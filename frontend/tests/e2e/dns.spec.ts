@@ -14,12 +14,16 @@ test("dns inspector runs a lookup and renders record sections", async ({ page, r
   );
 
   await page.locator("#dns-target").fill("example.com");
+  await page.locator("#dns-record-type").selectOption("mx");
+  await page.locator("#dns-resolver").selectOption("google");
   await page.getByRole("button", { name: /run lookup/i }).click();
 
   const lookupResponse = await lookupResponsePromise;
   expect(lookupResponse.ok()).toBeTruthy();
 
-  await expect(page.getByRole("heading", { name: "A Records", exact: true })).toBeVisible();
+  await expect(page.getByText("MX").nth(1)).toBeVisible();
+  await expect(page.getByText("8.8.8.8:53", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "MX Records", exact: true })).toBeVisible();
+  await expect(page.getByText("Mail Posture", { exact: true })).toBeVisible();
   await expect(page.getByText("example.com", { exact: false }).first()).toBeVisible();
 });

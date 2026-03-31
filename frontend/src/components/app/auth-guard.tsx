@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { SessionResponse } from "@/lib/types";
 import { Sidebar } from "@/components/app/sidebar";
@@ -10,6 +10,7 @@ import { Topbar } from "@/components/app/topbar";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const session = useQuery({
     queryKey: ["session"],
     queryFn: () => apiRequest<SessionResponse>("/api/auth/session"),
@@ -19,7 +20,10 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     if (!session.isLoading && !session.data?.authenticated) {
       router.replace("/login");
     }
-  }, [router, session.data?.authenticated, session.isLoading]);
+    if (!session.isLoading && session.data?.read_only && pathname !== "/") {
+      router.replace("/");
+    }
+  }, [pathname, router, session.data?.authenticated, session.data?.read_only, session.isLoading]);
 
   if (session.isLoading) {
     return (
@@ -37,6 +41,10 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     return null;
   }
 
+  if (session.data.read_only && pathname !== "/") {
+    return null;
+  }
+
   return (
     <div className="relative min-h-screen bg-background">
       <div className="bg-grid-overlay fixed inset-0 pointer-events-none z-0 opacity-25" />
@@ -50,7 +58,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       />
 
       <div className="relative z-10 flex min-h-screen">
-        <Sidebar />
+        <Sidebar session={session.data} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar session={session.data} />
           <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>

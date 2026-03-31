@@ -184,6 +184,8 @@ NETWATCHER_S3_ACCESS_KEY=minioadmin
 NETWATCHER_S3_SECRET_KEY=change-me
 NETWATCHER_S3_BUCKET=netwatcher-artifacts
 NETWATCHER_S3_SSL=false
+NETWATCHER_PREVIEW_ENABLED=false
+NETWATCHER_PREVIEW_TOKEN=change-this-preview-token
 ```
 
 Start the production stack:
@@ -198,6 +200,21 @@ Health check response now includes dependency status for:
 - database
 - redis
 - object storage
+
+## Contributor Preview
+
+For temporary read-only contributor access, enable preview mode and share:
+
+```text
+https://your-domain.example/preview?token=YOUR_PREVIEW_TOKEN
+```
+
+Preview mode:
+
+- authenticates without a full user login
+- only allows the overview dashboard
+- blocks mutating actions
+- uses safe demo monitoring data
 
 ## Development
 

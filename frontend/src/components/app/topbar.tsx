@@ -14,6 +14,7 @@ export function Topbar({ session }: { session: SessionResponse }) {
   const queryClient = useQueryClient();
   const { toggleSidebar } = useShellStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const isPreview = session.read_only === true;
 
   const logout = useMutation({
     mutationFn: () => apiRequest<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: JSON.stringify({}) }),
@@ -46,7 +47,13 @@ export function Topbar({ session }: { session: SessionResponse }) {
         </div>
       </div>
 
-      <div className="relative">
+      <div className="relative flex items-center gap-2">
+        {isPreview ? (
+          <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-100">
+            Read-only preview
+          </span>
+        ) : null}
+
         <button
           onClick={() => setDropdownOpen((current) => !current)}
           className="flex items-center gap-2 rounded-full border border-border/50 bg-secondary/50 px-2 py-1.5 transition-all hover:border-primary/30"
@@ -54,30 +61,40 @@ export function Topbar({ session }: { session: SessionResponse }) {
           <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-nw-teal to-nw-cyan text-[10px] font-bold tracking-wider text-primary-foreground">
             {(session.user?.name?.trim() || session.user?.email?.trim() || "OP").slice(0, 2).toUpperCase()}
           </span>
-          <span className="text-xs text-muted-foreground">▾</span>
+          <span className="text-xs text-muted-foreground">▼</span>
         </button>
 
         {dropdownOpen ? (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-            <div className="absolute right-0 top-full z-50 mt-2 w-52 animate-fade-in rounded-xl border border-border/50 bg-popover/95 p-2 shadow-xl backdrop-blur-lg">
+            <div className="absolute right-0 top-full z-50 mt-2 w-56 animate-fade-in rounded-xl border border-border/50 bg-popover/95 p-2 shadow-xl backdrop-blur-lg">
               <div className="mb-1 border-b border-border/30 px-3 py-2">
                 <p className="text-sm font-medium text-foreground">{session.user?.name ?? "Operator"}</p>
                 <p className="text-xs text-muted-foreground">{session.user?.email ?? "-"}</p>
               </div>
-              <Link href="/settings" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary" onClick={() => setDropdownOpen(false)}>
-                <Settings className="h-4 w-4 text-muted-foreground" /> Settings
-              </Link>
-              <Link href="/profile" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary" onClick={() => setDropdownOpen(false)}>
-                <User className="h-4 w-4 text-muted-foreground" /> Profile
-              </Link>
+
+              {!isPreview ? (
+                <>
+                  <Link href="/settings" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary" onClick={() => setDropdownOpen(false)}>
+                    <Settings className="h-4 w-4 text-muted-foreground" /> Settings
+                  </Link>
+                  <Link href="/profile" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary" onClick={() => setDropdownOpen(false)}>
+                    <User className="h-4 w-4 text-muted-foreground" /> Profile
+                  </Link>
+                </>
+              ) : (
+                <div className="rounded-lg px-3 py-2 text-xs leading-6 text-muted-foreground">
+                  This session is limited to the overview dashboard.
+                </div>
+              )}
+
               <button
                 type="button"
                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-nw-red transition-colors hover:bg-destructive/10"
                 onClick={() => logout.mutate()}
                 disabled={logout.isPending}
               >
-                <LogOut className="h-4 w-4" /> {logout.isPending ? "Signing out..." : "Log Out"}
+                <LogOut className="h-4 w-4" /> {logout.isPending ? "Signing out..." : isPreview ? "Exit Preview" : "Log Out"}
               </button>
             </div>
           </>

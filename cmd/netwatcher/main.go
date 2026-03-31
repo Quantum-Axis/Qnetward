@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/hex"
@@ -66,7 +67,9 @@ const (
 	maxHistoryLimit      = 1000
 	maxConcurrentProbes  = 8
 	authCookieName       = "netwatcher_session"
+	previewCookieName    = "netwatcher_preview"
 	defaultSessionTTL    = 30 * 24 * time.Hour
+	defaultPreviewTTL    = 7 * 24 * time.Hour
 	defaultResetTTL      = 30 * time.Minute
 	defaultVerifyCodeTTL = 10 * time.Minute
 	verifyResendCooldown = 60 * time.Second
@@ -278,6 +281,8 @@ func runDNSLookup(args []string) {
 	fs.SetOutput(os.Stderr)
 
 	timeout := fs.Duration("timeout", dnslookup.DefaultTimeout, "per-query timeout")
+	recordType := fs.String("type", "all", "record type: all, a, aaaa, cname, ns, mx, txt, dmarc, soa, srv, caa, dnskey, ds, rrsig, ptr")
+	resolver := fs.String("resolver", "auto", "resolver: auto, cloudflare, google, quad9, or host[:port]")
 	jsonOut := fs.Bool("json", false, "JSON output")
 
 	fs.Usage = func() {
@@ -305,7 +310,11 @@ func runDNSLookup(args []string) {
 		os.Exit(2)
 	}
 
-	rep, err := dnslookup.Run(target, dnslookup.Config{Timeout: normalizedTimeout})
+	rep, err := dnslookup.Run(target, dnslookup.Config{
+		Timeout:    normalizedTimeout,
+		RecordType: *recordType,
+		Resolver:   *resolver,
+	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -349,6 +358,10 @@ func runServe(args []string) {
 	emailReplyTo := fs.String("email-reply-to", envString("NETWATCHER_EMAIL_REPLY_TO", ""), "reply-to address for transactional emails")
 	publicBaseURL := fs.String("public-base-url", envString("NETWATCHER_PUBLIC_BASE_URL", ""), "public base URL used in emails, for example https://netwatcher.example.com")
 	allowedOriginsRaw := fs.String("allowed-origins", envString("NETWATCHER_ALLOWED_ORIGINS", ""), "comma-separated additional allowed browser origins, for example http://127.0.0.1:3000")
+	previewEnabled := fs.Bool("preview-enabled", envBool("NETWATCHER_PREVIEW_ENABLED", false), "enable shared preview dashboard access")
+	previewToken := fs.String("preview-token", envString("NETWATCHER_PREVIEW_TOKEN", ""), "shared preview token")
+	previewName := fs.String("preview-name", envString("NETWATCHER_PREVIEW_NAME", "Contributor Preview"), "display name for preview access")
+	previewEmail := fs.String("preview-email", envString("NETWATCHER_PREVIEW_EMAIL", "preview@netwatcher.local"), "display email for preview access")
 
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: netwatcher serve [flags]")
@@ -444,11 +457,30 @@ func runServe(args []string) {
 	}
 	appMailer = emailClient
 	appPublicBaseURL = strings.TrimRight(strings.TrimSpace(*publicBaseURL), "/")
+	appPreviewEnabled = *previewEnabled
+	appPreviewTokenHash = ""
+	appPreviewName = strings.TrimSpace(*previewName)
+	appPreviewEmail = strings.TrimSpace(*previewEmail)
+	appPreviewCreatedAt = time.Now().UTC()
+	if appPreviewEnabled {
+		if strings.TrimSpace(*previewToken) == "" {
+			fmt.Fprintln(os.Stderr, "preview token is required when preview access is enabled")
+			os.Exit(1)
+		}
+		appPreviewTokenHash = hashOpaqueToken(strings.TrimSpace(*previewToken))
+		if appPreviewName == "" {
+			appPreviewName = "Contributor Preview"
+		}
+		if appPreviewEmail == "" {
+			appPreviewEmail = "preview@netwatcher.local"
+		}
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handleHealthz)
 	mux.HandleFunc("/api/healthz", handleHealthz)
 	mux.HandleFunc("/api/auth/session", handleAuthSession)
+	mux.HandleFunc("/api/auth/preview", handleAuthPreview)
 	mux.HandleFunc("/api/auth/signup", handleAuthSignup)
 	mux.HandleFunc("/api/auth/login", handleAuthLogin)
 	mux.HandleFunc("/api/auth/logout", handleAuthLogout)
@@ -1078,6 +1110,7 @@ func printDNSLookup(rep dnslookup.Report) {
 		}
 	}
 	printDNSSection("TXT", rep.TXT)
+	printDNSSection("DMARC", rep.DMARC)
 	if rep.SOA.Record != nil || rep.SOA.Error != "" {
 		fmt.Println("SOA:")
 		if rep.SOA.Record != nil {
@@ -1113,6 +1146,9 @@ func printDNSLookup(rep dnslookup.Report) {
 			fmt.Printf("  ! %s\n", rep.CAA.Error)
 		}
 	}
+	printDNSSection("DNSKEY", rep.DNSKEY)
+	printDNSSection("DS", rep.DS)
+	printDNSSection("RRSIG", rep.RRSIG)
 	if len(rep.PTR) > 0 {
 		fmt.Println("PTR:")
 		for _, record := range rep.PTR {
@@ -1126,6 +1162,14 @@ func printDNSLookup(rep dnslookup.Report) {
 			fmt.Printf("  %s ! %s\n", record.Address, record.Error)
 		}
 	}
+	fmt.Printf("analysis: mail_ready=%t spf=%t dmarc=%t mx=%t caa=%t dnssec=%t\n",
+		rep.Analysis.MailReady,
+		rep.Analysis.SPFPresent,
+		rep.Analysis.DMARCPresent,
+		rep.Analysis.MXPresent,
+		rep.Analysis.CAAPresent,
+		rep.Analysis.DNSSECPresent,
+	)
 }
 
 func printDNSLookupJSON(rep dnslookup.Report) {
@@ -1189,6 +1233,8 @@ type authUser struct {
 type authSessionResponse struct {
 	Authenticated bool      `json:"authenticated"`
 	User          *authUser `json:"user,omitempty"`
+	Mode          string    `json:"mode,omitempty"`
+	ReadOnly      bool      `json:"read_only,omitempty"`
 }
 
 type authMessageResponse struct {
@@ -1200,6 +1246,12 @@ type authMessageResponse struct {
 	Authenticated        bool      `json:"authenticated,omitempty"`
 	User                 *authUser `json:"user,omitempty"`
 	Email                string    `json:"email,omitempty"`
+	Mode                 string    `json:"mode,omitempty"`
+	ReadOnly             bool      `json:"read_only,omitempty"`
+}
+
+type authPreviewRequest struct {
+	Token string `json:"token"`
 }
 
 type pingRequest struct {
@@ -1227,8 +1279,10 @@ type portScanRequest struct {
 }
 
 type dnsLookupRequest struct {
-	Target    string `json:"target"`
-	TimeoutMs int    `json:"timeout_ms"`
+	Target     string `json:"target"`
+	TimeoutMs  int    `json:"timeout_ms"`
+	RecordType string `json:"record_type,omitempty"`
+	Resolver   string `json:"resolver,omitempty"`
 }
 
 type historyExportRequest struct {
@@ -1351,6 +1405,11 @@ var appObjectStore *objectstore.Client
 var appMailer *mailer.Client
 var appPublicBaseURL string
 var appAllowedOrigins map[string]struct{}
+var appPreviewEnabled bool
+var appPreviewTokenHash string
+var appPreviewName string
+var appPreviewEmail string
+var appPreviewCreatedAt time.Time
 var probeLimiter = make(chan struct{}, maxConcurrentProbes)
 var rejectedProbeRequests atomic.Uint64
 var authRateLimiter = newRateLimiter()
@@ -1383,24 +1442,68 @@ func handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if appStore == nil {
-		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
-		return
-	}
-
-	user, _, err := currentSessionUser(r)
-	if err != nil {
-		if errors.Is(err, store.ErrSessionNotFound) || errors.Is(err, http.ErrNoCookie) {
-			writeJSON(w, http.StatusOK, authSessionResponse{Authenticated: false})
+	if appStore != nil {
+		user, _, err := currentSessionUser(r)
+		if err == nil {
+			writeJSON(w, http.StatusOK, authSessionResponse{
+				Authenticated: true,
+				User:          toAuthUser(user),
+				Mode:          "authenticated",
+			})
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		if !errors.Is(err, store.ErrSessionNotFound) && !errors.Is(err, http.ErrNoCookie) {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+	}
+
+	if isPreviewSessionActive(r) {
+		writeJSON(w, http.StatusOK, authSessionResponse{
+			Authenticated: true,
+			User:          previewAuthUser(),
+			Mode:          "preview",
+			ReadOnly:      true,
+		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, authSessionResponse{
+	writeJSON(w, http.StatusOK, authSessionResponse{Authenticated: false})
+}
+
+func handleAuthPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+	if !appPreviewEnabled || appPreviewTokenHash == "" {
+		writeJSON(w, http.StatusNotFound, apiError{Error: "preview access is disabled"})
+		return
+	}
+	if !isAllowedRequestOrigin(r) {
+		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
+		return
+	}
+
+	var req authPreviewRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
+
+	if !isValidPreviewToken(req.Token) {
+		writeJSON(w, http.StatusUnauthorized, apiError{Error: "invalid preview token"})
+		return
+	}
+
+	setPreviewCookie(w, r, defaultPreviewTTL)
+	writeJSON(w, http.StatusOK, authMessageResponse{
+		OK:            true,
+		Message:       "Preview access granted.",
 		Authenticated: true,
-		User:          toAuthUser(user),
+		User:          previewAuthUser(),
+		Mode:          "preview",
+		ReadOnly:      true,
 	})
 }
 
@@ -1552,17 +1655,18 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if appStore != nil {
+		if tokenHash, err := sessionTokenHashFromRequest(r); err == nil && tokenHash != "" {
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			_ = appStore.DeleteSession(ctx, tokenHash)
+			cancel()
+		}
+	} else if !isPreviewSessionActive(r) {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
-
-	if tokenHash, err := sessionTokenHashFromRequest(r); err == nil && tokenHash != "" {
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		_ = appStore.DeleteSession(ctx, tokenHash)
-		cancel()
-	}
 	clearSessionCookie(w, r)
+	clearPreviewCookie(w, r)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -2057,6 +2161,41 @@ func currentSessionUser(r *http.Request) (store.User, string, error) {
 	return user, tokenHash, nil
 }
 
+func isPreviewSessionActive(r *http.Request) bool {
+	if !appPreviewEnabled || appPreviewTokenHash == "" {
+		return false
+	}
+	cookie, err := r.Cookie(previewCookieName)
+	if err != nil {
+		return false
+	}
+	value := strings.TrimSpace(cookie.Value)
+	if value == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(value), []byte(appPreviewTokenHash)) == 1
+}
+
+func isValidPreviewToken(token string) bool {
+	if !appPreviewEnabled || appPreviewTokenHash == "" {
+		return false
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(hashOpaqueToken(token)), []byte(appPreviewTokenHash)) == 1
+}
+
+func previewAuthUser() *authUser {
+	return &authUser{
+		ID:        0,
+		Name:      appPreviewName,
+		Email:     appPreviewEmail,
+		CreatedAt: appPreviewCreatedAt,
+	}
+}
+
 func sessionTokenHashFromRequest(r *http.Request) (string, error) {
 	cookie, err := r.Cookie(authCookieName)
 	if err != nil {
@@ -2139,9 +2278,36 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, expi
 	})
 }
 
+func setPreviewCookie(w http.ResponseWriter, r *http.Request, ttl time.Duration) {
+	expiresAt := time.Now().Add(ttl)
+	http.SetCookie(w, &http.Cookie{
+		Name:     previewCookieName,
+		Value:    appPreviewTokenHash,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   requestIsSecure(r),
+		Expires:  expiresAt,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
+	})
+}
+
 func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     authCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   requestIsSecure(r),
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+}
+
+func clearPreviewCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     previewCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
@@ -2670,7 +2836,11 @@ func handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	rep, err := dnslookup.RunContext(ctx, target, dnslookup.Config{Timeout: timeout})
+	rep, err := dnslookup.RunContext(ctx, target, dnslookup.Config{
+		Timeout:    timeout,
+		RecordType: req.RecordType,
+		Resolver:   req.Resolver,
+	})
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return

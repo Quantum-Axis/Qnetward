@@ -178,6 +178,102 @@ func TestHandleAuthSessionReturnsUnauthenticatedWithoutCookie(t *testing.T) {
 	}
 }
 
+func TestAuthPreviewFlow(t *testing.T) {
+	installTestStore(t)
+	originalEnabled := appPreviewEnabled
+	originalHash := appPreviewTokenHash
+	originalName := appPreviewName
+	originalEmail := appPreviewEmail
+	originalCreatedAt := appPreviewCreatedAt
+	t.Cleanup(func() {
+		appPreviewEnabled = originalEnabled
+		appPreviewTokenHash = originalHash
+		appPreviewName = originalName
+		appPreviewEmail = originalEmail
+		appPreviewCreatedAt = originalCreatedAt
+	})
+
+	appPreviewEnabled = true
+	appPreviewTokenHash = hashOpaqueToken("preview-secret")
+	appPreviewName = "Contributor Preview"
+	appPreviewEmail = "preview@netwatcher.local"
+	appPreviewCreatedAt = time.Now().UTC()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/preview", strings.NewReader(`{"token":"preview-secret"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handleAuthPreview(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	result := rr.Result()
+	var previewCookie *http.Cookie
+	for _, cookie := range result.Cookies() {
+		if cookie.Name == previewCookieName {
+			previewCookie = cookie
+			break
+		}
+	}
+	if previewCookie == nil || previewCookie.Value == "" {
+		t.Fatal("expected preview cookie to be issued")
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	sessionReq.AddCookie(previewCookie)
+	sessionRR := httptest.NewRecorder()
+	handleAuthSession(sessionRR, sessionReq)
+
+	if sessionRR.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", sessionRR.Code)
+	}
+
+	var sessionResp authSessionResponse
+	if err := json.Unmarshal(sessionRR.Body.Bytes(), &sessionResp); err != nil {
+		t.Fatalf("decode preview session response: %v", err)
+	}
+	if !sessionResp.Authenticated || sessionResp.Mode != "preview" || !sessionResp.ReadOnly {
+		t.Fatalf("unexpected preview session response: %#v", sessionResp)
+	}
+}
+
+func TestAuthLogoutClearsPreviewCookie(t *testing.T) {
+	originalEnabled := appPreviewEnabled
+	originalHash := appPreviewTokenHash
+	t.Cleanup(func() {
+		appPreviewEnabled = originalEnabled
+		appPreviewTokenHash = originalHash
+	})
+
+	appPreviewEnabled = true
+	appPreviewTokenHash = hashOpaqueToken("preview-secret")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: previewCookieName, Value: appPreviewTokenHash})
+	rr := httptest.NewRecorder()
+
+	handleAuthLogout(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	result := rr.Result()
+	cleared := false
+	for _, cookie := range result.Cookies() {
+		if cookie.Name == previewCookieName && cookie.MaxAge < 0 {
+			cleared = true
+			break
+		}
+	}
+	if !cleared {
+		t.Fatal("expected preview cookie to be cleared")
+	}
+}
+
 func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	installTestStore(t)
 	resetAuthRateLimiterForTest(t)

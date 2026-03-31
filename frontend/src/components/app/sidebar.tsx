@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useShellStore } from "@/store/ui-store";
+import { SessionResponse } from "@/lib/types";
 
 interface NavItem {
   href: string;
@@ -52,9 +53,10 @@ const navGroups: NavGroup[] = [
   { label: "Integration", icon: "IT" },
 ];
 
-export function Sidebar() {
+export function Sidebar({ session }: { session: SessionResponse }) {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useShellStore();
+  const isPreview = session.read_only === true;
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     navGroups.forEach((group) => {
@@ -106,53 +108,60 @@ export function Sidebar() {
           </div>
 
           <nav className="flex-1 space-y-0.5 px-2 pb-4">
-            {navGroups.map((group) => {
-              const isOpen = openGroups.has(group.label);
-              const hasActive = group.items?.some((item) => item.href === pathname) ?? false;
-              const hasChildren = (group.items?.length ?? 0) > 0;
+            {isPreview ? (
+              <div className="mx-2 mb-3 rounded-2xl border border-teal-400/18 bg-teal-400/10 px-3 py-3 text-xs leading-6 text-teal-100">
+                Preview access is read-only. Only the overview workspace is available.
+              </div>
+            ) : null}
 
-              return (
-                <div key={group.label}>
-                  <button
-                    type="button"
-                    onClick={() => hasChildren && toggleGroup(group.label)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                      hasActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <span className="grid h-7 w-7 place-items-center rounded-md bg-secondary/60 text-[10px] font-bold tracking-wider">
-                        {group.icon}
+            {!isPreview &&
+              navGroups.map((group) => {
+                const isOpen = openGroups.has(group.label);
+                const hasActive = group.items?.some((item) => item.href === pathname) ?? false;
+                const hasChildren = (group.items?.length ?? 0) > 0;
+
+                return (
+                  <div key={group.label}>
+                    <button
+                      type="button"
+                      onClick={() => hasChildren && toggleGroup(group.label)}
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                        hasActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <span className="grid h-7 w-7 place-items-center rounded-md bg-secondary/60 text-[10px] font-bold tracking-wider">
+                          {group.icon}
+                        </span>
+                        <span className="font-medium">{group.label}</span>
                       </span>
-                      <span className="font-medium">{group.label}</span>
-                    </span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "rotate-0" : "-rotate-90"}`} />
-                  </button>
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "rotate-0" : "-rotate-90"}`} />
+                    </button>
 
-                  {hasChildren && isOpen ? (
-                    <div className="mt-0.5 mb-1 ml-3 space-y-0.5 border-l border-border/40 pl-4">
-                      {group.items?.map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setSidebarOpen(false)}
-                          className={`flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all ${
-                            pathname === item.href
-                              ? "bg-primary/15 font-medium text-primary"
-                              : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-                          }`}
-                        >
-                          <span className="grid h-6 w-6 place-items-center rounded bg-secondary/40 text-[9px] font-bold tracking-wider">
-                            {item.icon}
-                          </span>
-                          {item.label}
-                        </Link>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                    {hasChildren && isOpen ? (
+                      <div className="mt-0.5 mb-1 ml-3 space-y-0.5 border-l border-border/40 pl-4">
+                        {group.items?.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all ${
+                              pathname === item.href
+                                ? "bg-primary/15 font-medium text-primary"
+                                : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                            }`}
+                          >
+                            <span className="grid h-6 w-6 place-items-center rounded bg-secondary/40 text-[9px] font-bold tracking-wider">
+                              {item.icon}
+                            </span>
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
           </nav>
         </div>
       </aside>

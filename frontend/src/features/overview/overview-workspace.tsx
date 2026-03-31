@@ -19,6 +19,7 @@ import { OverviewHealthDistributionPanel } from "@/features/overview/overview-he
 import { OverviewKpiStrip } from "@/features/overview/overview-kpi-strip";
 import { OverviewLatencyPanel } from "@/features/overview/overview-latency-panel";
 import { OverviewLiveMonitorGrid } from "@/features/overview/overview-live-monitor-grid";
+import { buildOverviewPreviewData } from "@/features/overview/overview-preview-data";
 import { OverviewTargetsTable } from "@/features/overview/overview-targets-table";
 
 type ActiveTool = "icmp" | "tcp" | "portscan" | "dns";
@@ -143,6 +144,8 @@ export function OverviewWorkspace() {
     queryFn: () => apiRequest<SessionResponse>("/api/auth/session"),
     staleTime: 60_000,
   });
+  const isPreview = sessionQuery.data?.read_only === true;
+  const previewData = useMemo(() => buildOverviewPreviewData(), []);
 
   const runtimeHealthQuery = useQuery({
     queryKey: ["runtime-health"],
@@ -154,22 +157,33 @@ export function OverviewWorkspace() {
     queryKey: ["alert-rules"],
     queryFn: () => apiRequest<AlertRule[]>("/api/alerts/rules"),
     refetchInterval: 20_000,
+    enabled: sessionQuery.data?.authenticated === true && !isPreview,
   });
 
   const recentTargetsQuery = useQuery({
     queryKey: ["recent-history-targets"],
     queryFn: () => apiRequest<RecentHistoryTarget[]>("/api/history/recent-targets?limit=12"),
     refetchInterval: 20_000,
+    enabled: sessionQuery.data?.authenticated === true && !isPreview,
   });
 
+  const alertRulesSource = useMemo(
+    () => (isPreview ? previewData.alertRules : alertRulesQuery.data ?? []),
+    [alertRulesQuery.data, isPreview, previewData.alertRules],
+  );
+  const recentTargetsSource = useMemo(
+    () => (isPreview ? previewData.recentTargets : recentTargetsQuery.data ?? []),
+    [isPreview, previewData.recentTargets, recentTargetsQuery.data],
+  );
+
   const trackedRules = useMemo(
-    () => mergeTrackedRules(uniqueAlertTargets(alertRulesQuery.data ?? []), recentTargetsQuery.data ?? []),
-    [alertRulesQuery.data, recentTargetsQuery.data],
+    () => mergeTrackedRules(uniqueAlertTargets(alertRulesSource), recentTargetsSource),
+    [alertRulesSource, recentTargetsSource],
   );
   const trackedRulesWithLive = useMemo(() => mergeTrackedRulesFromLiveSamples(trackedRules, liveSamples), [trackedRules, liveSamples]);
 
   const historyQueries = useQueries({
-    queries: trackedRulesWithLive.map((rule) => {
+    queries: isPreview ? [] : trackedRulesWithLive.map((rule) => {
       const params = new URLSearchParams({
         type: rule.protocol,
         host: rule.target,
@@ -187,13 +201,16 @@ export function OverviewWorkspace() {
   });
 
   const historyMap = useMemo(() => {
+    if (isPreview) {
+      return previewData.historyMap;
+    }
     const map = new Map<string, HistoryPoint[]>();
     trackedRulesWithLive.forEach((rule, index) => {
       const key = `${rule.protocol}:${rule.target}:${rule.port ?? 0}`;
       map.set(key, historyQueries[index]?.data ?? []);
     });
     return map;
-  }, [historyQueries, trackedRulesWithLive]);
+  }, [historyQueries, isPreview, previewData.historyMap, trackedRulesWithLive]);
 
   const liveSampleMap = useMemo(() => {
     const map = new Map<string, LiveTelemetrySample>();
@@ -205,7 +222,7 @@ export function OverviewWorkspace() {
 
   const targetSnapshots = useMemo(
     () =>
-      buildOverviewTargetSnapshots(trackedRulesWithLive, historyMap, recentTargetsQuery.data ?? []).map((snapshot) => {
+      buildOverviewTargetSnapshots(trackedRulesWithLive, historyMap, recentTargetsSource).map((snapshot) => {
         const liveSample = liveSampleMap.get(snapshot.id);
         if (!liveSample) {
           return snapshot;
@@ -222,7 +239,7 @@ export function OverviewWorkspace() {
           lastRttMs: liveSample.rttMs ?? snapshot.lastRttMs,
         };
       }),
-    [trackedRulesWithLive, historyMap, recentTargetsQuery.data, liveSampleMap],
+    [trackedRulesWithLive, historyMap, recentTargetsSource, liveSampleMap],
   );
   const latencySeries = useMemo(() => {
     const livePoints = liveSamples
@@ -283,22 +300,29 @@ export function OverviewWorkspace() {
               onChange={(event) => setTarget(event.target.value)}
               placeholder="Set active target (e.g. 8.8.8.8)"
               className="dashboard-hero-input min-w-0 flex-1"
+              disabled={isPreview}
             />
-            <Button className="h-10 rounded-2xl px-5 text-sm" onClick={runActiveTool}>
-              Run Active Tool
+            <Button className="h-10 rounded-2xl px-5 text-sm" onClick={runActiveTool} disabled={isPreview}>
+              {isPreview ? "Preview mode" : "Run Active Tool"}
             </Button>
             <div className="flex flex-wrap gap-1.5 xl:justify-end">
-              <button type="button" className="dashboard-action-pill dashboard-action-pill-active" onClick={runActiveTool}>
+              <button type="button" className="dashboard-action-pill dashboard-action-pill-active" onClick={runActiveTool} disabled={isPreview}>
                 Diagnostics
               </button>
-              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/history")}>
+              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/history")} disabled={isPreview}>
                 History
               </button>
-              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/alerts")}>
+              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/alerts")} disabled={isPreview}>
                 Alerts
               </button>
             </div>
           </div>
+
+          {isPreview ? (
+            <div className="rounded-2xl border border-teal-400/20 bg-teal-400/10 px-4 py-3 text-sm text-teal-100">
+              Preview mode is active. This view is read-only and uses safe demo monitoring data.
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap gap-1">
             {(["icmp", "tcp", "portscan", "dns"] as ActiveTool[]).map((tool) => (
@@ -340,7 +364,7 @@ export function OverviewWorkspace() {
         <OverviewLatencyPanel points={latencySeries} />
         <OverviewHealthDistributionPanel
           items={healthDistribution}
-          alertRuleCount={alertRulesQuery.data?.filter((rule) => rule.enabled).length ?? 0}
+          alertRuleCount={alertRulesSource.filter((rule) => rule.enabled).length}
           liveMonitorCount={kpis.liveStreams}
           lastRttMs={latestRtt}
         />

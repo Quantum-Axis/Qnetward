@@ -9,6 +9,8 @@ export type AuthUser = {
 export type SessionResponse = {
   authenticated: boolean;
   user?: AuthUser | null;
+  mode?: "authenticated" | "preview";
+  read_only?: boolean;
 };
 
 export type AuthMessageResponse = {
@@ -84,19 +86,25 @@ export type RecentHistoryTarget = {
 
 export type DNSStringSection = {
   values?: string[];
+  records?: { value: string; ttl: number }[];
   error?: string;
   duration_ms: number;
+  resolver?: string;
+  authoritative?: boolean;
 };
 
 export type DNSMXRecord = {
   host: string;
   pref: number;
+  ttl: number;
 };
 
 export type DNSMXSection = {
   records?: DNSMXRecord[];
   error?: string;
   duration_ms: number;
+  resolver?: string;
+  authoritative?: boolean;
 };
 
 export type DNSSOARecord = {
@@ -107,12 +115,15 @@ export type DNSSOARecord = {
   retry: number;
   expire: number;
   minttl: number;
+  ttl: number;
 };
 
 export type DNSSOASection = {
   record?: DNSSOARecord | null;
   error?: string;
   duration_ms: number;
+  resolver?: string;
+  authoritative?: boolean;
 };
 
 export type DNSSRVRecord = {
@@ -120,47 +131,73 @@ export type DNSSRVRecord = {
   port: number;
   priority: number;
   weight: number;
+  ttl: number;
 };
 
 export type DNSSRVSection = {
   records?: DNSSRVRecord[];
   error?: string;
   duration_ms: number;
+  resolver?: string;
+  authoritative?: boolean;
 };
 
 export type DNSCAARecord = {
   flag: number;
   tag: string;
   value: string;
+  ttl: number;
 };
 
 export type DNSCAASection = {
   records?: DNSCAARecord[];
   error?: string;
   duration_ms: number;
+  resolver?: string;
+  authoritative?: boolean;
 };
 
 export type DNSReverseRecord = {
   address: string;
   names?: string[];
+  records?: { value: string; ttl: number }[];
   error?: string;
   duration_ms: number;
+  resolver?: string;
+  authoritative?: boolean;
 };
 
 export type DNSReport = {
   protocol: string;
   target: string;
   kind: "host" | "ip";
+  record_type: string;
+  resolver: string;
   a: DNSStringSection;
   aaaa: DNSStringSection;
   cname: DNSStringSection;
   ns: DNSStringSection;
   txt: DNSStringSection;
+  dmarc: DNSStringSection;
   mx: DNSMXSection;
   soa: DNSSOASection;
   srv: DNSSRVSection;
   caa: DNSCAASection;
+  dnskey: DNSStringSection;
+  ds: DNSStringSection;
+  rrsig: DNSStringSection;
   ptr?: DNSReverseRecord[];
+  analysis: {
+    spf_present: boolean;
+    dmarc_present: boolean;
+    mx_present: boolean;
+    caa_present: boolean;
+    dnskey_present: boolean;
+    ds_present: boolean;
+    rrsig_present: boolean;
+    dnssec_present: boolean;
+    mail_ready: boolean;
+  };
   summary: {
     addresses: number;
     reverse_lookups: number;

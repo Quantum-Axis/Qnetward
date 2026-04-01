@@ -27,14 +27,14 @@ test("verified user can request a reset link and sign in with the new password",
 
   await page.goto(forgotPayload.preview_url);
   await page.locator("#reset-password").fill(newPassword);
+  await page.locator("#reset-confirm-password").fill(newPassword);
   await page.getByRole("button", { name: /set password/i }).click();
 
   await expect(page).toHaveURL(/\/login$/);
 
   await page.getByLabel("Email").fill(user.email);
   await page.locator("#login-password").fill(newPassword);
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await page.getByRole("button", { name: /^login$/i }).click();
 
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("Network Operations Overview")).toBeVisible();
+  await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
 });

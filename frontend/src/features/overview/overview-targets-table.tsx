@@ -12,13 +12,13 @@ type OverviewTargetsTableProps = {
 function targetStatusTone(state: OverviewTargetSnapshot["healthState"]) {
   switch (state) {
     case "critical":
-      return "border-rose-500/18 bg-rose-500/10 text-rose-200";
+      return "border-fuchsia-500/18 bg-fuchsia-500/10 text-fuchsia-200";
     case "warning":
       return "border-amber-500/18 bg-amber-500/10 text-amber-200";
     case "stable":
-      return "border-emerald-500/18 bg-emerald-500/10 text-emerald-200";
-    case "idle":
       return "border-cyan-500/18 bg-cyan-500/10 text-cyan-100";
+    case "idle":
+      return "border-blue-500/18 bg-blue-500/10 text-blue-100";
     default:
       return "border-white/8 bg-white/[0.04] text-slate-300";
   }
@@ -27,13 +27,13 @@ function targetStatusTone(state: OverviewTargetSnapshot["healthState"]) {
 function targetDotTone(state: OverviewTargetSnapshot["healthState"]) {
   switch (state) {
     case "critical":
-      return "bg-rose-400";
+      return "bg-fuchsia-400";
     case "warning":
       return "bg-amber-400";
     case "stable":
-      return "bg-emerald-400";
+      return "bg-cyan-300";
     case "idle":
-      return "bg-sky-400";
+      return "bg-blue-400";
     default:
       return "bg-white/30";
   }

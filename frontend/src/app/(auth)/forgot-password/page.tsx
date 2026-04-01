@@ -7,8 +7,8 @@ export default function ForgotPasswordPage() {
     <GuestOnly>
       <AuthLayoutCard
         eyebrow="Recovery"
-        title="Reset access"
-        subtitle="Request a reset link for your account."
+        title="Forgot password"
+        subtitle="Request a password reset link for your workspace account."
         alternateHref="/login"
         alternateLabel="Back to login"
       >

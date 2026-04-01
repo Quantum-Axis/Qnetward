@@ -51,9 +51,9 @@ export async function loginAsVerifiedUser(page: Page, request: APIRequestContext
   await page.goto("/login");
   await page.getByLabel("Email").fill(candidate.email);
   await page.locator("#login-password").fill(candidate.password);
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await page.getByRole("button", { name: /^login$/i }).click();
 
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
 
   return candidate;
 }

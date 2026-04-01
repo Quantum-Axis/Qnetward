@@ -11,13 +11,13 @@ type OverviewActivityFeedProps = {
 function entryTone(tone: OverviewActivityEntry["tone"]) {
   switch (tone) {
     case "critical":
-      return "border-rose-500/25 bg-rose-500/10";
+      return "border-fuchsia-500/25 bg-fuchsia-500/10";
     case "warning":
       return "border-amber-500/25 bg-amber-500/10";
     case "stable":
-      return "border-emerald-500/25 bg-emerald-500/10";
+      return "border-cyan-500/25 bg-cyan-500/10";
     default:
-      return "border-cyan-900/60 bg-slate-950/70";
+      return "border-blue-500/20 bg-slate-950/70";
   }
 }
 

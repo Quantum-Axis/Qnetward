@@ -56,7 +56,7 @@ export function OverviewHealthDistributionPanel({
                   <Tooltip
                     contentStyle={{
                       background: "rgba(8,14,23,0.96)",
-                      border: "1px solid rgba(87,157,196,0.22)",
+                      border: "1px solid rgba(76,125,255,0.28)",
                       borderRadius: "16px",
                       color: "#e8f0ff",
                     }}
@@ -93,15 +93,15 @@ export function OverviewHealthDistributionPanel({
       <div className="mt-4 grid gap-3 border-t border-white/6 pt-4 sm:grid-cols-3">
         <div className="text-center sm:text-left">
           <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Alert Rules</p>
-          <p className="mt-1.5 text-[1.35rem] font-semibold text-[#63ddd3]">{alertRuleCount}</p>
+          <p className="mt-1.5 text-[1.35rem] font-semibold text-cyan-200">{alertRuleCount}</p>
         </div>
         <div className="text-center sm:text-left">
           <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Live Monitors</p>
-          <p className="mt-1.5 text-[1.35rem] font-semibold text-[#63ddd3]">{liveMonitorCount}</p>
+          <p className="mt-1.5 text-[1.35rem] font-semibold text-cyan-200">{liveMonitorCount}</p>
         </div>
         <div className="text-center sm:text-left">
           <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Last RTT</p>
-          <p className="mt-1.5 text-[1.35rem] font-semibold text-[#63ddd3]">{formatMs(lastRttMs)}</p>
+          <p className="mt-1.5 text-[1.35rem] font-semibold text-cyan-200">{formatMs(lastRttMs)}</p>
         </div>
       </div>
     </div>

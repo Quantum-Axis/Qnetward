@@ -9,7 +9,7 @@ export type AuthUser = {
 export type SessionResponse = {
   authenticated: boolean;
   user?: AuthUser | null;
-  mode?: "authenticated" | "preview";
+  mode?: "authenticated" | "demo";
   read_only?: boolean;
 };
 

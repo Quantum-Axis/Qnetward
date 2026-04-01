@@ -3,7 +3,7 @@ import { AlertRule, HistoryPoint, RecentHistoryTarget } from "@/lib/types";
 function createHistorySeries(baseTs: number, baseRttMs: number, offsets: number[], errorIndices: number[] = []): HistoryPoint[] {
   return offsets.map((offset, index) => {
     const point: HistoryPoint = {
-      ts: baseTs - (offsets.length-index) * 15_000,
+      ts: baseTs - (offsets.length - index) * 15_000,
     };
     if (errorIndices.includes(index)) {
       point.error = "timeout";
@@ -15,7 +15,7 @@ function createHistorySeries(baseTs: number, baseRttMs: number, offsets: number[
   });
 }
 
-export function buildOverviewPreviewData() {
+export function buildOverviewDemoData() {
   const now = Date.now();
 
   const alertRules: AlertRule[] = [
@@ -24,7 +24,7 @@ export function buildOverviewPreviewData() {
       name: "Public Resolver A",
       protocol: "ping",
       target: "8.8.8.8",
-      recipient_email: "preview@netwatcher.local",
+      recipient_email: "demo@netwatcher.local",
       consecutive_breaches: 1,
       cooldown_minutes: 30,
       notify_recovery: true,
@@ -39,7 +39,7 @@ export function buildOverviewPreviewData() {
       name: "Public Resolver B",
       protocol: "ping",
       target: "1.1.1.1",
-      recipient_email: "preview@netwatcher.local",
+      recipient_email: "demo@netwatcher.local",
       consecutive_breaches: 2,
       cooldown_minutes: 20,
       notify_recovery: true,
@@ -56,7 +56,7 @@ export function buildOverviewPreviewData() {
       protocol: "tcpping",
       target: "github.com",
       port: 443,
-      recipient_email: "preview@netwatcher.local",
+      recipient_email: "demo@netwatcher.local",
       consecutive_breaches: 1,
       cooldown_minutes: 15,
       notify_recovery: true,
@@ -71,7 +71,7 @@ export function buildOverviewPreviewData() {
       name: "OpenAI Edge",
       protocol: "ping",
       target: "api.openai.com",
-      recipient_email: "preview@netwatcher.local",
+      recipient_email: "demo@netwatcher.local",
       consecutive_breaches: 1,
       cooldown_minutes: 30,
       notify_recovery: true,
@@ -86,7 +86,7 @@ export function buildOverviewPreviewData() {
       name: "Quad9",
       protocol: "ping",
       target: "9.9.9.9",
-      recipient_email: "preview@netwatcher.local",
+      recipient_email: "demo@netwatcher.local",
       consecutive_breaches: 1,
       cooldown_minutes: 30,
       notify_recovery: false,
@@ -99,26 +99,11 @@ export function buildOverviewPreviewData() {
   ];
 
   const historyMap = new Map<string, HistoryPoint[]>([
-    [
-      "ping:8.8.8.8:0",
-      createHistorySeries(now, 14, [0, 1, 3, 2, 4, 2, 1, 2, 3, 2, 1, 0]),
-    ],
-    [
-      "ping:1.1.1.1:0",
-      createHistorySeries(now, 18, [2, 4, 5, 6, 12, 24, 18, 0, 0, 0, 0, 0], [7, 8]),
-    ],
-    [
-      "tcpping:github.com:443",
-      createHistorySeries(now, 28, [5, 8, 4, 7, 6, 4, 5, 6, 8, 7, 6, 5]),
-    ],
-    [
-      "ping:api.openai.com:0",
-      createHistorySeries(now, 31, [4, 5, 7, 6, 5, 4, 6, 5, 7, 9, 8, 6]),
-    ],
-    [
-      "ping:9.9.9.9:0",
-      createHistorySeries(now, 24, [2, 3, 2, 4, 3, 2, 3, 4, 3, 2, 2, 1]),
-    ],
+    ["ping:8.8.8.8:0", createHistorySeries(now, 14, [0, 1, 3, 2, 4, 2, 1, 2, 3, 2, 1, 0])],
+    ["ping:1.1.1.1:0", createHistorySeries(now, 18, [2, 4, 5, 6, 12, 24, 18, 0, 0, 0, 0, 0], [7, 8])],
+    ["tcpping:github.com:443", createHistorySeries(now, 28, [5, 8, 4, 7, 6, 4, 5, 6, 8, 7, 6, 5])],
+    ["ping:api.openai.com:0", createHistorySeries(now, 31, [4, 5, 7, 6, 5, 4, 6, 5, 7, 9, 8, 6])],
+    ["ping:9.9.9.9:0", createHistorySeries(now, 24, [2, 3, 2, 4, 3, 2, 3, 4, 3, 2, 2, 1])],
   ]);
 
   const recentTargets: RecentHistoryTarget[] = [

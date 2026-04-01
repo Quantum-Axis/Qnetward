@@ -19,7 +19,7 @@ import { OverviewHealthDistributionPanel } from "@/features/overview/overview-he
 import { OverviewKpiStrip } from "@/features/overview/overview-kpi-strip";
 import { OverviewLatencyPanel } from "@/features/overview/overview-latency-panel";
 import { OverviewLiveMonitorGrid } from "@/features/overview/overview-live-monitor-grid";
-import { buildOverviewPreviewData } from "@/features/overview/overview-preview-data";
+import { buildOverviewDemoData } from "@/features/overview/overview-demo-data";
 import { OverviewTargetsTable } from "@/features/overview/overview-targets-table";
 
 type ActiveTool = "icmp" | "tcp" | "portscan" | "dns";
@@ -144,8 +144,8 @@ export function OverviewWorkspace() {
     queryFn: () => apiRequest<SessionResponse>("/api/auth/session"),
     staleTime: 60_000,
   });
-  const isPreview = sessionQuery.data?.read_only === true;
-  const previewData = useMemo(() => buildOverviewPreviewData(), []);
+  const isDemo = sessionQuery.data?.read_only === true;
+  const demoData = useMemo(() => buildOverviewDemoData(), []);
 
   const runtimeHealthQuery = useQuery({
     queryKey: ["runtime-health"],
@@ -157,23 +157,23 @@ export function OverviewWorkspace() {
     queryKey: ["alert-rules"],
     queryFn: () => apiRequest<AlertRule[]>("/api/alerts/rules"),
     refetchInterval: 20_000,
-    enabled: sessionQuery.data?.authenticated === true && !isPreview,
+    enabled: sessionQuery.data?.authenticated === true && !isDemo,
   });
 
   const recentTargetsQuery = useQuery({
     queryKey: ["recent-history-targets"],
     queryFn: () => apiRequest<RecentHistoryTarget[]>("/api/history/recent-targets?limit=12"),
     refetchInterval: 20_000,
-    enabled: sessionQuery.data?.authenticated === true && !isPreview,
+    enabled: sessionQuery.data?.authenticated === true && !isDemo,
   });
 
   const alertRulesSource = useMemo(
-    () => (isPreview ? previewData.alertRules : alertRulesQuery.data ?? []),
-    [alertRulesQuery.data, isPreview, previewData.alertRules],
+    () => (isDemo ? demoData.alertRules : alertRulesQuery.data ?? []),
+    [alertRulesQuery.data, demoData.alertRules, isDemo],
   );
   const recentTargetsSource = useMemo(
-    () => (isPreview ? previewData.recentTargets : recentTargetsQuery.data ?? []),
-    [isPreview, previewData.recentTargets, recentTargetsQuery.data],
+    () => (isDemo ? demoData.recentTargets : recentTargetsQuery.data ?? []),
+    [demoData.recentTargets, isDemo, recentTargetsQuery.data],
   );
 
   const trackedRules = useMemo(
@@ -183,7 +183,7 @@ export function OverviewWorkspace() {
   const trackedRulesWithLive = useMemo(() => mergeTrackedRulesFromLiveSamples(trackedRules, liveSamples), [trackedRules, liveSamples]);
 
   const historyQueries = useQueries({
-    queries: isPreview ? [] : trackedRulesWithLive.map((rule) => {
+    queries: isDemo ? [] : trackedRulesWithLive.map((rule) => {
       const params = new URLSearchParams({
         type: rule.protocol,
         host: rule.target,
@@ -201,8 +201,8 @@ export function OverviewWorkspace() {
   });
 
   const historyMap = useMemo(() => {
-    if (isPreview) {
-      return previewData.historyMap;
+    if (isDemo) {
+      return demoData.historyMap;
     }
     const map = new Map<string, HistoryPoint[]>();
     trackedRulesWithLive.forEach((rule, index) => {
@@ -210,7 +210,7 @@ export function OverviewWorkspace() {
       map.set(key, historyQueries[index]?.data ?? []);
     });
     return map;
-  }, [historyQueries, isPreview, previewData.historyMap, trackedRulesWithLive]);
+  }, [demoData.historyMap, historyQueries, isDemo, trackedRulesWithLive]);
 
   const liveSampleMap = useMemo(() => {
     const map = new Map<string, LiveTelemetrySample>();
@@ -282,7 +282,7 @@ export function OverviewWorkspace() {
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
-                className="dashboard-chip transition hover:border-teal-300/40 hover:bg-teal-400/12"
+                className="dashboard-chip transition hover:border-cyan-300/40 hover:bg-cyan-300/12"
                 onClick={() => setActiveTool("icmp")}
               >
                 {toolLabels[activeTool]}
@@ -300,27 +300,27 @@ export function OverviewWorkspace() {
               onChange={(event) => setTarget(event.target.value)}
               placeholder="Set active target (e.g. 8.8.8.8)"
               className="dashboard-hero-input min-w-0 flex-1"
-              disabled={isPreview}
+              disabled={isDemo}
             />
-            <Button className="h-10 rounded-2xl px-5 text-sm" onClick={runActiveTool} disabled={isPreview}>
-              {isPreview ? "Preview mode" : "Run Active Tool"}
+            <Button className="h-10 rounded-2xl px-5 text-sm" onClick={runActiveTool} disabled={isDemo}>
+              {isDemo ? "Demo mode" : "Run Active Tool"}
             </Button>
             <div className="flex flex-wrap gap-1.5 xl:justify-end">
-              <button type="button" className="dashboard-action-pill dashboard-action-pill-active" onClick={runActiveTool} disabled={isPreview}>
+              <button type="button" className="dashboard-action-pill dashboard-action-pill-active" onClick={runActiveTool} disabled={isDemo}>
                 Diagnostics
               </button>
-              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/history")} disabled={isPreview}>
+              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/history")} disabled={isDemo}>
                 History
               </button>
-              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/alerts")} disabled={isPreview}>
+              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/alerts")} disabled={isDemo}>
                 Alerts
               </button>
             </div>
           </div>
 
-          {isPreview ? (
-            <div className="rounded-2xl border border-teal-400/20 bg-teal-400/10 px-4 py-3 text-sm text-teal-100">
-              Preview mode is active. This view is read-only and uses safe demo monitoring data.
+          {isDemo ? (
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+              Demo mode is active. This view is read-only and uses safe demo monitoring data.
             </div>
           ) : null}
 
@@ -348,7 +348,7 @@ export function OverviewWorkspace() {
       />
 
       {(sessionQuery.isError || runtimeHealthQuery.isError || alertRulesQuery.isError || recentTargetsQuery.isError) && (
-        <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <div className="rounded-3xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-sm text-fuchsia-200">
           {[
             sessionQuery.error instanceof ApiError ? sessionQuery.error.message : null,
             runtimeHealthQuery.error instanceof ApiError ? runtimeHealthQuery.error.message : null,

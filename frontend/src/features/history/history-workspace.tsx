@@ -231,6 +231,9 @@ export function HistoryWorkspace() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const initialLoadDoneRef = useRef(false);
+  const historyRetryTimerRef = useRef<number | null>(null);
+  const historyRetryCountRef = useRef(0);
+  const activeSelectionKeyRef = useRef("");
 
   const [points, setPoints] = useState<HistoryPoint[]>([]);
   const [selection, setSelection] = useState<HistorySelection | null>(null);
@@ -257,10 +260,34 @@ export function HistoryWorkspace() {
       setPoints(data);
       setSelection(nextSelection);
       router.replace(`${pathname}?${buildHistoryQueryString(nextSelection)}`, { scroll: false });
+
+      if (
+        data.length === 0 &&
+        activeSelectionKeyRef.current === buildHistoryQueryString(nextSelection) &&
+        historyRetryCountRef.current < 4
+      ) {
+        historyRetryCountRef.current += 1;
+        if (historyRetryTimerRef.current) {
+          window.clearTimeout(historyRetryTimerRef.current);
+        }
+        historyRetryTimerRef.current = window.setTimeout(() => {
+          loadHistoryMutation.mutate(nextSelection);
+        }, 700);
+        return;
+      }
+
+      if (historyRetryTimerRef.current) {
+        window.clearTimeout(historyRetryTimerRef.current);
+        historyRetryTimerRef.current = null;
+      }
     },
     onError: (error: ApiError) => {
       setRequestError(error.message);
       setPoints([]);
+      if (historyRetryTimerRef.current) {
+        window.clearTimeout(historyRetryTimerRef.current);
+        historyRetryTimerRef.current = null;
+      }
     },
   });
 
@@ -271,8 +298,22 @@ export function HistoryWorkspace() {
       port: values.type === "tcpping" ? values.port : undefined,
       limit: values.limit,
     };
+    activeSelectionKeyRef.current = buildHistoryQueryString(nextSelection);
+    historyRetryCountRef.current = 0;
+    if (historyRetryTimerRef.current) {
+      window.clearTimeout(historyRetryTimerRef.current);
+      historyRetryTimerRef.current = null;
+    }
     await loadHistoryMutation.mutateAsync(nextSelection);
   }, [loadHistoryMutation]);
+
+  useEffect(() => {
+    return () => {
+      if (historyRetryTimerRef.current) {
+        window.clearTimeout(historyRetryTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (initialLoadDoneRef.current) {

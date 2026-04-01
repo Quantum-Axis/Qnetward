@@ -6,11 +6,14 @@ export default function SignupPage() {
   return (
     <GuestOnly>
       <AuthLayoutCard
-        eyebrow="Create Operator"
-        title="Create your account"
-        subtitle="Set up secure access for your NetWatcher workspace."
+        eyebrow="Secure Access"
+        title="Create account"
+        subtitle="Complete the guided setup to secure your workspace access."
         alternateHref="/login"
-        alternateLabel="Sign in"
+        alternateLabel="Back to login"
+        backdropClassName="py-3 sm:py-4"
+        shellClassName="sm:max-w-[38rem] px-4 py-4 sm:px-5 sm:py-5"
+        contentClassName="mt-4 sm:mt-5"
       >
         <SignupForm />
       </AuthLayoutCard>

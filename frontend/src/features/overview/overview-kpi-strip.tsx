@@ -10,11 +10,11 @@ type OverviewKpiStripProps = {
 
 export function OverviewKpiStrip({ trackedTargets, critical, warning, stable, liveStreams }: OverviewKpiStripProps) {
   const cards = [
-    { label: "Tracked Targets", value: trackedTargets, copy: "active monitoring", tone: "text-[#63ddd3]" },
-    { label: "Critical", value: critical, copy: "targets", tone: "text-rose-300" },
+    { label: "Tracked Targets", value: trackedTargets, copy: "active monitoring", tone: "text-cyan-200" },
+    { label: "Critical", value: critical, copy: "targets", tone: "text-fuchsia-300" },
     { label: "Warning", value: warning, copy: "targets", tone: "text-amber-200" },
-    { label: "Stable", value: stable, copy: "targets", tone: "text-emerald-300" },
-    { label: "Streaming", value: liveStreams, copy: "active runs", tone: "text-sky-300" },
+    { label: "Stable", value: stable, copy: "targets", tone: "text-cyan-100" },
+    { label: "Streaming", value: liveStreams, copy: "active runs", tone: "text-blue-300" },
   ];
 
   return (

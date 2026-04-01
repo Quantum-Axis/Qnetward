@@ -46,15 +46,19 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="relative min-h-screen bg-background">
+    <div className="dashboard-shell relative min-h-screen bg-background">
       <div className="bg-grid-overlay fixed inset-0 pointer-events-none z-0 opacity-25" />
       <div
         className="pointer-events-none fixed top-0 left-0 z-0 h-[400px] w-[600px]"
-        style={{ background: "radial-gradient(ellipse at 10% -10%, hsl(174 54% 56% / 0.15), transparent 60%)" }}
+        style={{ background: "radial-gradient(ellipse at 10% -10%, rgba(64, 240, 255, 0.16), transparent 60%)" }}
       />
       <div
         className="pointer-events-none fixed top-0 right-0 z-0 h-[300px] w-[500px]"
-        style={{ background: "radial-gradient(ellipse at 90% 0%, hsl(37 91% 50% / 0.1), transparent 60%)" }}
+        style={{ background: "radial-gradient(ellipse at 90% 0%, rgba(52, 129, 255, 0.14), transparent 60%)" }}
+      />
+      <div
+        className="pointer-events-none fixed bottom-0 right-0 z-0 h-[360px] w-[480px]"
+        style={{ background: "radial-gradient(ellipse at 100% 100%, rgba(248, 176, 51, 0.08), transparent 62%)" }}
       />
 
       <div className="relative z-10 flex min-h-screen">

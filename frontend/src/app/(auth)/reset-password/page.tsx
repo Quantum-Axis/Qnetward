@@ -7,7 +7,7 @@ export default function ResetPasswordPage() {
     <GuestOnly>
       <AuthLayoutCard
         eyebrow="Recovery"
-        title="Set a new password"
+        title="Set new password"
         subtitle="Set a new password for your account."
         alternateHref="/login"
         alternateLabel="Back to login"

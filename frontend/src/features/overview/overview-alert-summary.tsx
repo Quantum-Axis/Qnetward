@@ -11,9 +11,9 @@ export function OverviewAlertSummary({ critical, warning, stable }: OverviewAler
   const totalActive = critical + warning;
 
   const rows = [
-    { label: "Critical", value: critical, bar: "bg-rose-400", tone: "text-rose-200" },
+    { label: "Critical", value: critical, bar: "bg-fuchsia-400", tone: "text-fuchsia-200" },
     { label: "Warning", value: warning, bar: "bg-amber-400", tone: "text-amber-200" },
-    { label: "Stable", value: stable, bar: "bg-emerald-400", tone: "text-emerald-200" },
+    { label: "Stable", value: stable, bar: "bg-cyan-400", tone: "text-cyan-100" },
   ];
 
   return (

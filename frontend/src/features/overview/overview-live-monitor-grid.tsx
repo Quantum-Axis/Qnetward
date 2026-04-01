@@ -12,26 +12,26 @@ type OverviewLiveMonitorGridProps = {
 function borderTone(state: OverviewTargetSnapshot["healthState"]) {
   switch (state) {
     case "critical":
-      return "border-rose-500/35";
+      return "border-fuchsia-500/35";
     case "warning":
       return "border-amber-400/35";
     case "stable":
-      return "border-emerald-400/35";
+      return "border-cyan-400/35";
     default:
-      return "border-white/8";
+      return "border-blue-500/20";
   }
 }
 
 function dotTone(state: OverviewTargetSnapshot["healthState"]) {
   switch (state) {
     case "critical":
-      return "bg-rose-400";
+      return "bg-fuchsia-400";
     case "warning":
       return "bg-amber-400";
     case "stable":
-      return "bg-emerald-400";
+      return "bg-cyan-300";
     default:
-      return "bg-sky-400";
+      return "bg-blue-400";
   }
 }
 

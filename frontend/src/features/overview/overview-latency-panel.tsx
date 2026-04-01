@@ -50,12 +50,12 @@ export function OverviewLatencyPanel({ points }: OverviewLatencyPanelProps) {
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="overviewLatencyFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#44d4c8" stopOpacity={0.32} />
-                  <stop offset="60%" stopColor="#1ea7b8" stopOpacity={0.12} />
+                  <stop offset="0%" stopColor="#63f3ff" stopOpacity={0.34} />
+                  <stop offset="58%" stopColor="#3481ff" stopOpacity={0.13} />
                   <stop offset="100%" stopColor="#071019" stopOpacity={0.01} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="rgba(87,157,196,0.14)" strokeDasharray="3 5" />
+              <CartesianGrid stroke="rgba(92, 140, 255, 0.16)" strokeDasharray="3 5" />
               <XAxis
                 dataKey="label"
                 tick={{ fill: "#7f93ac", fontSize: 11 }}
@@ -69,29 +69,29 @@ export function OverviewLatencyPanel({ points }: OverviewLatencyPanelProps) {
                 axisLine={false}
               />
               <Tooltip
-                cursor={{ stroke: "rgba(68,212,200,0.22)", strokeWidth: 1 }}
+                cursor={{ stroke: "rgba(99, 243, 255, 0.22)", strokeWidth: 1 }}
                 contentStyle={{
                   background: "rgba(8,14,23,0.96)",
-                  border: "1px solid rgba(87,157,196,0.22)",
+                  border: "1px solid rgba(76,125,255,0.28)",
                   borderRadius: "16px",
                   color: "#e8f0ff",
                 }}
                 formatter={(value) => [formatMs(typeof value === "number" ? value : null), "RTT"]}
                 labelFormatter={(_, payload) => {
                   const row = payload?.[0]?.payload as OverviewLatencyPoint | undefined;
-                  return row ? `${row.key} • ${formatDateTime(row.ts)}` : "";
+                  return row ? `${row.key} - ${formatDateTime(row.ts)}` : "";
                 }}
               />
               <Area
                 type="monotone"
                 dataKey="rttMs"
-                stroke="#44d4c8"
+                stroke="#63f3ff"
                 fill="url(#overviewLatencyFill)"
                 strokeWidth={2.5}
                 dot={false}
                 isAnimationActive
                 animationDuration={420}
-                activeDot={{ r: 4, fill: "#f59e0b", stroke: "#071019", strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: "#f8b033", stroke: "#071019", strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -101,15 +101,15 @@ export function OverviewLatencyPanel({ points }: OverviewLatencyPanelProps) {
       <div className="mt-3 grid gap-3 border-t border-white/6 pt-3 sm:grid-cols-3">
         <div>
           <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Peak</p>
-          <p className="mt-1.5 text-base font-semibold text-rose-300">{formatMs(peak)}</p>
+          <p className="mt-1.5 text-base font-semibold text-fuchsia-300">{formatMs(peak)}</p>
         </div>
         <div>
           <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Floor</p>
-          <p className="mt-1.5 text-base font-semibold text-emerald-300">{formatMs(floor)}</p>
+          <p className="mt-1.5 text-base font-semibold text-cyan-200">{formatMs(floor)}</p>
         </div>
         <div>
           <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Median</p>
-          <p className="mt-1.5 text-base font-semibold text-sky-300">{formatMs(medianValue)}</p>
+          <p className="mt-1.5 text-base font-semibold text-blue-300">{formatMs(medianValue)}</p>
         </div>
       </div>
     </div>

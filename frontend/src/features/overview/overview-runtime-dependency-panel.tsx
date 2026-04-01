@@ -10,8 +10,8 @@ function dependencyTone(state: OverviewDependencySnapshot["state"]) {
   switch (state) {
     case "healthy":
       return {
-        text: "text-emerald-300",
-        bar: "bg-emerald-400",
+        text: "text-cyan-100",
+        bar: "bg-cyan-400",
       };
     case "degraded":
       return {

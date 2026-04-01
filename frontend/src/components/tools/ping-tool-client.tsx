@@ -87,8 +87,8 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
   const form = useForm<PingInput | TCPInput, unknown, PingValues | TCPValues>({
     resolver: zodResolver(schema),
     defaultValues: isPing
-      ? { host: "", count: 4, interval_ms: 1000, timeout_ms: 2000, size: 32, ipv6: false }
-      : { host: "", port: 443, count: 4, interval_ms: 1000, timeout_ms: 2000 },
+      ? { host: "", count: 5, interval_ms: 1000, timeout_ms: 2000, size: 32, ipv6: false }
+      : { host: "", port: 443, count: 5, interval_ms: 1000, timeout_ms: 2000 },
   });
 
   const { formError, report, run, runState, stop, isBusy } = useRealtimeProbe<PingValues | TCPValues>({
@@ -204,6 +204,9 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
             <div>
               <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-slate-500">Count</label>
               <Input type="number" className="bg-white/[0.04]" {...form.register("count", { valueAsNumber: true })} />
+              <p className="mt-2 text-[11px] leading-5 text-cyan-200/80">
+                By default, NetWatcher sends 5 packets per run. Adjust Count to send a custom number.
+              </p>
             </div>
             <div>
               <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-slate-500">Interval (ms)</label>

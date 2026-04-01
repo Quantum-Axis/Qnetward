@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -178,51 +179,48 @@ func TestHandleAuthSessionReturnsUnauthenticatedWithoutCookie(t *testing.T) {
 	}
 }
 
-func TestAuthPreviewFlow(t *testing.T) {
+func TestAuthDemoLoginFlow(t *testing.T) {
 	installTestStore(t)
-	originalEnabled := appPreviewEnabled
-	originalHash := appPreviewTokenHash
-	originalName := appPreviewName
-	originalEmail := appPreviewEmail
-	originalCreatedAt := appPreviewCreatedAt
+	originalEnabled := appDemoEnabled
+	originalName := appDemoName
+	originalEmail := appDemoEmail
+	originalCreatedAt := appDemoCreatedAt
 	t.Cleanup(func() {
-		appPreviewEnabled = originalEnabled
-		appPreviewTokenHash = originalHash
-		appPreviewName = originalName
-		appPreviewEmail = originalEmail
-		appPreviewCreatedAt = originalCreatedAt
+		appDemoEnabled = originalEnabled
+		appDemoName = originalName
+		appDemoEmail = originalEmail
+		appDemoCreatedAt = originalCreatedAt
 	})
 
-	appPreviewEnabled = true
-	appPreviewTokenHash = hashOpaqueToken("preview-secret")
-	appPreviewName = "Contributor Preview"
-	appPreviewEmail = "preview@netwatcher.local"
-	appPreviewCreatedAt = time.Now().UTC()
+	appDemoEnabled = true
+	appDemoName = "Contributor Demo"
+	appDemoEmail = "demo@netwatcher.local"
+	appDemoCreatedAt = time.Now().UTC()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/preview", strings.NewReader(`{"token":"preview-secret"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/demo-login", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	handleAuthPreview(rr, req)
+	handleAuthDemoLogin(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
 
 	result := rr.Result()
-	var previewCookie *http.Cookie
+	var sessionCookie *http.Cookie
 	for _, cookie := range result.Cookies() {
-		if cookie.Name == previewCookieName {
-			previewCookie = cookie
+		if cookie.Name == authCookieName {
+			sessionCookie = cookie
 			break
 		}
 	}
-	if previewCookie == nil || previewCookie.Value == "" {
-		t.Fatal("expected preview cookie to be issued")
+	if sessionCookie == nil || sessionCookie.Value == "" {
+		t.Fatal("expected auth session cookie to be issued")
 	}
 
 	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
-	sessionReq.AddCookie(previewCookie)
+	sessionReq.AddCookie(sessionCookie)
 	sessionRR := httptest.NewRecorder()
 	handleAuthSession(sessionRR, sessionReq)
 
@@ -232,27 +230,54 @@ func TestAuthPreviewFlow(t *testing.T) {
 
 	var sessionResp authSessionResponse
 	if err := json.Unmarshal(sessionRR.Body.Bytes(), &sessionResp); err != nil {
-		t.Fatalf("decode preview session response: %v", err)
+		t.Fatalf("decode demo session response: %v", err)
 	}
-	if !sessionResp.Authenticated || sessionResp.Mode != "preview" || !sessionResp.ReadOnly {
-		t.Fatalf("unexpected preview session response: %#v", sessionResp)
+	if !sessionResp.Authenticated || sessionResp.Mode != "demo" || sessionResp.ReadOnly {
+		t.Fatalf("unexpected demo session response: %#v", sessionResp)
 	}
 }
 
-func TestAuthLogoutClearsPreviewCookie(t *testing.T) {
-	originalEnabled := appPreviewEnabled
-	originalHash := appPreviewTokenHash
+func TestAuthLogoutClearsDemoCookie(t *testing.T) {
+	installTestStore(t)
+	originalEnabled := appDemoEnabled
+	originalName := appDemoName
+	originalEmail := appDemoEmail
 	t.Cleanup(func() {
-		appPreviewEnabled = originalEnabled
-		appPreviewTokenHash = originalHash
+		appDemoEnabled = originalEnabled
+		appDemoName = originalName
+		appDemoEmail = originalEmail
 	})
 
-	appPreviewEnabled = true
-	appPreviewTokenHash = hashOpaqueToken("preview-secret")
+	appDemoEnabled = true
+	appDemoName = "Contributor Demo"
+	appDemoEmail = "demo-logout@netwatcher.local"
+
+	ctx := context.Background()
+	user, err := appStore.GetUserByEmail(ctx, appDemoEmail)
+	if err != nil {
+		if !errors.Is(err, store.ErrUserNotFound) {
+			t.Fatalf("load demo user: %v", err)
+		}
+		passwordHash, hashErr := bcrypt.GenerateFromPassword([]byte("temporary-demo-password"), bcrypt.DefaultCost)
+		if hashErr != nil {
+			t.Fatalf("hash demo password: %v", hashErr)
+		}
+		user, err = appStore.CreateUser(ctx, appDemoName, appDemoEmail, string(passwordHash), false)
+		if err != nil {
+			t.Fatalf("create demo user: %v", err)
+		}
+	}
+	token, tokenHash, err := generateSessionToken()
+	if err != nil {
+		t.Fatalf("generate demo session token: %v", err)
+	}
+	if err := appStore.CreateSession(ctx, user.ID, tokenHash, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create demo session: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: previewCookieName, Value: appPreviewTokenHash})
+	req.AddCookie(&http.Cookie{Name: authCookieName, Value: token})
 	rr := httptest.NewRecorder()
 
 	handleAuthLogout(rr, req)
@@ -264,13 +289,13 @@ func TestAuthLogoutClearsPreviewCookie(t *testing.T) {
 	result := rr.Result()
 	cleared := false
 	for _, cookie := range result.Cookies() {
-		if cookie.Name == previewCookieName && cookie.MaxAge < 0 {
+		if cookie.Name == authCookieName && cookie.MaxAge < 0 {
 			cleared = true
 			break
 		}
 	}
 	if !cleared {
-		t.Fatal("expected preview cookie to be cleared")
+		t.Fatal("expected auth cookie to be cleared")
 	}
 }
 
@@ -371,6 +396,45 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	handlePing(unauthRR, unauthReq)
 	if unauthRR.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", unauthRR.Code)
+	}
+}
+
+func TestAuthSignupAcceptsFirstAndLastName(t *testing.T) {
+	installTestStore(t)
+	resetAuthRateLimiterForTest(t)
+
+	email := fmt.Sprintf("names_%d@example.com", time.Now().UnixNano())
+	body := fmt.Sprintf(`{"first_name":"Test","last_name":"Operator","email":"%s","password":"S3curePass!","confirm_password":"S3curePass!"}`, email)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handleAuthSignup(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAuthRejectsMismatchedConfirmPassword(t *testing.T) {
+	installTestStore(t)
+	resetAuthRateLimiterForTest(t)
+
+	email := fmt.Sprintf("mismatch_%d@example.com", time.Now().UnixNano())
+	signupReq := httptest.NewRequest(http.MethodPost, "/api/auth/signup", strings.NewReader(fmt.Sprintf(`{"name":"Mismatch User","email":"%s","password":"S3curePass!","confirm_password":"DifferentPass!"}`, email)))
+	signupReq.Header.Set("Content-Type", "application/json")
+	signupRR := httptest.NewRecorder()
+	handleAuthSignup(signupRR, signupReq)
+	if signupRR.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for signup mismatch, got %d: %s", signupRR.Code, signupRR.Body.String())
+	}
+
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(`{"token":"abc","password":"S3curePass!","confirm_password":"DifferentPass!"}`))
+	resetReq.Header.Set("Content-Type", "application/json")
+	resetRR := httptest.NewRecorder()
+	handleAuthResetPassword(resetRR, resetReq)
+	if resetRR.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for reset mismatch, got %d: %s", resetRR.Code, resetRR.Body.String())
 	}
 }
 

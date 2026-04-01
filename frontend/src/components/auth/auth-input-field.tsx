@@ -1,6 +1,6 @@
 "use client";
 
-import { InputHTMLAttributes, useState } from "react";
+import { InputHTMLAttributes, useMemo, useState } from "react";
 import { Eye, EyeOff, LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -8,30 +8,35 @@ import { cn } from "@/lib/utils";
 type AuthInputFieldProps = {
   id: string;
   label: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   error?: string;
   passwordToggle?: boolean;
   inputProps?: InputHTMLAttributes<HTMLInputElement>;
 };
 
-export function AuthInputField({ id, label, icon: Icon, error, passwordToggle = false, inputProps }: AuthInputFieldProps) {
+export function AuthInputField({ id, label, icon: _icon, error, passwordToggle = false, inputProps }: AuthInputFieldProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const resolvedType = passwordToggle ? (showPassword ? "text" : "password") : inputProps?.type;
+  void _icon;
+  const { className, placeholder, type, ...restInputProps } = inputProps ?? {};
+  const resolvedType = passwordToggle ? (showPassword ? "text" : "password") : type;
+  const resolvedPlaceholder = useMemo(() => {
+    if (placeholder) return placeholder;
+    return `Enter your ${label.toLowerCase()}`;
+  }, [label, placeholder]);
 
   return (
-    <div>
+    <div className="auth-input-group">
+      <label className="auth-field-label" htmlFor={id}>
+        {label}
+      </label>
       <div className="auth-input-shell">
-        <Icon className="auth-input-icon" />
         <Input
           id={id}
-          placeholder=" "
-          className={cn("auth-input peer", passwordToggle && "pr-12")}
-          {...inputProps}
+          className={cn("auth-input", passwordToggle && "pr-12", className)}
+          placeholder={resolvedPlaceholder}
           type={resolvedType}
+          {...restInputProps}
         />
-        <label className="auth-floating-label" htmlFor={id}>
-          {label}
-        </label>
         {passwordToggle ? (
           <button
             type="button"
@@ -43,7 +48,7 @@ export function AuthInputField({ id, label, icon: Icon, error, passwordToggle = 
           </button>
         ) : null}
       </div>
-      {error ? <p className="mt-2 text-sm text-rose-500">{error}</p> : null}
+      {error ? <p className="mt-2 text-[0.8rem] text-rose-400">{error}</p> : null}
     </div>
   );
 }

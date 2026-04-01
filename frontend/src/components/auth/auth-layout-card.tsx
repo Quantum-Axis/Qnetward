@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 export function AuthLayoutCard({
   title,
@@ -7,6 +8,10 @@ export function AuthLayoutCard({
   eyebrow,
   alternateHref,
   alternateLabel,
+  showAlternateFooter = true,
+  backdropClassName,
+  shellClassName,
+  contentClassName,
   children,
 }: {
   title: string;
@@ -14,66 +19,60 @@ export function AuthLayoutCard({
   eyebrow: string;
   alternateHref: string;
   alternateLabel: string;
+  showAlternateFooter?: boolean;
+  backdropClassName?: string;
+  shellClassName?: string;
+  contentClassName?: string;
   children: ReactNode;
 }) {
   return (
-    <div className="auth-backdrop flex min-h-screen items-center justify-center px-3 py-4 sm:px-5 sm:py-6 lg:px-8">
-      <div className="auth-shell w-full max-w-[72rem] overflow-hidden rounded-[1.5rem] lg:rounded-[2rem]">
-        <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
-          <section className="auth-form-panel flex flex-col px-5 py-6 sm:px-8 sm:py-8 lg:px-11 lg:py-10">
-            <div className="flex items-center gap-3">
-              <div className="auth-brand-mark flex h-10 w-10 items-center justify-center rounded-xl font-space text-sm font-bold text-white">
-                NW
-              </div>
-              <div>
-                <p className="font-space text-[1.32rem] font-bold tracking-[-0.03em] text-slate-950">NetWatcher</p>
-                <p className="text-[0.62rem] font-medium uppercase tracking-[0.3em] text-slate-500">Access</p>
-              </div>
-            </div>
-
-            <div className="mt-9 max-w-[28rem] sm:mt-10">
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.3em] text-teal-800/80">{eyebrow}</p>
-              <h1 className="mt-3 font-space text-[2.05rem] font-bold leading-[1.02] tracking-[-0.05em] text-slate-950 sm:text-[2.35rem]">
-                {title}
-              </h1>
-              <p className="mt-3 max-w-md text-[0.95rem] leading-7 text-slate-600">{subtitle}</p>
-            </div>
-
-            <div className="mt-8 max-w-[27rem]">{children}</div>
-
-            <div className="mt-7 max-w-[27rem] border-t border-slate-200 pt-4 text-sm text-slate-500">
-              Need a different path?{" "}
-              <Link className="font-semibold text-teal-800 transition hover:text-teal-700" href={alternateHref}>
-                {alternateLabel}
-              </Link>
-            </div>
-          </section>
-
-          <aside className="auth-brand-panel order-last flex flex-col justify-between px-5 py-6 text-white sm:px-8 sm:py-8 lg:order-none lg:px-11 lg:py-10">
-            <div>
-              <div className="auth-brand-chip">Private Access</div>
-              <h2 className="mt-6 max-w-lg font-space text-[1.95rem] font-semibold leading-[1.05] tracking-[-0.05em] sm:text-[2.45rem] lg:mt-10 lg:text-[3.05rem]">
-                A clean, premium entry point for your monitoring workspace.
-              </h2>
-              <p className="mt-4 max-w-md text-[0.96rem] leading-7 text-white/78">
-                Focused access for diagnostics, alerts, and live target visibility without clutter.
-              </p>
-
-              <div className="auth-brand-rule mt-9" />
-              <div className="mt-8 max-w-sm">
-                <p className="auth-signal-label">NetWatcher Console</p>
-                <p className="mt-3 text-[1rem] leading-7 text-white/86">
-                  Designed for a calm, readable workflow across monitoring, history, and active investigation.
-                </p>
-              </div>
-            </div>
-
-            <div className="auth-brand-footer mt-8">
-              <span>Secure session</span>
-              <span>Verified access</span>
-            </div>
-          </aside>
+    <div className={cn("auth-backdrop flex min-h-screen items-center justify-center px-4 py-5 sm:px-6 sm:py-7", backdropClassName)}>
+      <div className={cn("auth-shell w-full max-w-[27.75rem] overflow-hidden rounded-[1.35rem] px-5 py-5 sm:max-w-[32rem] sm:px-6 sm:py-6", shellClassName)}>
+        <div className="auth-shell-topline" aria-hidden="true" />
+        <div className="auth-brand-head">
+          <div className="auth-brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none" className="h-10 w-10 sm:h-11 sm:w-11">
+              <defs>
+                <linearGradient id="nw-mark-stroke" x1="10" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="white" />
+                  <stop offset="1" stopColor="#DDF8FF" />
+                </linearGradient>
+                <linearGradient id="nw-mark-accent" x1="14" y1="16" x2="50" y2="16" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#F6B847" />
+                  <stop offset="1" stopColor="#38BDF8" />
+                </linearGradient>
+              </defs>
+              <path d="M14 18.5L26.5 30V47.5" stroke="url(#nw-mark-stroke)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M50 18.5L37.5 30V47.5" stroke="url(#nw-mark-stroke)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M32 12.5V47.5" stroke="url(#nw-mark-stroke)" strokeWidth="5.8" strokeLinecap="round" />
+              <path d="M17 18.5H47" stroke="url(#nw-mark-accent)" strokeWidth="2.2" strokeLinecap="round" opacity="0.9" />
+              <circle cx="15.5" cy="18.5" r="3.3" fill="#F6B847" />
+              <circle cx="48.5" cy="18.5" r="3.3" fill="#38BDF8" />
+              <circle cx="32" cy="12.5" r="2.2" fill="#E6F7FF" opacity="0.9" />
+            </svg>
+          </div>
+          <div className="auth-brand-copy">
+            <p className="font-space text-[1.3rem] font-bold tracking-[-0.04em] text-white">NetWatcher</p>
+            <p className="auth-brand-subline">Secure network operations</p>
+          </div>
         </div>
+
+        <div className="auth-heading-block text-center">
+          <p className="auth-heading-eyebrow">{eyebrow}</p>
+          <h1 className="auth-heading-title">{title}</h1>
+          <p className="auth-heading-subtitle">{subtitle}</p>
+        </div>
+
+        <div className={cn("mt-6 sm:mt-7", contentClassName)}>{children}</div>
+
+        {showAlternateFooter ? (
+          <div className="auth-footer-note text-center">
+            Need a different path?{" "}
+            <Link className="auth-footer-link" href={alternateHref}>
+              {alternateLabel}
+            </Link>
+          </div>
+        ) : null}
       </div>
     </div>
   );

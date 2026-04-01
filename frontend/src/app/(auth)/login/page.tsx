@@ -6,11 +6,12 @@ export default function LoginPage() {
   return (
     <GuestOnly>
       <AuthLayoutCard
-        eyebrow="Operator Login"
-        title="Welcome back"
-        subtitle="Sign in to continue in your NetWatcher workspace."
+        eyebrow="Secure Access"
+        title="Login"
+        subtitle="Access your monitoring workspace."
         alternateHref="/signup"
         alternateLabel="Create an account"
+        showAlternateFooter={false}
       >
         <LoginForm />
       </AuthLayoutCard>

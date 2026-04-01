@@ -56,7 +56,7 @@ const navGroups: NavGroup[] = [
 export function Sidebar({ session }: { session: SessionResponse }) {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useShellStore();
-  const isPreview = session.read_only === true;
+  const isDemo = session.mode === "demo";
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     navGroups.forEach((group) => {
@@ -87,9 +87,9 @@ export function Sidebar({ session }: { session: SessionResponse }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-full flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar">
+        <div className="sidebar-shell flex h-full flex-col overflow-y-auto border-r border-sidebar-border">
           <div className="px-4 py-4">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Main</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100/40">Main</span>
           </div>
 
           <div className="mb-1 px-2">
@@ -98,24 +98,23 @@ export function Sidebar({ session }: { session: SessionResponse }) {
               onClick={() => setSidebarOpen(false)}
               className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                 pathname === "/"
-                  ? "border border-primary/20 bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                  ? "border border-cyan-300/22 bg-cyan-300/12 text-cyan-100 shadow-[0_0_18px_rgba(64,240,255,0.08)]"
+                  : "text-muted-foreground hover:bg-cyan-300/8 hover:text-foreground"
               }`}
             >
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-secondary text-[10px] font-bold tracking-wider text-foreground">OV</span>
+              <span className={`grid h-7 w-7 place-items-center rounded-md text-[10px] font-bold tracking-wider ${pathname === "/" ? "bg-[linear-gradient(135deg,rgba(23,211,194,0.96),rgba(52,129,255,0.96))] text-slate-950" : "bg-secondary/70 text-foreground"}`}>OV</span>
               Overview
             </Link>
           </div>
 
           <nav className="flex-1 space-y-0.5 px-2 pb-4">
-            {isPreview ? (
-              <div className="mx-2 mb-3 rounded-2xl border border-teal-400/18 bg-teal-400/10 px-3 py-3 text-xs leading-6 text-teal-100">
-                Preview access is read-only. Only the overview workspace is available.
+            {isDemo ? (
+              <div className="mx-2 mb-3 rounded-2xl border border-cyan-300/18 bg-cyan-300/10 px-3 py-3 text-xs leading-6 text-cyan-100">
+                Shared demo access is active.
               </div>
             ) : null}
 
-            {!isPreview &&
-              navGroups.map((group) => {
+            {navGroups.map((group) => {
                 const isOpen = openGroups.has(group.label);
                 const hasActive = group.items?.some((item) => item.href === pathname) ?? false;
                 const hasChildren = (group.items?.length ?? 0) > 0;
@@ -126,11 +125,11 @@ export function Sidebar({ session }: { session: SessionResponse }) {
                       type="button"
                       onClick={() => hasChildren && toggleGroup(group.label)}
                       className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                        hasActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                        hasActive ? "text-foreground" : "text-muted-foreground hover:bg-cyan-300/6 hover:text-foreground"
                       }`}
                     >
                       <span className="flex items-center gap-2.5">
-                        <span className="grid h-7 w-7 place-items-center rounded-md bg-secondary/60 text-[10px] font-bold tracking-wider">
+                        <span className={`grid h-7 w-7 place-items-center rounded-md text-[10px] font-bold tracking-wider ${hasActive ? "bg-[linear-gradient(135deg,rgba(23,211,194,0.94),rgba(52,129,255,0.92))] text-slate-950 shadow-[0_0_14px_rgba(64,240,255,0.14)]" : "bg-secondary/60"}`}>
                           {group.icon}
                         </span>
                         <span className="font-medium">{group.label}</span>
@@ -147,11 +146,11 @@ export function Sidebar({ session }: { session: SessionResponse }) {
                             onClick={() => setSidebarOpen(false)}
                             className={`flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all ${
                               pathname === item.href
-                                ? "bg-primary/15 font-medium text-primary"
-                                : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                                ? "bg-cyan-300/12 font-medium text-cyan-100 shadow-[0_0_14px_rgba(64,240,255,0.06)]"
+                                : "text-muted-foreground hover:bg-cyan-300/8 hover:text-foreground"
                             }`}
                           >
-                            <span className="grid h-6 w-6 place-items-center rounded bg-secondary/40 text-[9px] font-bold tracking-wider">
+                            <span className={`grid h-6 w-6 place-items-center rounded text-[9px] font-bold tracking-wider ${pathname === item.href ? "bg-cyan-300/14 text-cyan-100" : "bg-secondary/40 text-[9px]"}`}>
                               {item.icon}
                             </span>
                             {item.label}

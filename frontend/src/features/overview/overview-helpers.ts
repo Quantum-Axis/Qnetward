@@ -180,10 +180,10 @@ export function buildOverviewHealthDistribution(targets: OverviewTargetSnapshot[
   });
 
   const items: OverviewHealthDistributionItem[] = [
-    { label: "Critical", value: counts.critical, color: "#fb7185", tone: "critical" },
-    { label: "Warning", value: counts.warning, color: "#fbbf24", tone: "warning" },
-    { label: "Stable", value: counts.stable, color: "#34d399", tone: "stable" },
-    { label: "Idle", value: counts.idle, color: "#60a5fa", tone: "idle" },
+    { label: "Critical", value: counts.critical, color: "#ff5fd2", tone: "critical" },
+    { label: "Warning", value: counts.warning, color: "#f8b033", tone: "warning" },
+    { label: "Stable", value: counts.stable, color: "#63f3ff", tone: "stable" },
+    { label: "Idle", value: counts.idle, color: "#4c7dff", tone: "idle" },
     { label: "Disabled", value: counts.disabled, color: "#94a3b8", tone: "disabled" },
   ];
 

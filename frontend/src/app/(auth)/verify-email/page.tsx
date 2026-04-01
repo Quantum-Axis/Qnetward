@@ -6,8 +6,8 @@ export default function VerifyEmailPage() {
   return (
     <GuestOnly>
       <AuthLayoutCard
-        eyebrow="Verify Access"
-        title="Confirm your email"
+        eyebrow="Verification"
+        title="Verify email"
         subtitle="Enter the code from your inbox to activate access."
         alternateHref="/login"
         alternateLabel="Back to login"

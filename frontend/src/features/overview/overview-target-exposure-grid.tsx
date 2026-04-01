@@ -11,15 +11,15 @@ type OverviewTargetExposureGridProps = {
 function targetTone(state: OverviewTargetSnapshot["healthState"]) {
   switch (state) {
     case "critical":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-200";
+      return "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200";
     case "warning":
       return "border-amber-500/30 bg-amber-500/10 text-amber-200";
     case "stable":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+      return "border-cyan-500/30 bg-cyan-500/10 text-cyan-100";
     case "disabled":
       return "border-slate-700 bg-slate-900/80 text-slate-300";
     default:
-      return "border-cyan-900/60 bg-slate-950/70 text-cyan-100";
+      return "border-blue-500/20 bg-slate-950/70 text-blue-100";
   }
 }
 
@@ -46,7 +46,7 @@ export function OverviewTargetExposureGrid({ targets }: OverviewTargetExposureGr
             <Link key={target.id} href={target.href}>
               <div
                 className={cn(
-                  "rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:border-teal-400/36",
+                  "rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:border-cyan-400/36",
                   targetTone(target.healthState),
                 )}
               >

@@ -49,8 +49,13 @@ Core capabilities:
   PostgreSQL/TimescaleDB persistence, batching, retention
 - `internal/portscan`
   TCP connect port scanning
+- `internal/telemetry`
+  OpenTelemetry tracing and metrics (see [Observability](#observability))
 - `deploy`
   production `docker-compose` stack
+
+Architecturally significant decisions (and the reasoning behind them) are
+recorded in [`docs/adr`](docs/adr/README.md).
 
 ## Tech Stack
 

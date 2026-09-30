@@ -227,7 +227,7 @@ func streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req ws
 
 	rep, err := ping.RunStreamContext(ctx, req.Host, cfg, func(res report.Result) error {
 		ts := time.Now()
-		storeResult(user.TenantID, user.ID, "ping", req.Host, res.Addr, 0, res, ts)
+		storeResult(ctx, user.TenantID, user.ID, "ping", req.Host, res.Addr, 0, res, ts)
 		jr := toJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",
@@ -297,7 +297,7 @@ func streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req
 
 	rep, err := tcpping.RunStreamContext(ctx, host, port, cfg, func(res report.Result) error {
 		ts := time.Now()
-		storeResult(user.TenantID, user.ID, "tcpping", host, res.Addr, port, res, ts)
+		storeResult(ctx, user.TenantID, user.ID, "tcpping", host, res.Addr, port, res, ts)
 		jr := toJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",

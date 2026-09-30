@@ -13,10 +13,13 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"netwatcher/internal/cache"
 	"netwatcher/internal/mailer"
 	"netwatcher/internal/objectstore"
 	"netwatcher/internal/store"
+	"netwatcher/internal/telemetry"
 )
 
 const (
@@ -150,6 +153,19 @@ func runServe(args []string) {
 		os.Exit(2)
 	}
 
+	telemetryShutdown, err := telemetry.Setup(context.Background(), telemetry.ConfigFromEnv())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := telemetryShutdown(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "telemetry shutdown error: %v\n", err)
+		}
+	}()
+
 	defer func() {
 		appStore = nil
 		appCache = nil
@@ -271,9 +287,15 @@ func runServe(args []string) {
 	mux.HandleFunc("/ws", handleWS)
 	mux.Handle("/", newBackendFallbackHandler())
 
+	instrumentedMux := otelhttp.NewHandler(mux, "netwatcher.http",
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return r.Method + " " + r.URL.Path
+		}),
+	)
+
 	srv := &http.Server{
 		Addr:              *listen,
-		Handler:           withSecurityHeaders(mux),
+		Handler:           withSecurityHeaders(instrumentedMux),
 		ReadTimeout:       15 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       120 * time.Second,

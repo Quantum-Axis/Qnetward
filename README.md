@@ -185,6 +185,7 @@ NETWATCHER_S3_SECRET_KEY=change-me
 NETWATCHER_S3_BUCKET=netwatcher-artifacts
 NETWATCHER_S3_SSL=false
 NETWATCHER_DEMO_ENABLED=false
+NETWATCHER_OTEL_ENDPOINT=otel-collector:4318
 ```
 
 Start the production stack:
@@ -199,6 +200,31 @@ Health check response now includes dependency status for:
 - database
 - redis
 - object storage
+
+## Observability
+
+NetWatcher exports OpenTelemetry traces and metrics over OTLP/HTTP when an
+endpoint is configured. It is off by default and never blocks startup or
+requests if the collector is unreachable.
+
+```bash
+NETWATCHER_OTEL_ENDPOINT=localhost:4318      # or OTEL_EXPORTER_OTLP_ENDPOINT
+NETWATCHER_OTEL_SERVICE_VERSION=1.2.3        # optional, reported as service.version
+```
+
+A bare `host:port` (or an explicit `http://` scheme) connects without TLS;
+use `https://` for a collector that requires it. When configured:
+
+- Every HTTP request gets a trace span (`METHOD /path`), via
+  [`otelhttp`](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp).
+- Every database query gets a span and the connection pool exports gauges
+  (open/idle/in-use connections), via
+  [`otelsql`](https://pkg.go.dev/github.com/XSAM/otelsql).
+- `netwatcher.probes.total` (counter) and `netwatcher.probe.duration`
+  (histogram), labeled by `protocol` and `success`, cover ping/tcpping
+  probes.
+- `netwatcher.alerts.evaluated` and `netwatcher.alerts.triggered`
+  (counters), labeled by `protocol`, cover alert rule evaluation.
 
 ## Contributor Demo Access
 

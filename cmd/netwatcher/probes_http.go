@@ -11,6 +11,7 @@ import (
 	"netwatcher/internal/report"
 	"netwatcher/internal/store"
 	"netwatcher/internal/tcpping"
+	"netwatcher/internal/telemetry"
 )
 
 type jsonResult struct {
@@ -128,7 +129,7 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 	defer release()
 
 	rep, err := ping.RunStreamContext(r.Context(), req.Host, cfg, func(res report.Result) error {
-		storeResult(user.TenantID, user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
+		storeResult(r.Context(), user.TenantID, user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -196,7 +197,7 @@ func handleTCPPing(w http.ResponseWriter, r *http.Request) {
 	defer release()
 
 	rep, err := tcpping.RunStreamContext(r.Context(), host, port, cfg, func(res report.Result) error {
-		storeResult(user.TenantID, user.ID, "tcpping", host, res.Addr, port, res, time.Now())
+		storeResult(r.Context(), user.TenantID, user.ID, "tcpping", host, res.Addr, port, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -397,7 +398,9 @@ func toJSONPortScanResult(r portscan.Result) jsonResult {
 	return jr
 }
 
-func storeResult(tenantID, userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
+func storeResult(ctx context.Context, tenantID, userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
+	telemetry.RecordProbe(ctx, protocol, res.Error == "", res.RTT)
+
 	if appStore == nil {
 		return
 	}

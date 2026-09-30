@@ -10,6 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/XSAM/otelsql"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -388,7 +391,7 @@ func openDB(cfg Config) (*sql.DB, error) {
 	if cfg.DSN == "" {
 		return nil, fmt.Errorf("postgres dsn is required")
 	}
-	db, err := sql.Open("pgx", cfg.DSN)
+	db, err := otelsql.Open("pgx", cfg.DSN, otelsql.WithAttributes(semconv.DBSystemPostgreSQL))
 	if err != nil {
 		return nil, err
 	}
@@ -400,6 +403,11 @@ func openDB(cfg Config) (*sql.DB, error) {
 	}
 	if cfg.ConnMaxLifetime > 0 {
 		db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	}
+	// Best-effort: connection pool gauges (open/idle/in-use) are a
+	// convenience, not something callers should fail startup over.
+	if _, err := otelsql.RegisterDBStatsMetrics(db, otelsql.WithAttributes(semconv.DBSystemPostgreSQL)); err != nil {
+		log.Printf("telemetry: register db stats metrics: %v", err)
 	}
 	return db, nil
 }

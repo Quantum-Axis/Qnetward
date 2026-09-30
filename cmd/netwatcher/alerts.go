@@ -14,6 +14,7 @@ import (
 	"netwatcher/internal/mailer"
 	"netwatcher/internal/report"
 	"netwatcher/internal/store"
+	"netwatcher/internal/telemetry"
 )
 
 // alertEvalWG tracks in-flight background alert evaluations spawned by
@@ -230,6 +231,7 @@ func enqueueAlertEvaluation(user store.User, protocol, target string, port int, 
 			log.Printf("alert evaluation failed for %s/%s: %v", protocol, target, err)
 			return
 		}
+		telemetry.RecordAlertEvaluation(ctx, protocol, len(decisions))
 		if mailerClient == nil {
 			return
 		}

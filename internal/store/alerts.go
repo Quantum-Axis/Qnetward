@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,6 +14,7 @@ var ErrAlertRuleNotFound = errors.New("alert rule not found")
 
 type AlertRule struct {
 	ID                   int64      `json:"id"`
+	TenantID             int64      `json:"-"`
 	UserID               int64      `json:"-"`
 	Name                 string     `json:"name"`
 	Protocol             string     `json:"protocol"`
@@ -48,7 +50,15 @@ type AlertDecision struct {
 	Summary   string
 }
 
-func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, error) {
+// SaveAlertRule creates or (when rule.ID is set) updates an alert rule,
+// scoped to tenantID. Row-Level Security on alert_rules independently
+// enforces this scoping at the database level: withTenant sets the
+// session's current tenant for the transaction, so an UPDATE naming a
+// rule from a different tenant matches zero rows (ErrAlertRuleNotFound)
+// even before the WHERE clause below is considered, and an INSERT whose
+// tenant_id doesn't match the session's is rejected by the policy's
+// WITH CHECK.
+func (s *Store) SaveAlertRule(ctx context.Context, tenantID int64, rule AlertRule) (AlertRule, error) {
 	if s == nil {
 		return AlertRule{}, errors.New("store is not available")
 	}
@@ -56,78 +66,79 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 	if err := validateAlertRule(&rule); err != nil {
 		return AlertRule{}, err
 	}
-
-	if rule.ID == 0 {
-		var saved AlertRule
-		row := s.db.QueryRowContext(ctx, `
-			INSERT INTO alert_rules (
-				user_id, name, protocol, target, port, recipient_email,
-				latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
-				cooldown_minutes, notify_on_recovery, enabled
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-			RETURNING id, user_id, name, protocol, target, port, recipient_email,
-				latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
-				cooldown_minutes, notify_on_recovery, enabled, last_state,
-				current_breach_streak, last_triggered_at, last_recovered_at,
-				last_evaluated_at, created_at
-		`,
-			rule.UserID,
-			rule.Name,
-			rule.Protocol,
-			rule.Target,
-			rule.Port,
-			rule.RecipientEmail,
-			rule.LatencyThresholdMs,
-			rule.LossThresholdPercent,
-			rule.ConsecutiveBreaches,
-			rule.CooldownMinutes,
-			rule.NotifyOnRecovery,
-			rule.Enabled,
-		)
-		if err := scanAlertRule(row, &saved); err != nil {
-			return AlertRule{}, err
-		}
-		return saved, nil
-	}
+	rule.TenantID = tenantID
 
 	var saved AlertRule
-	row := s.db.QueryRowContext(ctx, `
-		UPDATE alert_rules
-		SET
-			name = $3,
-			protocol = $4,
-			target = $5,
-			port = $6,
-			recipient_email = $7,
-			latency_threshold_ms = $8,
-			loss_threshold_percent = $9,
-			consecutive_breaches = $10,
-			cooldown_minutes = $11,
-			notify_on_recovery = $12,
-			enabled = $13
-		WHERE id = $1 AND user_id = $2
-		RETURNING id, user_id, name, protocol, target, port, recipient_email,
-			latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
-			cooldown_minutes, notify_on_recovery, enabled, last_state,
-			current_breach_streak, last_triggered_at, last_recovered_at,
-			last_evaluated_at, created_at
-	`,
-		rule.ID,
-		rule.UserID,
-		rule.Name,
-		rule.Protocol,
-		rule.Target,
-		rule.Port,
-		rule.RecipientEmail,
-		rule.LatencyThresholdMs,
-		rule.LossThresholdPercent,
-		rule.ConsecutiveBreaches,
-		rule.CooldownMinutes,
-		rule.NotifyOnRecovery,
-		rule.Enabled,
-	)
-	err := scanAlertRule(row, &saved)
+	err := s.withTenant(ctx, tenantID, func(tx *sql.Tx) error {
+		var row *sql.Row
+		if rule.ID == 0 {
+			row = tx.QueryRowContext(ctx, `
+				INSERT INTO alert_rules (
+					tenant_id, user_id, name, protocol, target, port, recipient_email,
+					latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
+					cooldown_minutes, notify_on_recovery, enabled
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+				RETURNING id, tenant_id, user_id, name, protocol, target, port, recipient_email,
+					latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
+					cooldown_minutes, notify_on_recovery, enabled, last_state,
+					current_breach_streak, last_triggered_at, last_recovered_at,
+					last_evaluated_at, created_at
+			`,
+				tenantID,
+				rule.UserID,
+				rule.Name,
+				rule.Protocol,
+				rule.Target,
+				rule.Port,
+				rule.RecipientEmail,
+				rule.LatencyThresholdMs,
+				rule.LossThresholdPercent,
+				rule.ConsecutiveBreaches,
+				rule.CooldownMinutes,
+				rule.NotifyOnRecovery,
+				rule.Enabled,
+			)
+		} else {
+			row = tx.QueryRowContext(ctx, `
+				UPDATE alert_rules
+				SET
+					name = $4,
+					protocol = $5,
+					target = $6,
+					port = $7,
+					recipient_email = $8,
+					latency_threshold_ms = $9,
+					loss_threshold_percent = $10,
+					consecutive_breaches = $11,
+					cooldown_minutes = $12,
+					notify_on_recovery = $13,
+					enabled = $14
+				WHERE id = $1 AND tenant_id = $2 AND user_id = $3
+				RETURNING id, tenant_id, user_id, name, protocol, target, port, recipient_email,
+					latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
+					cooldown_minutes, notify_on_recovery, enabled, last_state,
+					current_breach_streak, last_triggered_at, last_recovered_at,
+					last_evaluated_at, created_at
+			`,
+				rule.ID,
+				tenantID,
+				rule.UserID,
+				rule.Name,
+				rule.Protocol,
+				rule.Target,
+				rule.Port,
+				rule.RecipientEmail,
+				rule.LatencyThresholdMs,
+				rule.LossThresholdPercent,
+				rule.ConsecutiveBreaches,
+				rule.CooldownMinutes,
+				rule.NotifyOnRecovery,
+				rule.Enabled,
+			)
+		}
+		return scanAlertRule(row, &saved)
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return AlertRule{}, ErrAlertRuleNotFound
 	}
@@ -137,58 +148,72 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 	return saved, nil
 }
 
-func (s *Store) ListAlertRules(ctx context.Context, userID int64) ([]AlertRule, error) {
+func (s *Store) ListAlertRules(ctx context.Context, tenantID, userID int64) ([]AlertRule, error) {
 	if s == nil {
 		return nil, errors.New("store is not available")
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, user_id, name, protocol, target, port, recipient_email,
-			latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
-			cooldown_minutes, notify_on_recovery, enabled, last_state,
-			current_breach_streak, last_triggered_at, last_recovered_at,
-			last_evaluated_at, created_at
-		FROM alert_rules
-		WHERE user_id = $1
-		ORDER BY created_at DESC, id DESC
-	`, userID)
+	var rules []AlertRule
+	err := s.withTenant(ctx, tenantID, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT id, tenant_id, user_id, name, protocol, target, port, recipient_email,
+				latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
+				cooldown_minutes, notify_on_recovery, enabled, last_state,
+				current_breach_streak, last_triggered_at, last_recovered_at,
+				last_evaluated_at, created_at
+			FROM alert_rules
+			WHERE tenant_id = $1 AND user_id = $2
+			ORDER BY created_at DESC, id DESC
+		`, tenantID, userID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		rules = make([]AlertRule, 0, 8)
+		for rows.Next() {
+			var rule AlertRule
+			if err := scanAlertRule(rows, &rule); err != nil {
+				return err
+			}
+			rules = append(rules, rule)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	rules := make([]AlertRule, 0, 8)
-	for rows.Next() {
-		var rule AlertRule
-		if err := scanAlertRule(rows, &rule); err != nil {
-			return nil, err
-		}
-		rules = append(rules, rule)
-	}
-	return rules, rows.Err()
+	return rules, nil
 }
 
-func (s *Store) DeleteAlertRule(ctx context.Context, userID, ruleID int64) error {
+func (s *Store) DeleteAlertRule(ctx context.Context, tenantID, userID, ruleID int64) error {
 	if s == nil {
 		return errors.New("store is not available")
 	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM alert_rules WHERE id = $1 AND user_id = $2`, ruleID, userID)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ErrAlertRuleNotFound
-	}
-	return nil
+	return s.withTenant(ctx, tenantID, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `
+			DELETE FROM alert_rules WHERE id = $1 AND tenant_id = $2 AND user_id = $3
+		`, ruleID, tenantID, userID)
+		if err != nil {
+			return err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return ErrAlertRuleNotFound
+		}
+		return nil
+	})
 }
 
-func (s *Store) EvaluateAlertRules(ctx context.Context, userID int64, protocol, target string, port int, sample AlertSample) ([]AlertDecision, error) {
+func (s *Store) EvaluateAlertRules(ctx context.Context, tenantID, userID int64, protocol, target string, port int, sample AlertSample) ([]AlertDecision, error) {
 	if s == nil {
 		return nil, errors.New("store is not available")
+	}
+	if tenantID <= 0 {
+		return nil, errors.New("tenant id is required")
 	}
 
 	now := time.Now().UTC()
@@ -200,23 +225,28 @@ func (s *Store) EvaluateAlertRules(ctx context.Context, userID int64, protocol, 
 		_ = tx.Rollback()
 	}()
 
+	if _, err := tx.ExecContext(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+		return nil, err
+	}
+
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, user_id, name, protocol, target, port, recipient_email,
+		SELECT id, tenant_id, user_id, name, protocol, target, port, recipient_email,
 			latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
 			cooldown_minutes, notify_on_recovery, enabled, last_state,
 			current_breach_streak, last_triggered_at, last_recovered_at,
 			last_evaluated_at, created_at
 		FROM alert_rules
-		WHERE user_id = $1
+		WHERE tenant_id = $1
+			AND user_id = $2
 			AND enabled = TRUE
-			AND protocol = $2
-			AND target = $3
+			AND protocol = $3
+			AND target = $4
 			AND (
-				($4 = 0 AND port IS NULL) OR port = $4
+				($5 = 0 AND port IS NULL) OR port = $5
 			)
 		ORDER BY id
 		FOR UPDATE
-	`, userID, protocol, target, port)
+	`, tenantID, userID, protocol, target, port)
 	if err != nil {
 		return nil, err
 	}
@@ -405,6 +435,7 @@ func scanAlertRule(scanner alertRuleScanner, rule *AlertRule) error {
 
 	if err := scanner.Scan(
 		&rule.ID,
+		&rule.TenantID,
 		&rule.UserID,
 		&rule.Name,
 		&rule.Protocol,
@@ -457,4 +488,3 @@ func nullTimePtr(v sql.NullTime) *time.Time {
 	t := v.Time.UTC()
 	return &t
 }
-

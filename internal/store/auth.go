@@ -21,6 +21,7 @@ var (
 
 type User struct {
 	ID                   int64      `json:"id"`
+	TenantID             int64      `json:"tenant_id"`
 	Name                 string     `json:"name"`
 	Email                string     `json:"email"`
 	VerificationRequired bool       `json:"verification_required"`
@@ -40,6 +41,9 @@ func NormalizeEmail(value string) (string, error) {
 	return value, nil
 }
 
+// CreateUser creates a new tenant for this user and the user itself, in
+// one transaction: every user belongs to exactly one tenant today,
+// auto-provisioned at signup (see Tenant's doc comment).
 func (s *Store) CreateUser(ctx context.Context, name, email, passwordHash string, verificationRequired bool) (User, error) {
 	email, err := NormalizeEmail(email)
 	if err != nil {
@@ -50,16 +54,37 @@ func (s *Store) CreateUser(ctx context.Context, name, email, passwordHash string
 		return User{}, errors.New("name is required")
 	}
 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	var tenantID int64
+	if err := tx.QueryRowContext(ctx, `
+		INSERT INTO tenants (name)
+		VALUES ($1)
+		RETURNING id
+	`, name+"'s workspace").Scan(&tenantID); err != nil {
+		return User{}, err
+	}
+
 	var user User
-	err = s.db.QueryRowContext(ctx, `
-		INSERT INTO users (name, email, password_hash, verification_required)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, name, email, verification_required, email_verified_at, created_at
-	`, name, email, passwordHash, verificationRequired).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO users (tenant_id, name, email, password_hash, verification_required)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, tenant_id, name, email, verification_required, email_verified_at, created_at
+	`, tenantID, name, email, passwordHash, verificationRequired).Scan(&user.ID, &user.TenantID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "idx_users_email_lower") {
 			return User{}, ErrUserExists
 		}
+		return User{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return User{}, err
 	}
 	return user, nil
@@ -74,10 +99,10 @@ func (s *Store) AuthenticateUser(ctx context.Context, email string) (User, strin
 	var user User
 	var passwordHash string
 	err = s.db.QueryRowContext(ctx, `
-		SELECT id, name, email, password_hash, verification_required, email_verified_at, created_at
+		SELECT id, tenant_id, name, email, password_hash, verification_required, email_verified_at, created_at
 		FROM users
 		WHERE email = $1
-	`, email).Scan(&user.ID, &user.Name, &user.Email, &passwordHash, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
+	`, email).Scan(&user.ID, &user.TenantID, &user.Name, &user.Email, &passwordHash, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, "", ErrInvalidCredentials
 	}
@@ -95,10 +120,10 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) 
 
 	var user User
 	err = s.db.QueryRowContext(ctx, `
-		SELECT id, name, email, verification_required, email_verified_at, created_at
+		SELECT id, tenant_id, name, email, verification_required, email_verified_at, created_at
 		FROM users
 		WHERE email = $1
-	`, email).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
+	`, email).Scan(&user.ID, &user.TenantID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrUserNotFound
 	}
@@ -119,11 +144,11 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash strin
 func (s *Store) GetUserBySessionToken(ctx context.Context, tokenHash string) (User, error) {
 	var user User
 	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at
+		SELECT u.id, u.tenant_id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at
 		FROM sessions s
 		INNER JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.expires_at > NOW()
-	`, tokenHash).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
+	`, tokenHash).Scan(&user.ID, &user.TenantID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrSessionNotFound
 	}
@@ -205,7 +230,7 @@ func (s *Store) VerifyUserEmailCode(ctx context.Context, email string, codeHash 
 
 	var user User
 	err = tx.QueryRowContext(ctx, `
-		SELECT u.id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at
+		SELECT u.id, u.tenant_id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at
 		FROM users u
 		INNER JOIN email_verification_codes evc ON evc.user_id = u.id
 		WHERE u.email = $1
@@ -213,7 +238,7 @@ func (s *Store) VerifyUserEmailCode(ctx context.Context, email string, codeHash 
 			AND evc.code_hash = $2
 			AND evc.expires_at > NOW()
 		FOR UPDATE
-	`, email, codeHash).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
+	`, email, codeHash).Scan(&user.ID, &user.TenantID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrVerificationCode
 	}

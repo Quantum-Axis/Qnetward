@@ -54,7 +54,7 @@ func handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		rules, err := appStore.ListAlertRules(ctx, user.ID)
+		rules, err := appStore.ListAlertRules(ctx, user.TenantID, user.ID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
@@ -78,7 +78,7 @@ func handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		saved, err := appStore.SaveAlertRule(ctx, rule)
+		saved, err := appStore.SaveAlertRule(ctx, user.TenantID, rule)
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrAlertRuleNotFound):
@@ -105,7 +105,7 @@ func handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
-		if err := appStore.DeleteAlertRule(ctx, user.ID, ruleID); err != nil {
+		if err := appStore.DeleteAlertRule(ctx, user.TenantID, user.ID, ruleID); err != nil {
 			switch {
 			case errors.Is(err, store.ErrAlertRuleNotFound):
 				writeJSON(w, http.StatusNotFound, apiError{Error: "alert rule not found"})
@@ -225,7 +225,7 @@ func enqueueAlertEvaluation(user store.User, protocol, target string, port int, 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		decisions, err := st.EvaluateAlertRules(ctx, user.ID, protocol, target, port, sample)
+		decisions, err := st.EvaluateAlertRules(ctx, user.TenantID, user.ID, protocol, target, port, sample)
 		if err != nil {
 			log.Printf("alert evaluation failed for %s/%s: %v", protocol, target, err)
 			return

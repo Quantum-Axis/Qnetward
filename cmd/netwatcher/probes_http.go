@@ -128,7 +128,7 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 	defer release()
 
 	rep, err := ping.RunStreamContext(r.Context(), req.Host, cfg, func(res report.Result) error {
-		storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
+		storeResult(user.TenantID, user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -196,7 +196,7 @@ func handleTCPPing(w http.ResponseWriter, r *http.Request) {
 	defer release()
 
 	rep, err := tcpping.RunStreamContext(r.Context(), host, port, cfg, func(res report.Result) error {
-		storeResult(user.ID, "tcpping", host, res.Addr, port, res, time.Now())
+		storeResult(user.TenantID, user.ID, "tcpping", host, res.Addr, port, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -397,11 +397,12 @@ func toJSONPortScanResult(r portscan.Result) jsonResult {
 	return jr
 }
 
-func storeResult(userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
+func storeResult(tenantID, userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
 	if appStore == nil {
 		return
 	}
 	rec := store.ResultRecord{
+		TenantID: tenantID,
 		UserID:   userID,
 		Ts:       ts,
 		Protocol: protocol,

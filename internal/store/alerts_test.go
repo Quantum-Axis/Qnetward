@@ -21,7 +21,7 @@ func TestAlertRuleCRUDAndEvaluation(t *testing.T) {
 	}
 
 	threshold := 120.0
-	rule, err := st.SaveAlertRule(ctx, AlertRule{
+	rule, err := st.SaveAlertRule(ctx, user.TenantID, AlertRule{
 		UserID:              user.ID,
 		Name:                "API latency",
 		Protocol:            "tcpping",
@@ -38,7 +38,7 @@ func TestAlertRuleCRUDAndEvaluation(t *testing.T) {
 		t.Fatalf("SaveAlertRule returned error: %v", err)
 	}
 
-	rules, err := st.ListAlertRules(ctx, user.ID)
+	rules, err := st.ListAlertRules(ctx, user.TenantID, user.ID)
 	if err != nil {
 		t.Fatalf("ListAlertRules returned error: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestAlertRuleCRUDAndEvaluation(t *testing.T) {
 	}
 
 	avg := 180.0
-	decisions, err := st.EvaluateAlertRules(ctx, user.ID, "tcpping", "example.com", 443, AlertSample{
+	decisions, err := st.EvaluateAlertRules(ctx, user.TenantID, user.ID, "tcpping", "example.com", 443, AlertSample{
 		LatencyAvgMs: &avg,
 		LossPercent:  0,
 		Sent:         4,
@@ -60,7 +60,7 @@ func TestAlertRuleCRUDAndEvaluation(t *testing.T) {
 		t.Fatalf("expected no trigger on first breach, got %#v", decisions)
 	}
 
-	decisions, err = st.EvaluateAlertRules(ctx, user.ID, "tcpping", "example.com", 443, AlertSample{
+	decisions, err = st.EvaluateAlertRules(ctx, user.TenantID, user.ID, "tcpping", "example.com", 443, AlertSample{
 		LatencyAvgMs: &avg,
 		LossPercent:  0,
 		Sent:         4,
@@ -74,7 +74,7 @@ func TestAlertRuleCRUDAndEvaluation(t *testing.T) {
 	}
 
 	okAvg := 40.0
-	decisions, err = st.EvaluateAlertRules(ctx, user.ID, "tcpping", "example.com", 443, AlertSample{
+	decisions, err = st.EvaluateAlertRules(ctx, user.TenantID, user.ID, "tcpping", "example.com", 443, AlertSample{
 		LatencyAvgMs: &okAvg,
 		LossPercent:  0,
 		Sent:         4,
@@ -87,7 +87,7 @@ func TestAlertRuleCRUDAndEvaluation(t *testing.T) {
 		t.Fatalf("expected recovery alert, got %#v", decisions)
 	}
 
-	if err := st.DeleteAlertRule(ctx, user.ID, rule.ID); err != nil {
+	if err := st.DeleteAlertRule(ctx, user.TenantID, user.ID, rule.ID); err != nil {
 		t.Fatalf("DeleteAlertRule returned error: %v", err)
 	}
 }

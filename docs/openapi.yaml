@@ -1,0 +1,1175 @@
+openapi: 3.0.3
+info:
+  title: Net-Watcher API
+  description: |
+    HTTP API for Net-Watcher: ICMP ping, TCP ping, port scanning, DNS lookup,
+    realtime probe streaming over WebSocket, history, exports, alert rules,
+    and session-based authentication.
+
+    Authentication uses an HTTP-only session cookie (`netwatcher_session`),
+    issued by the `/api/auth/*` endpoints. Endpoints marked as requiring
+    authentication expect that cookie to be present; unauthenticated
+    requests receive `401 Unauthorized`.
+  version: "0.1.0"
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development server
+
+tags:
+  - name: health
+    description: Liveness and dependency status
+  - name: auth
+    description: Session-cookie based signup, login, and password/email flows
+  - name: probes
+    description: On-demand ICMP ping, TCP ping, port scan, and DNS lookup
+  - name: history
+    description: Stored probe results and exports
+  - name: alerts
+    description: Threshold-based alert rules on probe targets
+  - name: realtime
+    description: WebSocket streaming of live probe runs
+
+security:
+  - sessionCookie: []
+
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness and dependency health check
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Health status (200 even when a dependency is unhealthy; see `ok`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/healthz:
+    get:
+      tags: [health]
+      summary: Alias of /healthz
+      operationId: getHealthAlias
+      security: []
+      responses:
+        "200":
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/auth/session:
+    get:
+      tags: [auth]
+      summary: Get the current session, if any
+      operationId: getAuthSession
+      security: []
+      responses:
+        "200":
+          description: Session state (authenticated=false when no valid session cookie is present)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+
+  /api/auth/demo-login:
+    post:
+      tags: [auth]
+      summary: Sign in as the shared demo account (only when demo mode is enabled)
+      operationId: postAuthDemoLogin
+      security: []
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+        "404":
+          description: Demo access is disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/signup:
+    post:
+      tags: [auth]
+      summary: Create an account
+      operationId: postAuthSignup
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthSignupRequest"
+      responses:
+        "200":
+          description: Account created (may require email verification)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+        "409":
+          description: A user with this email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Log in with email and password
+      operationId: postAuthLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+        "401":
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Log out and clear the session cookie
+      operationId: postAuthLogout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/auth/verify-email:
+    post:
+      tags: [auth]
+      summary: Verify an email address with a one-time code
+      operationId: postAuthVerifyEmail
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthVerifyEmailRequest"
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+
+  /api/auth/resend-verification:
+    post:
+      tags: [auth]
+      summary: Resend the email verification code (rate-limited)
+      operationId: postAuthResendVerification
+      responses:
+        "200":
+          description: Verification code resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Request a password reset email (rate-limited)
+      operationId: postAuthForgotPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthForgotPasswordRequest"
+      responses:
+        "200":
+          description: |
+            Always 200 regardless of whether the email exists, to avoid
+            leaking account existence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+
+  /api/auth/reset-password:
+    post:
+      tags: [auth]
+      summary: Reset a password with a reset token
+      operationId: postAuthResetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+        "400":
+          description: Reset link is invalid or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/ping:
+    post:
+      tags: [probes]
+      summary: Run an ICMP ping and return the full report
+      operationId: postPing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PingRequest"
+      responses:
+        "200":
+          description: Ping report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeReport"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Server busy, try again (probe concurrency limit reached)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/tcpping:
+    post:
+      tags: [probes]
+      summary: Run a TCP connect ping and return the full report
+      operationId: postTcpPing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TCPPingRequest"
+      responses:
+        "200":
+          description: TCP ping report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeReport"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Server busy, try again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/portscan:
+    post:
+      tags: [probes]
+      summary: Run a TCP connect port scan and return the full report
+      operationId: postPortScan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortScanRequest"
+      responses:
+        "200":
+          description: Port scan report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeReport"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Server busy, try again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/dnslookup:
+    post:
+      tags: [probes]
+      summary: Run a DNS lookup across common record types
+      operationId: postDnsLookup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DNSLookupRequest"
+      responses:
+        "200":
+          description: DNS lookup report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DNSLookupReport"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/history:
+    get:
+      tags: [history]
+      summary: Query stored probe history for a target
+      operationId: getHistory
+      parameters:
+        - $ref: "#/components/parameters/HistoryType"
+        - $ref: "#/components/parameters/HistoryHost"
+        - $ref: "#/components/parameters/HistoryPort"
+        - $ref: "#/components/parameters/HistoryLimit"
+      responses:
+        "200":
+          description: History points, newest last
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryPoint"
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Storage not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/history/recent-targets:
+    get:
+      tags: [history]
+      summary: List the current user's most recently probed targets
+      operationId: getRecentHistoryTargets
+      parameters:
+        - name: limit
+          in: query
+          description: Max targets to return (1-50, default 12)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 12
+      responses:
+        "200":
+          description: Recent targets, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecentHistoryTarget"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/export/history:
+    post:
+      tags: [history]
+      summary: Export stored history as a download or an S3-compatible object
+      operationId: postExportHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HistoryExportRequest"
+      responses:
+        "200":
+          description: |
+            When `destination` is `download`, the response body is the file
+            itself (`application/json` or `text/csv`, with a
+            `Content-Disposition: attachment` header). When `destination` is
+            `s3`, the response body is a JSON object with the uploaded
+            object's key and a presigned URL.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/HistoryPoint"
+                  - $ref: "#/components/schemas/HistoryExportS3Response"
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Storage (or, for destination=s3, object storage) not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/alerts/rules:
+    get:
+      tags: [alerts]
+      summary: List the current user's alert rules
+      operationId: listAlertRules
+      responses:
+        "200":
+          description: Alert rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlertRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [alerts]
+      summary: Create an alert rule
+      operationId: createAlertRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertRuleRequest"
+      responses:
+        "200":
+          description: Created alert rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [alerts]
+      summary: Update an alert rule (`id` required in the body)
+      operationId: updateAlertRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertRuleRequest"
+      responses:
+        "200":
+          description: Updated alert rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRule"
+        "404":
+          description: Alert rule not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [alerts]
+      summary: Delete an alert rule
+      operationId: deleteAlertRule
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMessageResponse"
+        "404":
+          description: Alert rule not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /ws:
+    get:
+      tags: [realtime]
+      summary: Realtime probe streaming (WebSocket upgrade)
+      operationId: streamRealtime
+      description: |
+        Not a plain HTTP endpoint: the client must send a WebSocket upgrade
+        request (`Connection: Upgrade`, `Upgrade: websocket`). OpenAPI 3.0
+        has no native WebSocket message schema, so only the handshake is
+        documented here.
+
+        Once connected, the client sends a single JSON text message shaped
+        like `WSRequest` (`type`: `ping` | `tcpping` | `portscan`, plus that
+        probe's parameters) to start a stream, and may send `{"action":
+        "stop"}` to cancel the active run. The server streams newline-delimited
+        JSON `WSEvent` messages (`type`: `result` | `summary` | `error` |
+        `stopped`) until the run completes or is stopped.
+      responses:
+        "101":
+          description: Switching Protocols (WebSocket handshake accepted)
+        "400":
+          description: Not a WebSocket upgrade request, or the request failed validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: netwatcher_session
+
+  responses:
+    Unauthorized:
+      description: No valid session cookie was presented
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+  parameters:
+    HistoryType:
+      name: type
+      in: query
+      required: true
+      schema:
+        type: string
+        enum: [ping, tcpping]
+    HistoryHost:
+      name: host
+      in: query
+      required: true
+      schema:
+        type: string
+    HistoryPort:
+      name: port
+      in: query
+      description: Required for type=tcpping unless host is host:port
+      schema:
+        type: integer
+    HistoryLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 120
+
+  schemas:
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    HealthDependency:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        healthy:
+          type: boolean
+        driver:
+          type: string
+        error:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        time:
+          type: string
+          format: date-time
+        database:
+          $ref: "#/components/schemas/HealthDependency"
+        redis:
+          $ref: "#/components/schemas/HealthDependency"
+        object_storage:
+          $ref: "#/components/schemas/HealthDependency"
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        email_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AuthSessionResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        mode:
+          type: string
+          description: e.g. "demo" for the shared demo account
+        read_only:
+          type: boolean
+
+    AuthMessageResponse:
+      type: object
+      required: [ok, message]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        preview_url:
+          type: string
+          description: Set instead of actually sending email when no email provider is configured
+        preview_code:
+          type: string
+        verification_required:
+          type: boolean
+        authenticated:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        email:
+          type: string
+        mode:
+          type: string
+        read_only:
+          type: boolean
+
+    AuthSignupRequest:
+      type: object
+      required: [email, password]
+      properties:
+        name:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        confirm_password:
+          type: string
+          format: password
+
+    AuthLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    AuthForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    AuthResetPasswordRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          format: password
+        confirm_password:
+          type: string
+          format: password
+
+    AuthVerifyEmailRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+
+    PingRequest:
+      type: object
+      required: [host]
+      properties:
+        host:
+          type: string
+        count:
+          type: integer
+          default: 4
+        interval_ms:
+          type: integer
+          default: 1000
+        timeout_ms:
+          type: integer
+          default: 2000
+        size:
+          type: integer
+          default: 32
+          minimum: 8
+          maximum: 65535
+        ipv6:
+          type: boolean
+          default: false
+
+    TCPPingRequest:
+      type: object
+      required: [host, port]
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        count:
+          type: integer
+          default: 4
+        interval_ms:
+          type: integer
+          default: 1000
+        timeout_ms:
+          type: integer
+          default: 2000
+
+    PortScanRequest:
+      type: object
+      required: [host]
+      properties:
+        host:
+          type: string
+        ports:
+          type: string
+          description: e.g. "22,80,443,8000-8100"
+          default: "22,80,443,8080"
+        timeout_ms:
+          type: integer
+          default: 2000
+        concurrency:
+          type: integer
+          default: 64
+          minimum: 1
+          maximum: 256
+
+    DNSLookupRequest:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+        timeout_ms:
+          type: integer
+        record_type:
+          type: string
+          description: e.g. A, AAAA, MX, TXT, NS, SOA, SRV, CAA; defaults to a full lookup across common types
+        resolver:
+          type: string
+          description: Optional resolver override, e.g. "1.1.1.1:53"
+
+    ProbeResult:
+      type: object
+      properties:
+        seq:
+          type: integer
+        port:
+          type: integer
+        state:
+          type: string
+          description: Port scan only, e.g. "open" | "closed" | "timeout"
+        rtt:
+          type: string
+          description: Human-readable duration, e.g. "12.3ms"
+        rtt_ms:
+          type: number
+          nullable: true
+        error:
+          type: string
+        addr:
+          type: string
+
+    ProbeSummary:
+      type: object
+      required: [sent, recv, loss]
+      properties:
+        sent:
+          type: integer
+        recv:
+          type: integer
+        loss:
+          type: number
+          description: Percentage, 0-100
+        min:
+          type: string
+        avg:
+          type: string
+        max:
+          type: string
+        stddev:
+          type: string
+        scanned:
+          type: integer
+          description: Port scan only
+        open:
+          type: integer
+          description: Port scan only
+        closed:
+          type: integer
+          description: Port scan only
+        timeout:
+          type: integer
+          description: Port scan only
+        duration:
+          type: string
+          description: Port scan only
+
+    ProbeReport:
+      type: object
+      required: [protocol, target, addr, results, summary]
+      properties:
+        protocol:
+          type: string
+          enum: [icmp, tcp, portscan]
+        target:
+          type: string
+        addr:
+          type: string
+        port:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProbeResult"
+        summary:
+          $ref: "#/components/schemas/ProbeSummary"
+
+    DNSStringSection:
+      type: object
+      properties:
+        values:
+          type: array
+          items:
+            type: string
+        error:
+          type: string
+        duration_ms:
+          type: number
+        resolver:
+          type: string
+        authoritative:
+          type: boolean
+
+    DNSLookupReport:
+      type: object
+      description: |
+        Sections not requested via `record_type` are still present but
+        empty. See internal/dnslookup for the exhaustive per-record-type
+        field shapes (MX, SOA, SRV, CAA, PTR carry extra fields beyond the
+        generic string-section shape shown here).
+      properties:
+        protocol:
+          type: string
+        target:
+          type: string
+        kind:
+          type: string
+        record_type:
+          type: string
+        resolver:
+          type: string
+        a:
+          $ref: "#/components/schemas/DNSStringSection"
+        aaaa:
+          $ref: "#/components/schemas/DNSStringSection"
+        cname:
+          $ref: "#/components/schemas/DNSStringSection"
+        ns:
+          $ref: "#/components/schemas/DNSStringSection"
+        txt:
+          $ref: "#/components/schemas/DNSStringSection"
+        dmarc:
+          $ref: "#/components/schemas/DNSStringSection"
+        mx:
+          type: object
+          description: See internal/dnslookup.MXSection (host/pref/ttl records)
+        soa:
+          type: object
+          description: See internal/dnslookup.SOASection
+        srv:
+          type: object
+          description: See internal/dnslookup.SRVSection
+        caa:
+          type: object
+          description: See internal/dnslookup.CAASection
+        dnskey:
+          $ref: "#/components/schemas/DNSStringSection"
+        ds:
+          $ref: "#/components/schemas/DNSStringSection"
+        rrsig:
+          $ref: "#/components/schemas/DNSStringSection"
+        ptr:
+          type: array
+          items:
+            type: object
+        analysis:
+          type: object
+        summary:
+          type: object
+
+    HistoryPoint:
+      type: object
+      properties:
+        ts:
+          type: integer
+          format: int64
+          description: Unix epoch milliseconds
+        seq:
+          type: integer
+        rtt_ms:
+          type: number
+          nullable: true
+        error:
+          type: string
+
+    RecentHistoryTarget:
+      type: object
+      properties:
+        protocol:
+          type: string
+        target:
+          type: string
+        port:
+          type: integer
+        last_sample_at:
+          type: integer
+          format: int64
+          description: Unix epoch milliseconds
+
+    HistoryExportRequest:
+      type: object
+      required: [type, host]
+      properties:
+        type:
+          type: string
+          enum: [ping, tcpping]
+        host:
+          type: string
+        port:
+          type: integer
+        limit:
+          type: integer
+        format:
+          type: string
+          enum: [json, csv]
+          default: json
+        destination:
+          type: string
+          enum: [download, s3]
+          default: download
+
+    HistoryExportS3Response:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        key:
+          type: string
+        url:
+          type: string
+          format: uri
+          description: Presigned GET URL, valid for 15 minutes
+        format:
+          type: string
+        count:
+          type: integer
+
+    AlertRule:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        protocol:
+          type: string
+          enum: [icmp, tcp]
+        target:
+          type: string
+        port:
+          type: integer
+          nullable: true
+        recipient_email:
+          type: string
+        latency_threshold_ms:
+          type: number
+          nullable: true
+        loss_threshold_percent:
+          type: number
+          nullable: true
+        consecutive_breaches:
+          type: integer
+        cooldown_minutes:
+          type: integer
+        notify_on_recovery:
+          type: boolean
+        enabled:
+          type: boolean
+        last_state:
+          type: string
+          enum: [healthy, breaching]
+        current_breach_streak:
+          type: integer
+        last_triggered_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_recovered_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_evaluated_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AlertRuleRequest:
+      type: object
+      required: [protocol, target]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Required for update (PUT); omit to create
+        name:
+          type: string
+        protocol:
+          type: string
+          enum: [icmp, tcp]
+        target:
+          type: string
+        port:
+          type: integer
+        recipient_email:
+          type: string
+        latency_threshold_ms:
+          type: number
+        loss_threshold_percent:
+          type: number
+        consecutive_breaches:
+          type: integer
+          default: 1
+        cooldown_minutes:
+          type: integer
+          default: 30
+        notify_on_recovery:
+          type: boolean
+          default: true
+        enabled:
+          type: boolean
+          default: true

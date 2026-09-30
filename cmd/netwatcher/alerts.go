@@ -8,12 +8,21 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"netwatcher/internal/mailer"
 	"netwatcher/internal/report"
 	"netwatcher/internal/store"
 )
+
+// alertEvalWG tracks in-flight background alert evaluations spawned by
+// enqueueAlertEvaluation. Tests that swap out the global appStore/appMailer
+// between runs (see installTestStore in main_test.go) wait on this before
+// reassigning those globals or closing the store, so a goroutine left over
+// from a previous test never touches a store that has since been closed or
+// replaced.
+var alertEvalWG sync.WaitGroup
 
 type alertRuleRequest struct {
 	ID                   int64   `json:"id,omitempty"`
@@ -187,9 +196,17 @@ func normalizeAlertRuleRequest(user store.User, req alertRuleRequest) (store.Ale
 }
 
 func enqueueAlertEvaluation(user store.User, protocol, target string, port int, summary report.Summary, dashboardURL string) {
-	if appStore == nil {
+	// Snapshot the globals now, synchronously, rather than reading them
+	// again inside the goroutine below: appStore/appMailer can be
+	// reassigned concurrently (only observed from tests, which swap them
+	// per test run), and alertEvalWG only guarantees this goroutine finishes
+	// before the *next* reassignment, not that appStore stays unchanged
+	// for its entire duration.
+	st := appStore
+	if st == nil {
 		return
 	}
+	mailerClient := appMailer
 
 	sample := store.AlertSample{
 		LossPercent: summary.Loss,
@@ -201,16 +218,19 @@ func enqueueAlertEvaluation(user store.User, protocol, target string, port int, 
 		sample.LatencyAvgMs = &avgMs
 	}
 
+	alertEvalWG.Add(1)
 	go func() {
+		defer alertEvalWG.Done()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		decisions, err := appStore.EvaluateAlertRules(ctx, user.ID, protocol, target, port, sample)
+		decisions, err := st.EvaluateAlertRules(ctx, user.ID, protocol, target, port, sample)
 		if err != nil {
 			log.Printf("alert evaluation failed for %s/%s: %v", protocol, target, err)
 			return
 		}
-		if appMailer == nil {
+		if mailerClient == nil {
 			return
 		}
 		for _, decision := range decisions {
@@ -218,7 +238,7 @@ func enqueueAlertEvaluation(user store.User, protocol, target string, port int, 
 			if strings.TrimSpace(alertTitle) == "" {
 				alertTitle = "Monitoring Alert"
 			}
-			if err := appMailer.SendAlert(ctx, mailer.AlertEmailInput{
+			if err := mailerClient.SendAlert(ctx, mailer.AlertEmailInput{
 				To:           decision.Rule.RecipientEmail,
 				Name:         user.Name,
 				Severity:     decision.Severity,

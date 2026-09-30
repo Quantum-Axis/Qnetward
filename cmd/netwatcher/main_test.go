@@ -1365,6 +1365,13 @@ func installTestStore(t *testing.T) *store.Store {
 	appCache = nil
 	appObjectStore = nil
 	t.Cleanup(func() {
+		// Wait for any background alert evaluation this test's requests
+		// triggered before handing the globals back / letting the caller's
+		// own cleanup close the store: enqueueAlertEvaluation's goroutine
+		// snapshots appStore at call time, so it keeps using *this* test's
+		// store even after this reassignment, but it must still finish
+		// before that store is closed.
+		alertEvalWG.Wait()
 		appStore = oldStore
 		appCache = oldCache
 		appObjectStore = oldObjectStore

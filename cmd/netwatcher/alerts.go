@@ -14,7 +14,7 @@ import (
 	"netwatcher/internal/mailer"
 	"netwatcher/internal/report"
 	"netwatcher/internal/store"
-	"netwatcher/internal/telemetry"
+	"netwatcher/pkg/telemetry"
 )
 
 // alertEvalWG tracks in-flight background alert evaluations spawned by

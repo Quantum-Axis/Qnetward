@@ -31,10 +31,10 @@ Core capabilities:
 
 ## Architecture
 
+- `apps/web`
+  primary Next.js frontend
 - `cmd/netwatcher`
   CLI entrypoint and backend API/probe server
-- `frontend`
-  primary Next.js frontend
 - `internal/cache`
   Redis cache integration
 - `internal/objectstore`
@@ -49,8 +49,8 @@ Core capabilities:
   PostgreSQL/TimescaleDB persistence, batching, retention
 - `internal/portscan`
   TCP connect port scanning
-- `internal/telemetry`
-  OpenTelemetry tracing and metrics (see [Observability](#observability))
+- `pkg/telemetry`
+  OpenTelemetry tracing and metrics (see [Observability](#observability)) — under `pkg/`, not `internal/`, since it has no dependency on this service's business logic and is meant to be reused if a package ever splits out of this monolith
 - `deploy`
   production `docker-compose` stack
 

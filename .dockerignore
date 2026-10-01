@@ -2,10 +2,10 @@
 .gitignore
 .next
 node_modules
-frontend/.next
-frontend/node_modules
-frontend/.env.local
-frontend/.turbo
+apps/web/.next
+apps/web/node_modules
+apps/web/.env.local
+apps/web/.turbo
 netwatcher.exe
 *.log
 *.db

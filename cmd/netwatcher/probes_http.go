@@ -11,7 +11,7 @@ import (
 	"netwatcher/internal/report"
 	"netwatcher/internal/store"
 	"netwatcher/internal/tcpping"
-	"netwatcher/internal/telemetry"
+	"netwatcher/pkg/telemetry"
 )
 
 type jsonResult struct {

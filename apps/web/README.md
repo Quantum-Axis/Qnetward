@@ -54,7 +54,7 @@ Use this only if you want to develop the Next app locally.
 3. Start the Next dev server
 
 ```powershell
-cd d:\NetWatcher\frontend
+cd d:\NetWatcher\apps\web
 Copy-Item .env.example .env.local -Force
 pnpm install
 pnpm dev
@@ -75,8 +75,8 @@ Open:
 
 If you run the frontend only through Docker, you do **not** need local:
 
-- `frontend/node_modules`
-- `frontend/.next`
+- `apps/web/node_modules`
+- `apps/web/.next`
 
 The Docker image installs dependencies and builds the app inside the container.
 
@@ -90,7 +90,7 @@ docker compose -f deploy/docker-compose.production.yml --env-file .env up -d --b
 ## Local production build
 
 ```powershell
-cd d:\NetWatcher\frontend
+cd d:\NetWatcher\apps\web
 pnpm build
 pnpm start
 ```
@@ -99,7 +99,7 @@ pnpm start
 
 The production compose stack now treats this app as the primary UI:
 
-- `frontend/` serves the dashboard
+- `apps/web/` serves the dashboard
 - `cmd/netwatcher` stays behind it as the API and realtime probe backend
 - `deploy/nginx.frontend-primary.conf` routes `/api`, `/healthz`, and `/ws` to Go
 

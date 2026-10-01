@@ -21,3 +21,4 @@ history in place, since the point is to keep the trail of *why* intact.
 | [0005](0005-defer-rls-on-results-table.md) | Defer RLS enforcement on the results table | Accepted |
 | [0006](0006-opentelemetry-disabled-by-default.md) | OpenTelemetry for tracing and metrics, disabled by default | Accepted |
 | [0007](0007-replace-minio-with-seaweedfs.md) | Replace MinIO with SeaweedFS in the production stack | Accepted |
+| [0008](0008-adopt-apps-and-pkg-top-level-layout.md) | Adopt `apps/` and `pkg/` top-level directories | Accepted |

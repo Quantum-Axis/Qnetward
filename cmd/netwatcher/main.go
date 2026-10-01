@@ -19,7 +19,7 @@ import (
 	"netwatcher/internal/mailer"
 	"netwatcher/internal/objectstore"
 	"netwatcher/internal/store"
-	"netwatcher/internal/telemetry"
+	"netwatcher/pkg/telemetry"
 )
 
 const (

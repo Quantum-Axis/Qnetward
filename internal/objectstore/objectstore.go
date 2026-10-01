@@ -100,11 +100,15 @@ func (c *Client) UploadCSV(ctx context.Context, key string, rows [][]string) (st
 	return c.upload(ctx, key, "text/csv", bytes.NewReader(buf.Bytes()), int64(buf.Len()))
 }
 
+// PresignedGetURL signs a GET URL for key, which must be the full object
+// key as already returned by UploadJSON/UploadCSV (prefix included) —
+// it is used as-is, not run through objectKey again, since that would
+// double-apply Config.Prefix on top of a key that already has it.
 func (c *Client) PresignedGetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	if c == nil || c.client == nil {
 		return "", fmt.Errorf("object storage not configured")
 	}
-	url, err := c.client.PresignedGetObject(ctx, c.cfg.Bucket, c.objectKey(key), ttl, nil)
+	url, err := c.client.PresignedGetObject(ctx, c.cfg.Bucket, key, ttl, nil)
 	if err != nil {
 		return "", err
 	}

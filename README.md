@@ -184,8 +184,8 @@ Environment variables:
 NETWATCHER_DB_DSN=postgres://netwatcher:change-me@timescaledb:5432/netwatcher?sslmode=disable
 NETWATCHER_TIMESCALE=true
 NETWATCHER_REDIS_ADDR=redis:6379
-NETWATCHER_S3_ENDPOINT=minio:9000
-NETWATCHER_S3_ACCESS_KEY=minioadmin
+NETWATCHER_S3_ENDPOINT=objectstore:8333
+NETWATCHER_S3_ACCESS_KEY=netwatcher
 NETWATCHER_S3_SECRET_KEY=change-me
 NETWATCHER_S3_BUCKET=netwatcher-artifacts
 NETWATCHER_S3_SSL=false

@@ -76,8 +76,8 @@ jobs:
         run: |
           cat > .env.ci <<'EOF'
           POSTGRES_PASSWORD=ci-postgres-password
-          MINIO_ROOT_USER=minioadmin
-          MINIO_ROOT_PASSWORD=ci-minio-password
+          OBJECTSTORE_ACCESS_KEY=netwatcher-ci
+          OBJECTSTORE_SECRET_KEY=ci-objectstore-password
           NETWATCHER_PUBLIC_BASE_URL=http://127.0.0.1:8080
           NETWATCHER_ALLOWED_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
           NETWATCHER_RESEND_API_KEY=

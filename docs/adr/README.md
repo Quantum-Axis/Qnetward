@@ -20,3 +20,4 @@ history in place, since the point is to keep the trail of *why* intact.
 | [0004](0004-multi-tenant-model-with-row-level-security.md) | Multi-tenant data model enforced with PostgreSQL Row-Level Security | Accepted |
 | [0005](0005-defer-rls-on-results-table.md) | Defer RLS enforcement on the results table | Accepted |
 | [0006](0006-opentelemetry-disabled-by-default.md) | OpenTelemetry for tracing and metrics, disabled by default | Accepted |
+| [0007](0007-replace-minio-with-seaweedfs.md) | Replace MinIO with SeaweedFS in the production stack | Accepted |

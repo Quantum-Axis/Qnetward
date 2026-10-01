@@ -2,7 +2,12 @@ package objectstore
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestOpenWithEmptyEndpointIsANoop(t *testing.T) {
@@ -66,4 +71,63 @@ func TestObjectKeyPrefixing(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestUploadThenPresignedGetURLRoundTrips exercises the exact sequence
+// cmd/netwatcher/history.go uses: upload a CSV, then presign a GET URL
+// for the key UploadCSV returned. That key already has Config.Prefix
+// applied, so PresignedGetURL must use it as-is rather than re-applying
+// the prefix (which previously produced a URL pointing at a key that was
+// never written, and a 404 on download).
+func TestUploadThenPresignedGetURLRoundTrips(t *testing.T) {
+	endpoint := strings.TrimSpace(os.Getenv("NETWATCHER_TEST_S3_ENDPOINT"))
+	if endpoint == "" {
+		t.Skip("NETWATCHER_TEST_S3_ENDPOINT is not set")
+	}
+
+	c, err := Open(Config{
+		Endpoint:  endpoint,
+		AccessKey: envOr("NETWATCHER_TEST_S3_ACCESS_KEY", "netwatcher"),
+		SecretKey: envOr("NETWATCHER_TEST_S3_SECRET_KEY", "change-me-too"),
+		Bucket:    envOr("NETWATCHER_TEST_S3_BUCKET", "netwatcher-artifacts"),
+		Prefix:    "netwatcher",
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	ctx := context.Background()
+	rows := [][]string{{"seq", "rtt_ms"}, {"1", "12.5"}}
+	objectKey, err := c.UploadCSV(ctx, "exports/roundtrip-test.csv", rows)
+	if err != nil {
+		t.Fatalf("UploadCSV: %v", err)
+	}
+	if objectKey != "netwatcher/exports/roundtrip-test.csv" {
+		t.Fatalf("UploadCSV returned key %q, want the prefixed key", objectKey)
+	}
+
+	url, err := c.PresignedGetURL(ctx, objectKey, time.Minute)
+	if err != nil {
+		t.Fatalf("PresignedGetURL: %v", err)
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("GET presigned URL: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET presigned URL: status %d, body: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "12.5") {
+		t.Fatalf("downloaded body missing expected content: %s", body)
+	}
+}
+
+func envOr(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
 }

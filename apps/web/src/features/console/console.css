@@ -222,13 +222,7 @@
 
 /* ---------- controls ---------- */
 .lp-console .field-input,
-.lp-console .dashboard-hero-input,
-.lp-console input[type="text"]:not(.auth-input),
-.lp-console input[type="number"],
-.lp-console input[type="email"]:not(.auth-input),
-.lp-console input[type="search"],
-.lp-console select,
-.lp-console textarea {
+.lp-console .dashboard-hero-input {
   border-radius: 8px;
   border: 1px solid var(--lp-border-strong);
   background: rgba(255, 255, 255, 0.03);
@@ -236,16 +230,10 @@
   font-family: var(--font-inter), system-ui, sans-serif;
   font-size: 14px;
   box-shadow: none;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
 }
 
 .lp-console .field-input:focus,
-.lp-console .dashboard-hero-input:focus,
-.lp-console input:focus-visible,
-.lp-console select:focus-visible,
-.lp-console textarea:focus-visible {
+.lp-console .dashboard-hero-input:focus {
   outline: none;
   border-color: var(--lp-accent);
   box-shadow: 0 0 0 3px rgba(255, 61, 127, 0.15);
@@ -296,53 +284,89 @@
   color: #ff7aa6;
 }
 
-/* Brand buttons used by the new shell and redesigned screens. */
-.lp-console .console-btn {
-  display: inline-flex;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border-radius: 8px;
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
 
-.lp-console .console-btn-primary {
-  background: var(--lp-accent);
-  color: #fff;
-}
+/*
+ * New classes and bare form controls live in the components layer so Tailwind
+ * utilities on the element (px-0, h-8, text-[13px]...) can still override them.
+ */
+@layer components {
+  .lp-console input[type="text"]:not(.auth-input),
+  .lp-console input[type="number"],
+  .lp-console input[type="search"],
+  .lp-console input:not([type]):not(.auth-input),
+  .lp-console select,
+  .lp-console textarea {
+    border-radius: 8px;
+    border: 1px solid var(--lp-border-strong);
+    background-color: rgba(255, 255, 255, 0.03);
+    color: var(--lp-text);
+    font-family: var(--font-inter), system-ui, sans-serif;
+    font-size: 14px;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
 
-.lp-console .console-btn-primary:hover {
-  background: #ff5a93;
-}
+  .lp-console input:focus-visible,
+  .lp-console select:focus-visible,
+  .lp-console textarea:focus-visible {
+    outline: none;
+    border-color: var(--lp-accent);
+    box-shadow: 0 0 0 3px rgba(255, 61, 127, 0.15);
+  }
 
-.lp-console .console-btn-secondary {
-  border: 1px solid var(--lp-border-strong);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--lp-text);
-}
+  .lp-console select option {
+    background: #1d1d22;
+  }
 
-.lp-console .console-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.07);
-}
+  /* Brand buttons used by the new shell and redesigned screens. */
+  .lp-console .console-btn {
+    display: inline-flex;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 8px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
 
-.lp-console .console-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+  .lp-console .console-btn-primary {
+    background: var(--lp-accent);
+    color: #fff;
+  }
 
-.lp-console .console-popover {
-  border-radius: 10px;
-  border: 1px solid var(--lp-border-strong);
-  background: #1d1d22;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  .lp-console .console-btn-primary:hover {
+    background: #ff5a93;
+  }
+
+  .lp-console .console-btn-secondary {
+    border: 1px solid var(--lp-border-strong);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--lp-text);
+  }
+
+  .lp-console .console-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .lp-console .console-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .lp-console .console-popover {
+    border-radius: 10px;
+    border: 1px solid var(--lp-border-strong);
+    background: #1d1d22;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  }
 }
 
 /* ---------- tables ---------- */

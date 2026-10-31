@@ -1,42 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
 import { AlertRule, HistoryPoint, RecentHistoryTarget, RuntimeHealthResponse, SessionResponse } from "@/lib/types";
 import { LiveTelemetrySample, subscribeLiveTelemetry } from "@/lib/live-telemetry";
 import {
-  buildOverviewKpis,
-  buildOverviewLatencySeries,
   buildOverviewTargetSnapshots,
   uniqueAlertTargets,
 } from "@/features/overview/overview-helpers";
 import { buildOverviewDemoData } from "@/features/overview/overview-demo-data";
-import { GettingStarted, LatencyCard, OverviewHeader, QuickProbe, StatRow, StatusCard, TargetsTable } from "@/features/overview/overview-view";
-
-type ActiveTool = "icmp" | "tcp" | "portscan" | "dns";
-
-
-function buildToolHref(tool: ActiveTool, target: string) {
-  const value = target.trim();
-  const params = new URLSearchParams();
-  if (value) {
-    params.set("target", value);
-  }
-
-  const query = params.toString();
-  switch (tool) {
-    case "tcp":
-      return query ? `/tcp-ping?${query}` : "/tcp-ping";
-    case "portscan":
-      return query ? `/port-scan?${query}` : "/port-scan";
-    case "dns":
-      return query ? `/dns-lookup?${query}` : "/dns-lookup";
-    default:
-      return query ? `/icmp-ping?${query}` : "/icmp-ping";
-  }
-}
+import { GettingStarted } from "@/features/overview/overview-view";
+import { ResponseTimeChart, StatCards, TargetHealthCard, TargetsSummary, WelcomeHeader } from "@/features/overview/overview-dashboard";
 
 function mergeTrackedRules(alertRules: AlertRule[], recentTargets: RecentHistoryTarget[]) {
   const merged = new Map<string, AlertRule>();
@@ -105,9 +80,8 @@ function mergeTrackedRulesFromLiveSamples(rules: AlertRule[], liveSamples: LiveT
 }
 
 export function OverviewWorkspace() {
-  const router = useRouter();
-  const [activeTool, setActiveTool] = useState<ActiveTool>("icmp");
-  const [target, setTarget] = useState("");
+  const queryClient = useQueryClient();
+  const fetchingCount = useIsFetching();
   const [liveSamples, setLiveSamples] = useState<LiveTelemetrySample[]>([]);
   useEffect(() => {
     return subscribeLiveTelemetry((sample) => {
@@ -217,54 +191,26 @@ export function OverviewWorkspace() {
       }),
     [trackedRulesWithLive, historyMap, recentTargetsSource, liveSampleMap],
   );
-  const latencySeries = useMemo(() => {
-    const livePoints = liveSamples
-      .filter((sample) => typeof sample.rttMs === "number")
-      .map((sample) => ({
-        key: `${sample.protocol}:${sample.target}:${sample.port ?? 0}`,
-        ts: sample.ts,
-        rttMs: sample.rttMs,
-      }));
-
-    return [...buildOverviewLatencySeries(historyMap), ...livePoints]
-      .sort((a, b) => a.ts - b.ts)
-      .slice(-32);
-  }, [historyMap, liveSamples]);
-  const kpis = useMemo(
-    () => buildOverviewKpis(trackedRulesWithLive, runtimeHealthQuery.data, targetSnapshots),
-    [trackedRulesWithLive, runtimeHealthQuery.data, targetSnapshots],
-  );
-  function runActiveTool() {
-    router.push(buildToolHref(activeTool, target));
-  }
-
   const alertRuleCount = alertRulesSource.length;
-  const hasData = targetSnapshots.length > 0 || latencySeries.length > 0;
-  const degraded = kpis.critical + kpis.warning;
+  const firingCount = alertRulesSource.filter((rule) => rule.enabled && rule.last_state === "alert").length;
+  const hasData = targetSnapshots.length > 0;
 
   return (
-    <div className="grid grid-cols-1 gap-6 [&>*]:min-w-0">
-      <OverviewHeader health={runtimeHealthQuery.data} />
-      <QuickProbe
-        tool={activeTool}
-        onToolChange={setActiveTool}
-        target={target}
-        onTargetChange={setTarget}
-        onRun={runActiveTool}
-        disabled={isDemo}
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <WelcomeHeader
+        name={sessionQuery.data?.user?.name}
+        targets={targetSnapshots}
+        health={runtimeHealthQuery.data}
+        onRefresh={() => queryClient.invalidateQueries()}
+        refreshing={fetchingCount > 0}
       />
-      {hasData ? (
-        <>
-          <StatRow tracked={targetSnapshots.length} healthy={kpis.stable} degraded={degraded} live={kpis.liveStreams} />
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <LatencyCard points={latencySeries} />
-            <StatusCard targets={targetSnapshots} alertRuleCount={alertRuleCount} />
-          </div>
-          {targetSnapshots.length > 0 ? <TargetsTable targets={targetSnapshots} /> : null}
-        </>
-      ) : (
-        <GettingStarted hasAlertRules={alertRuleCount > 0} />
-      )}
+      <StatCards targets={targetSnapshots} historyMap={historyMap} alertRuleCount={alertRuleCount} firingCount={firingCount} />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] [&>*]:min-w-0">
+        <ResponseTimeChart targets={targetSnapshots} historyMap={historyMap} />
+        <TargetHealthCard targets={targetSnapshots} />
+      </div>
+      <TargetsSummary targets={targetSnapshots} />
+      {hasData ? null : <GettingStarted hasAlertRules={alertRuleCount > 0} />}
     </div>
   );
 }

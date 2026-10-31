@@ -1,3 +1,4 @@
+import { LockKeyhole } from "lucide-react";
 import { AuthLayoutCard } from "@/components/auth/auth-layout-card";
 import { GuestOnly } from "@/components/auth/guest-only";
 import { ResetPasswordForm } from "@/components/forms/reset-password-form";
@@ -6,11 +7,10 @@ export default function ResetPasswordPage() {
   return (
     <GuestOnly>
       <AuthLayoutCard
-        eyebrow="Recovery"
-        title="Set new password"
-        subtitle="Set a new password for your account."
-        alternateHref="/login"
-        alternateLabel="Back to login"
+        headerAction={{ prompt: "Remembered it?", label: "Sign in", href: "/login" }}
+        icon={<LockKeyhole />}
+        title="Choose a new password"
+        subtitle="Pick something you haven't used here before."
       >
         <ResetPasswordForm />
       </AuthLayoutCard>

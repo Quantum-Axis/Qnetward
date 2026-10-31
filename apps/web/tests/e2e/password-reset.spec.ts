@@ -34,7 +34,7 @@ test("verified user can request a reset link and sign in with the new password",
 
   await page.getByLabel("Email").fill(user.email);
   await page.locator("#login-password").fill(newPassword);
-  await page.getByRole("button", { name: /^login$/i }).click();
+  await page.getByRole("button", { name: /^sign in$/i }).click();
 
   await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
 });

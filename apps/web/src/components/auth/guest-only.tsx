@@ -1,5 +1,6 @@
 "use client";
 
+import { QnetwardMark } from "@/features/landing/qnetward-mark";
 import { ReactNode, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -15,18 +16,16 @@ export function GuestOnly({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session.isLoading && session.data?.authenticated) {
-      router.replace("/");
+      router.replace("/overview");
     }
   }, [router, session.data?.authenticated, session.isLoading]);
 
   if (session.isLoading) {
     return (
-      <div className="grid-shell flex min-h-screen items-center justify-center px-6">
-        <div className="surface w-full max-w-md rounded-3xl p-8 text-center">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Qnetward</p>
-          <h2 className="mt-3 font-space text-3xl font-bold text-white">Preparing access</h2>
-          <p className="mt-2 text-sm text-slate-400">Checking whether an operator session already exists.</p>
-        </div>
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-label="Checking your session">
+        <span className="lp-pulse">
+          <QnetwardMark size={32} />
+        </span>
       </div>
     );
   }

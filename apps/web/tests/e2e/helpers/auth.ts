@@ -60,13 +60,13 @@ export async function loginWithCredentials(page: Page, user: Pick<E2EUser, "emai
   await page.goto("/login");
   await page.getByLabel("Email").fill(user.email);
   await page.locator("#login-password").fill(user.password);
-  await page.getByRole("button", { name: /^login$/i }).click();
+  await page.getByRole("button", { name: /^sign in$/i }).click();
 
   await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
 }
 
 export async function loginAsDemoUser(page: Page) {
   await page.goto("/login");
-  await page.getByRole("button", { name: /continue as demo/i }).click();
+  await page.getByRole("button", { name: /demo workspace/i }).click();
   await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
 }

@@ -11,7 +11,6 @@ import { AuthInputField } from "@/components/auth/auth-input-field";
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
 import { apiRequest, ApiError } from "@/lib/api";
 import { AuthMessageResponse, SessionResponse } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 const schema = z
   .object({
@@ -31,9 +30,9 @@ type FormValues = z.infer<typeof schema>;
 type SignupStep = 1 | 2 | 3 | 4;
 
 const stepMeta: Array<{ step: SignupStep; label: string }> = [
-  { step: 1, label: "Identity" },
-  { step: 2, label: "Password" },
-  { step: 3, label: "Verify" },
+  { step: 1, label: "Your details" },
+  { step: 2, label: "Set a password" },
+  { step: 3, label: "Verify your email" },
   { step: 4, label: "Success" },
 ];
 
@@ -113,7 +112,7 @@ export function SignupForm() {
       setNotice(null);
       setStep(4);
       redirectTimer.current = window.setTimeout(() => {
-        router.replace("/");
+        router.replace("/overview");
       }, 2800);
     },
     onError: (error: ApiError) => {
@@ -168,31 +167,25 @@ export function SignupForm() {
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2.5">
-        <div className="flex items-center justify-between gap-3 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-slate-500">
-          <span>Step {step} of 4</span>
-          <span>{stepMeta.find((item) => item.step === step)?.label}</span>
+      {step < 4 ? (
+        <div className="grid gap-2.5" aria-label={`Step ${step} of 3`}>
+          <div className="flex items-center justify-between text-[13px]">
+            <span className="text-[var(--lp-text)]">{stepMeta.find((item) => item.step === step)?.label}</span>
+            <span className="text-[var(--lp-subtle)]">Step {step} of 3</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {stepMeta
+              .filter((item) => item.step < 4)
+              .map((item) => (
+                <span
+                  key={item.step}
+                  className="h-1 rounded-full transition-colors duration-300"
+                  style={{ background: item.step <= step ? "var(--lp-accent)" : "var(--lp-border-strong)" }}
+                />
+              ))}
+          </div>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {stepMeta.map((item) => {
-            const isActive = item.step === step;
-            const isComplete = item.step < step;
-            return (
-              <div
-                key={item.step}
-                className={cn(
-                  "auth-step-card",
-                  isActive && "auth-step-card-active",
-                  isComplete && "auth-step-card-complete",
-                )}
-              >
-                <span className="auth-step-index">{item.step}</span>
-                <span className={cn("auth-step-label", (isActive || isComplete) && "text-slate-200")}>{item.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
 
       {step === 1 ? (
         <div className="grid gap-3.5">
@@ -240,7 +233,7 @@ export function SignupForm() {
           <div className="auth-password-stage">
             <div className="auth-password-stage-main">
               <div className="grid gap-1.5">
-                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Password setup</p>
+                <p className="text-[13px] text-[var(--lp-muted)]">Password setup</p>
                 <p className="text-sm leading-6 text-slate-400">Set the password you will use to sign in to the workspace.</p>
               </div>
 
@@ -293,7 +286,7 @@ export function SignupForm() {
       {step === 3 ? (
         <div className="grid gap-3.5">
           <div className="auth-step-panel">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Verification target</p>
+            <p className="text-[13px] text-[var(--lp-muted)]">Verification target</p>
             <p className="mt-2 text-base font-medium text-slate-100">{signupEmail}</p>
             <p className="mt-1 text-sm text-slate-500">Enter the 6-digit email code to activate the account.</p>
             {previewCode ? <p className="mt-3 text-sm text-sky-300">Preview code: {previewCode}</p> : null}
@@ -345,15 +338,15 @@ export function SignupForm() {
             <CheckCircle2 className="h-9 w-9 text-emerald-300" />
           </div>
           <div className="grid gap-2">
-            <h3 className="font-space text-2xl font-bold tracking-[-0.04em] text-white">Account ready</h3>
+            <h3 className="text-[22px] font-normal tracking-[-0.02em] text-white">Account ready</h3>
             <p className="text-sm leading-6 text-slate-400">{successEmail || signupEmail} is verified. Opening the workspace now.</p>
           </div>
           <div className="rounded-2xl border border-emerald-400/12 bg-emerald-500/6 px-4 py-3 text-left">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Access granted</p>
+            <p className="text-[13px] font-medium text-emerald-300">Access granted</p>
             <p className="mt-2 text-sm text-slate-300">Your email is confirmed and the workspace session is ready.</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <button className="auth-primary-button sm:flex-1" type="button" onClick={() => router.replace("/")}>
+            <button className="auth-primary-button sm:flex-1" type="button" onClick={() => router.replace("/overview")}>
               Open dashboard
             </button>
             <button className="auth-muted-button sm:flex-1" type="button" onClick={() => router.replace("/login")}>

@@ -1,0 +1,518 @@
+/*
+ * Auth pages in the landing-page brand. Rules are scoped under .lp-auth and left
+ * unlayered so they win over the older .auth-* styles in globals.css.
+ */
+
+.lp-auth {
+  --lp-input-bg: #1b1b1f;
+}
+
+/* labels and inputs */
+.lp-auth .auth-input-group {
+  display: grid;
+  gap: 8px;
+}
+
+.lp-auth .auth-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--lp-text);
+}
+
+.lp-auth .auth-input-shell {
+  position: relative;
+  border-radius: 10px;
+  border: 1px solid var(--lp-border-strong);
+  background: var(--lp-input-bg);
+  box-shadow: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.lp-auth .auth-input-shell:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.lp-auth .auth-input-shell:focus-within {
+  border-color: var(--lp-accent);
+  box-shadow: 0 0 0 3px rgba(255, 61, 127, 0.16);
+}
+
+.lp-auth .auth-input {
+  height: 44px;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  padding: 0 14px;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 15px;
+  color: var(--lp-text);
+  box-shadow: none;
+  outline: none;
+}
+
+.lp-auth .auth-input::placeholder {
+  color: var(--lp-subtle);
+}
+
+.lp-auth .auth-input:focus {
+  box-shadow: none;
+}
+
+.lp-auth .auth-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  height: 30px;
+  width: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--lp-subtle);
+  background: transparent;
+}
+
+.lp-auth .auth-password-toggle:hover {
+  color: var(--lp-text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* buttons */
+.lp-auth .auth-primary-button,
+.lp-auth .auth-muted-button,
+.lp-auth .auth-provider-button {
+  display: inline-flex;
+  width: 100%;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 10px;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  box-shadow: none;
+  transform: none;
+}
+
+.lp-auth .auth-primary-button {
+  border: 0;
+  background: var(--lp-accent);
+  color: #fff;
+}
+
+.lp-auth .auth-primary-button:hover {
+  background: #ff5a93;
+  box-shadow: none;
+  transform: none;
+}
+
+.lp-auth .auth-primary-button::before,
+.lp-auth .auth-primary-button::after {
+  display: none;
+}
+
+.lp-auth .auth-muted-button,
+.lp-auth .auth-provider-button {
+  border: 1px solid var(--lp-border-strong);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--lp-text);
+}
+
+.lp-auth .auth-muted-button:hover,
+.lp-auth .auth-provider-button:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  transform: none;
+}
+
+.lp-auth .auth-primary-button:disabled,
+.lp-auth .auth-muted-button:disabled,
+.lp-auth .auth-provider-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lp-auth .auth-provider-icon {
+  display: flex;
+  height: 20px;
+  width: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* links and dividers */
+.lp-auth .auth-inline-link,
+.lp-auth .auth-footer-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lp-accent);
+}
+
+.lp-auth .auth-footer-link {
+  font-size: inherit;
+}
+
+.lp-auth .auth-inline-link:hover,
+.lp-auth .auth-footer-link:hover {
+  color: #ff7aa6;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.lp-auth .auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--lp-subtle);
+}
+
+.lp-auth .auth-divider::before,
+.lp-auth .auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--lp-border);
+}
+
+/* notices */
+.lp-auth .auth-notice-success,
+.lp-auth .auth-notice-error {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.lp-auth .auth-notice-success {
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.08);
+  color: #86efac;
+}
+
+.lp-auth .auth-notice-error {
+  border: 1px solid rgba(255, 61, 127, 0.35);
+  background: rgba(255, 61, 127, 0.08);
+  color: #ff8fb3;
+}
+
+/* multi-step sign-up */
+.lp-auth .auth-step-card {
+  gap: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--lp-border);
+  background: transparent;
+  padding: 10px 12px;
+  box-shadow: none;
+  transform: none;
+}
+
+.lp-auth .auth-step-card-active {
+  border-color: rgba(255, 61, 127, 0.5);
+  background: rgba(255, 61, 127, 0.06);
+}
+
+.lp-auth .auth-step-card-complete {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.05);
+}
+
+.lp-auth .auth-step-index {
+  height: 22px;
+  width: 22px;
+  border: 1px solid var(--lp-border-strong);
+  background: transparent;
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--lp-subtle);
+}
+
+.lp-auth .auth-step-card-active .auth-step-index {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent);
+  color: #fff;
+}
+
+.lp-auth .auth-step-card-complete .auth-step-index {
+  border-color: rgba(74, 222, 128, 0.5);
+  background: rgba(74, 222, 128, 0.15);
+  color: #86efac;
+}
+
+.lp-auth .auth-step-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lp-muted);
+}
+
+.lp-auth .auth-step-card-active .auth-step-label {
+  color: var(--lp-text);
+}
+
+.lp-auth .auth-step-panel,
+.lp-auth .auth-password-stage-main,
+.lp-auth .auth-password-meter,
+.lp-auth .auth-success-shell {
+  border-radius: 12px;
+  border: 1px solid var(--lp-border);
+  background: var(--lp-bg-raised);
+  box-shadow: none;
+}
+
+.lp-auth .auth-success-shell {
+  border-color: rgba(74, 222, 128, 0.25);
+  background:
+    radial-gradient(circle at top center, rgba(74, 222, 128, 0.08), transparent 45%),
+    var(--lp-bg-raised);
+}
+
+.lp-auth .auth-password-suggestion-box {
+  border-top-color: var(--lp-border);
+}
+
+/* verification code */
+.lp-auth .auth-otp-shell {
+  border-radius: 12px;
+  border: 1px solid var(--lp-border-strong);
+  background: var(--lp-input-bg);
+  padding: 14px 16px;
+}
+
+.lp-auth .auth-otp-shell:focus-within {
+  border-color: var(--lp-accent);
+  box-shadow: 0 0 0 3px rgba(255, 61, 127, 0.16);
+}
+
+.lp-auth .auth-otp-input {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--lp-text);
+}
+
+.lp-auth .auth-otp-input::placeholder {
+  color: var(--lp-subtle);
+}
+
+/* colour helpers used inside the forms (Tailwind slate/cyan from the old theme) */
+.lp-auth .text-slate-400,
+.lp-auth .text-slate-500 {
+  color: var(--lp-muted);
+}
+
+.lp-auth .text-slate-300,
+.lp-auth .text-slate-200 {
+  color: var(--lp-text);
+}
+
+/* field feedback */
+.lp-auth .auth-input-shell-error {
+  border-color: rgba(255, 61, 127, 0.6);
+}
+
+.lp-auth .auth-field-error,
+.lp-auth .auth-field-hint {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.lp-auth .auth-field-error {
+  color: #ff8fb3;
+}
+
+.lp-auth .auth-field-hint {
+  color: var(--lp-amber);
+}
+
+/* live probe feed: new lines fade in */
+.lp-auth .lp-feed-line:last-child {
+  animation: lp-feed-in 0.35s ease-out;
+}
+
+@keyframes lp-feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-auth .lp-feed-line:last-child {
+    animation: none;
+  }
+}
+
+/* ---- centered glass card ---- */
+.lp-auth .auth-card {
+  position: relative;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 61, 127, 0.07), rgba(255, 255, 255, 0) 38%),
+    rgba(24, 24, 29, 0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 28px 28px 24px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.lp-auth .auth-card::after {
+  /* soft brand glow along the bottom edge */
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 61, 127, 0.6), rgba(167, 139, 250, 0.5), transparent);
+}
+
+@media (min-width: 640px) {
+  .lp-auth .auth-card {
+    padding: 32px 32px 28px;
+  }
+}
+
+.lp-auth .auth-card-icon {
+  display: flex;
+  height: 48px;
+  width: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
+  color: var(--lp-text);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.lp-auth .auth-card-icon svg {
+  height: 20px;
+  width: 20px;
+}
+
+/* compact inputs with a leading icon */
+.lp-auth .auth-card .auth-input-group {
+  gap: 6px;
+}
+
+.lp-auth .auth-card .auth-input-shell {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lp-auth .auth-card .auth-input-shell:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.lp-auth .auth-card .auth-input-shell:focus-within {
+  border-color: var(--lp-accent);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lp-auth .auth-card .auth-input-shell-error {
+  border-color: rgba(255, 61, 127, 0.6);
+}
+
+.lp-auth .auth-card .auth-input {
+  height: 42px;
+  font-size: 14px;
+}
+
+.lp-auth .auth-input-shell-icon .auth-input {
+  padding-left: 40px;
+}
+
+.lp-auth .auth-input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  height: 16px;
+  width: 16px;
+  transform: translateY(-50%);
+  color: var(--lp-subtle);
+  pointer-events: none;
+  transition: color 0.15s ease;
+}
+
+.lp-auth .auth-input-shell:focus-within .auth-input-icon {
+  color: var(--lp-text);
+}
+
+.lp-auth .auth-card .auth-primary-button,
+.lp-auth .auth-card .auth-muted-button {
+  height: 42px;
+  font-size: 14px;
+}
+
+.lp-auth .auth-card .auth-primary-button {
+  background: linear-gradient(180deg, #ff4f8b, #f2306f);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 6px 18px rgba(255, 61, 127, 0.25);
+}
+
+.lp-auth .auth-card .auth-primary-button:hover {
+  background: linear-gradient(180deg, #ff669b, #ff3d7f);
+}
+
+/* dotted "Or continue with" divider */
+.lp-auth .auth-card .auth-divider::before,
+.lp-auth .auth-card .auth-divider::after {
+  height: 0;
+  background: none;
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+}
+
+/* radar rings */
+.lp-auth .lp-radar-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lp-radar 4.5s ease-out infinite;
+}
+
+@keyframes lp-radar {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-auth .lp-radar-pulse {
+    animation: none;
+    opacity: 0;
+  }
+}

@@ -14,7 +14,7 @@ export function PasswordStrengthMeter({ password, compact = false }: PasswordStr
   return (
     <div className={cn("auth-password-meter", compact && "auth-password-meter-compact")}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[0.74rem] font-semibold uppercase tracking-[0.22em] text-slate-500">Password strength</p>
+        <p className="text-[13px] text-[var(--lp-muted)]">Password strength</p>
         <p className={cn("text-sm font-semibold", strength.accentClassName)}>{strength.label}</p>
       </div>
 
@@ -41,7 +41,7 @@ export function PasswordStrengthMeter({ password, compact = false }: PasswordStr
 
       {strength.suggestions.length ? (
         <div className="auth-password-suggestion-box mt-3">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Suggestions</p>
+          <p className="text-[13px] text-[var(--lp-muted)]">Suggestions</p>
           <ul className={cn("mt-2 grid gap-1.5 text-sm text-slate-400", compact && "text-[0.82rem]")}>
             {strength.suggestions.slice(0, 3).map((suggestion) => (
               <li key={suggestion} className="flex gap-2">

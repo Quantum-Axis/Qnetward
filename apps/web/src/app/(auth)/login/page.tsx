@@ -1,3 +1,4 @@
+import { LogIn } from "lucide-react";
 import { AuthLayoutCard } from "@/components/auth/auth-layout-card";
 import { GuestOnly } from "@/components/auth/guest-only";
 import { LoginForm } from "@/components/forms/login-form";
@@ -6,12 +7,10 @@ export default function LoginPage() {
   return (
     <GuestOnly>
       <AuthLayoutCard
-        eyebrow="Secure Access"
-        title="Login"
-        subtitle="Access your monitoring workspace."
-        alternateHref="/signup"
-        alternateLabel="Create an account"
-        showAlternateFooter={false}
+        headerAction={{ prompt: "New to Qnetward?", label: "Create an account", href: "/signup" }}
+        icon={<LogIn />}
+        title="Sign in to Qnetward"
+        subtitle="Welcome back. Pick up where your team left off."
       >
         <LoginForm />
       </AuthLayoutCard>

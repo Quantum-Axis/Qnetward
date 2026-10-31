@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronsUpDown, LogOut, PanelLeftClose, PanelLeftOpen, Search, Shield, User, Users, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, LogOut, PanelLeftClose, PanelLeftOpen, Shield, User, Users, X } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import { AlertRule, SessionResponse, WorkspaceListResponse } from "@/lib/types";
 import { useShellStore } from "@/store/ui-store";
@@ -273,7 +273,7 @@ function NavLink({
 
 export function Sidebar({ session }: { session: SessionResponse }) {
   const pathname = usePathname();
-  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleSidebarCollapsed, setPaletteOpen, foldedSections, toggleSection } = useShellStore();
+  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleSidebarCollapsed, foldedSections, toggleSection } = useShellStore();
   const isDemo = session.mode === "demo";
   const isAdmin = session.platform_role === "admin";
   // The rail only collapses on desktop; the mobile drawer is always full width.
@@ -331,24 +331,6 @@ export function Sidebar({ session }: { session: SessionResponse }) {
 
         <div className={cn("space-y-2 pt-3", collapsed ? "px-2" : "px-3")}>
           <WorkspaceSwitcher session={session} collapsed={collapsed} />
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            aria-label="Search pages"
-            className={cn(
-              "group relative flex w-full items-center gap-2 rounded-lg border border-[var(--lp-border)] text-[13px] text-[var(--lp-subtle)] transition-colors hover:border-[var(--lp-border-strong)] hover:text-[var(--lp-muted)]",
-              collapsed ? "h-9 justify-center" : "h-8 px-2.5",
-            )}
-          >
-            <Search className="h-3.5 w-3.5 shrink-0" />
-            {collapsed ? null : (
-              <>
-                <span className="flex-1 text-left">Search…</span>
-                <kbd className="rounded border border-[var(--lp-border)] px-1 text-[10px]">Ctrl K</kbd>
-              </>
-            )}
-            <RailTip label="Search (Ctrl K)" show={collapsed} />
-          </button>
         </div>
 
         <nav className={cn("flex-1 pb-4 pt-1", collapsed ? "overflow-visible px-2" : "overflow-y-auto px-3")} aria-label="Main">

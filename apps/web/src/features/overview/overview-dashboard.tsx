@@ -256,16 +256,62 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
   const H = 240;
   const PAD = { l: 44, r: 12, t: 12, b: 26 };
   const all = series.flatMap((s) => s.points);
-  const minTs = all.length ? Math.min(...all.map((p) => p.ts)) : 0;
-  const maxTs = all.length ? Math.max(...all.map((p) => p.ts)) : 1;
+
+  // Collapse long idle gaps on the time axis so bursts of probes stay readable.
+  const axis = useMemo(() => {
+    const times = Array.from(new Set(all.map((p) => p.ts))).sort((a, b) => a - b);
+    const deltas = times.slice(1).map((t, idx) => t - times[idx]).sort((a, b) => a - b);
+    const typical = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 1;
+    const cap = Math.max(typical * 3, 1);
+    const threshold = Math.max(60_000, typical * 10);
+    const eff: number[] = [];
+    const breaks: number[] = [];
+    times.forEach((t, idx) => {
+      if (idx === 0) return eff.push(0);
+      const delta = t - times[idx - 1];
+      if (delta > threshold) breaks.push(idx);
+      eff.push(eff[idx - 1] + Math.min(delta, delta > threshold ? cap : delta));
+    });
+    return { times, eff, breaks };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [series]);
+
+  const toEff = (ts: number) => {
+    const { times, eff } = axis;
+    if (!times.length) return 0;
+    if (ts <= times[0]) return 0;
+    for (let k = 1; k < times.length; k++) {
+      if (ts <= times[k]) return eff[k - 1] + ((ts - times[k - 1]) / Math.max(1, times[k] - times[k - 1])) * (eff[k] - eff[k - 1]);
+    }
+    return eff[eff.length - 1];
+  };
+  const fromEff = (e: number) => {
+    const { times, eff } = axis;
+    if (!times.length) return 0;
+    for (let k = 1; k < eff.length; k++) {
+      if (e <= eff[k]) return times[k - 1] + ((e - eff[k - 1]) / Math.max(1e-9, eff[k] - eff[k - 1])) * (times[k] - times[k - 1]);
+    }
+    return times[times.length - 1];
+  };
+  const maxEff = Math.max(1, axis.eff[axis.eff.length - 1] ?? 1);
   const maxRtt = all.length ? Math.max(...all.map((p) => p.rtt)) : 1;
   const minRtt = all.length ? Math.min(...all.map((p) => p.rtt)) : 0;
   const span = Math.max(1, maxRtt - minRtt);
   const yMin = Math.max(0, minRtt - span * 0.15);
   const yMax = maxRtt + span * 0.15;
-  const x = (ts: number) => PAD.l + ((ts - minTs) / Math.max(1, maxTs - minTs)) * (W - PAD.l - PAD.r);
+  const x = (ts: number) => PAD.l + (toEff(ts) / maxEff) * (W - PAD.l - PAD.r);
   const y = (rtt: number) => PAD.t + (1 - (rtt - yMin) / Math.max(1, yMax - yMin)) * (H - PAD.t - PAD.b);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => yMin + (yMax - yMin) * f);
+
+  // Break a line where probes stopped for a while, instead of drawing a straight bridge across the gap.
+  const linePath = (points: Series["points"]) => {
+    const deltas = points.slice(1).map((p, idx) => p.ts - points[idx].ts).sort((a, b) => a - b);
+    const typical = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
+    const gap = Math.max(60_000, typical * 10);
+    return points
+      .map((p, idx) => `${idx === 0 || p.ts - points[idx - 1].ts > gap ? "M" : "L"}${x(p.ts).toFixed(1)},${y(p.rtt).toFixed(1)}`)
+      .join(" ");
+  };
 
   const nearest = (s: Series, ts: number) => s.points.reduce((best, p) => (Math.abs(p.ts - ts) < Math.abs(best.ts - ts) ? p : best), s.points[0]);
 
@@ -274,8 +320,8 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
     if (!svg || !all.length) return;
     const rect = svg.getBoundingClientRect();
     const px = ((event.clientX - rect.left) / rect.width) * W;
-    const ts = minTs + ((px - PAD.l) / (W - PAD.l - PAD.r)) * (maxTs - minTs);
-    setHoverTs(Math.min(maxTs, Math.max(minTs, ts)));
+    const e = Math.min(maxEff, Math.max(0, ((px - PAD.l) / (W - PAD.l - PAD.r)) * maxEff));
+    setHoverTs(fromEff(e));
   };
 
   const tooltipLeft = hoverTs !== null ? (x(hoverTs) / W) * 100 : 0;
@@ -322,10 +368,21 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
                   </text>
                 </g>
               ))}
+              {axis.breaks.map((k) => {
+                const gx = (x(axis.times[k - 1]) + x(axis.times[k])) / 2;
+                return (
+                  <g key={k}>
+                    <line x1={gx} x2={gx} y1={PAD.t} y2={H - PAD.b} stroke="rgba(255,255,255,0.12)" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
+                    <text x={gx} y={H - 8} textAnchor="middle" fontSize="10" fill="#6c6c75">
+                      gap
+                    </text>
+                  </g>
+                );
+              })}
               {series.map((s) => (
                 <path
                   key={s.id}
-                  d={s.points.map((p, i) => `${i ? "L" : "M"}${x(p.ts).toFixed(1)},${y(p.rtt).toFixed(1)}`).join(" ")}
+                  d={linePath(s.points)}
                   fill="none"
                   stroke={s.color}
                   strokeWidth="1.6"

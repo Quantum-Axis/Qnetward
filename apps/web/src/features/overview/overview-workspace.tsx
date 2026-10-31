@@ -3,33 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { apiRequest, ApiError } from "@/lib/api";
+import { apiRequest } from "@/lib/api";
 import { AlertRule, HistoryPoint, RecentHistoryTarget, RuntimeHealthResponse, SessionResponse } from "@/lib/types";
 import { LiveTelemetrySample, subscribeLiveTelemetry } from "@/lib/live-telemetry";
-import { Button } from "@/components/ui/button";
-import { OverviewAlertSummary } from "@/features/overview/overview-alert-summary";
 import {
-  buildOverviewHealthDistribution,
   buildOverviewKpis,
   buildOverviewLatencySeries,
   buildOverviewTargetSnapshots,
   uniqueAlertTargets,
 } from "@/features/overview/overview-helpers";
-import { OverviewHealthDistributionPanel } from "@/features/overview/overview-health-distribution-panel";
-import { OverviewKpiStrip } from "@/features/overview/overview-kpi-strip";
-import { OverviewLatencyPanel } from "@/features/overview/overview-latency-panel";
-import { OverviewLiveMonitorGrid } from "@/features/overview/overview-live-monitor-grid";
 import { buildOverviewDemoData } from "@/features/overview/overview-demo-data";
-import { OverviewTargetsTable } from "@/features/overview/overview-targets-table";
+import { GettingStarted, LatencyCard, OverviewHeader, QuickProbe, StatRow, StatusCard, TargetsTable } from "@/features/overview/overview-view";
 
 type ActiveTool = "icmp" | "tcp" | "portscan" | "dns";
 
-const toolLabels: Record<ActiveTool, string> = {
-  icmp: "ICMP Ping",
-  tcp: "TCP Ping",
-  portscan: "Port Scan",
-  dns: "DNS Lookup",
-};
 
 function buildToolHref(tool: ActiveTool, target: string) {
   const value = target.trim();
@@ -122,17 +109,6 @@ export function OverviewWorkspace() {
   const [activeTool, setActiveTool] = useState<ActiveTool>("icmp");
   const [target, setTarget] = useState("");
   const [liveSamples, setLiveSamples] = useState<LiveTelemetrySample[]>([]);
-  const [clock, setClock] = useState(() =>
-    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-  );
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setClock(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   useEffect(() => {
     return subscribeLiveTelemetry((sample) => {
       setLiveSamples((current) => [...current, sample].slice(-96));
@@ -258,124 +234,37 @@ export function OverviewWorkspace() {
     () => buildOverviewKpis(trackedRulesWithLive, runtimeHealthQuery.data, targetSnapshots),
     [trackedRulesWithLive, runtimeHealthQuery.data, targetSnapshots],
   );
-  const healthDistribution = useMemo(() => buildOverviewHealthDistribution(targetSnapshots), [targetSnapshots]);
-
-  const latestRtt = useMemo(() => {
-    const latestPoint = [...latencySeries].reverse().find((point) => typeof point.rttMs === "number");
-    return typeof latestPoint?.rttMs === "number" ? latestPoint.rttMs : null;
-  }, [latencySeries]);
-
   function runActiveTool() {
     router.push(buildToolHref(activeTool, target));
   }
 
+  const alertRuleCount = alertRulesSource.length;
+  const hasData = targetSnapshots.length > 0 || latencySeries.length > 0;
+  const degraded = kpis.critical + kpis.warning;
+
   return (
-    <div className="grid gap-6">
-      <section className="dashboard-hero-panel rounded-[1.5rem] p-4 md:p-5">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Qnetward Control Plane</p>
-              <h2 className="mt-1.5 font-space text-[1.6rem] font-bold leading-tight text-white sm:text-[1.8rem]">Network Operations Overview</h2>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                className="dashboard-chip transition hover:border-cyan-300/40 hover:bg-cyan-300/12"
-                onClick={() => setActiveTool("icmp")}
-              >
-                {toolLabels[activeTool]}
-              </button>
-              <span className={runtimeHealthQuery.data?.ok ? "dashboard-chip dashboard-chip-success" : "dashboard-chip dashboard-chip-muted"}>
-                {runtimeHealthQuery.data?.ok ? "Runtime Active" : "Runtime Check"}
-              </span>
-              <span className="dashboard-subtle-chip">{clock}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-            <input
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              placeholder="Set active target (e.g. 8.8.8.8)"
-              className="dashboard-hero-input min-w-0 flex-1"
-              disabled={isDemo}
-            />
-            <Button className="h-10 rounded-2xl px-5 text-sm" onClick={runActiveTool} disabled={isDemo}>
-              {isDemo ? "Demo mode" : "Run Active Tool"}
-            </Button>
-            <div className="flex flex-wrap gap-1.5 xl:justify-end">
-              <button type="button" className="dashboard-action-pill dashboard-action-pill-active" onClick={runActiveTool} disabled={isDemo}>
-                Diagnostics
-              </button>
-              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/history")} disabled={isDemo}>
-                History
-              </button>
-              <button type="button" className="dashboard-action-pill" onClick={() => router.push("/alerts")} disabled={isDemo}>
-                Alerts
-              </button>
-            </div>
-          </div>
-
-          {isDemo ? (
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
-              Demo mode is active. This view is read-only and uses safe demo monitoring data.
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-1">
-            {(["icmp", "tcp", "portscan", "dns"] as ActiveTool[]).map((tool) => (
-              <button
-                key={tool}
-                type="button"
-                className={tool === activeTool ? "dashboard-action-pill dashboard-action-pill-active" : "dashboard-action-pill"}
-                onClick={() => setActiveTool(tool)}
-              >
-                {toolLabels[tool]}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <OverviewKpiStrip
-        trackedTargets={kpis.trackedTargets}
-        critical={kpis.critical}
-        warning={kpis.warning}
-        stable={kpis.stable}
-        liveStreams={kpis.liveStreams}
+    <div className="grid grid-cols-1 gap-6 [&>*]:min-w-0">
+      <OverviewHeader health={runtimeHealthQuery.data} />
+      <QuickProbe
+        tool={activeTool}
+        onToolChange={setActiveTool}
+        target={target}
+        onTargetChange={setTarget}
+        onRun={runActiveTool}
+        disabled={isDemo}
       />
-
-      {(sessionQuery.isError || runtimeHealthQuery.isError || alertRulesQuery.isError || recentTargetsQuery.isError) && (
-        <div className="rounded-3xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-sm text-fuchsia-200">
-          {[
-            sessionQuery.error instanceof ApiError ? sessionQuery.error.message : null,
-            runtimeHealthQuery.error instanceof ApiError ? runtimeHealthQuery.error.message : null,
-            alertRulesQuery.error instanceof ApiError ? alertRulesQuery.error.message : null,
-            recentTargetsQuery.error instanceof ApiError ? recentTargetsQuery.error.message : null,
-          ]
-            .filter(Boolean)
-            .join(" | ")}
-        </div>
+      {hasData ? (
+        <>
+          <StatRow tracked={targetSnapshots.length} healthy={kpis.stable} degraded={degraded} live={kpis.liveStreams} />
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <LatencyCard points={latencySeries} />
+            <StatusCard targets={targetSnapshots} alertRuleCount={alertRuleCount} />
+          </div>
+          {targetSnapshots.length > 0 ? <TargetsTable targets={targetSnapshots} /> : null}
+        </>
+      ) : (
+        <GettingStarted hasAlertRules={alertRuleCount > 0} />
       )}
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.95fr)]">
-        <OverviewLatencyPanel points={latencySeries} />
-        <OverviewHealthDistributionPanel
-          items={healthDistribution}
-          alertRuleCount={alertRulesSource.filter((rule) => rule.enabled).length}
-          liveMonitorCount={kpis.liveStreams}
-          lastRttMs={latestRtt}
-        />
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.35fr)]">
-        <OverviewAlertSummary critical={kpis.critical} warning={kpis.warning} stable={kpis.stable} />
-        <OverviewTargetsTable targets={targetSnapshots} />
-      </section>
-
-      <OverviewLiveMonitorGrid targets={targetSnapshots} />
     </div>
   );
 }

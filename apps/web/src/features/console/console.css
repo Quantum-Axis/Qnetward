@@ -1,0 +1,374 @@
+/*
+ * Console (signed-in app) in the Qnetward brand.
+ *
+ * The console's feature screens were built on an older visual language: teal
+ * accents, uppercase tracked labels, glowing glass panels. Rather than edit
+ * every screen at once, this sheet re-themes the shared building blocks under
+ * .lp-console. Rules are unlayered and scoped with two classes so they win over
+ * the older globals.css styles. Screens that get redesigned individually can
+ * drop the legacy classes over time.
+ */
+
+/* ---------- tokens: point Tailwind theme colours at the brand ---------- */
+.lp-console {
+  --color-background: #141417;
+  --color-foreground: #ededf0;
+  --color-card: #1b1b1f;
+  --color-card-foreground: #ededf0;
+  --color-popover: #1d1d22;
+  --color-popover-foreground: #ededf0;
+  --color-primary: #ff3d7f;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #202025;
+  --color-secondary-foreground: #ededf0;
+  --color-muted: #202025;
+  --color-muted-foreground: #9a9aa3;
+  --color-accent: #8b5cf6;
+  --color-accent-foreground: #ffffff;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-input: rgba(255, 255, 255, 0.06);
+  --color-ring: #ff3d7f;
+  --color-nw-teal: #ff3d7f;
+  --color-nw-cyan: #a78bfa;
+  --color-nw-gold: #fbbf24;
+  --color-nw-mint: #4ade80;
+  --color-nw-violet: #8b5cf6;
+  --color-nw-red: #ff6b9a;
+  --color-sidebar: #111114;
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+
+  /* legacy custom properties read by some screens */
+  --foreground: #ededf0;
+  --muted: #9a9aa3;
+  --border: rgba(255, 255, 255, 0.08);
+  --card: #1b1b1f;
+  --teal: #ff3d7f;
+  --cyan: #a78bfa;
+  --gold: #fbbf24;
+  --danger: #ff6b9a;
+  --success: #4ade80;
+
+  background: #141417;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* ---------- typography ---------- */
+.lp-console .font-space,
+.lp-console .font-display,
+.lp-console .font-body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Old screens shout small labels in tracked uppercase; read them as plain text. */
+.lp-console .uppercase {
+  text-transform: none;
+}
+
+.lp-console [class*="tracking-[0."] {
+  letter-spacing: 0;
+}
+
+.lp-console h1.font-space,
+.lp-console h2.font-space,
+.lp-console h3.font-space {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.lp-console .brand-gradient {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--lp-text);
+}
+
+/* slate/cyan text from the old palette */
+.lp-console .text-white,
+.lp-console .text-slate-100,
+.lp-console .text-slate-200,
+.lp-console .text-cyan-100,
+.lp-console .text-cyan-50 {
+  color: var(--lp-text);
+}
+
+.lp-console .text-slate-300 {
+  color: #c9c9d1;
+}
+
+.lp-console .text-slate-400 {
+  color: var(--lp-muted);
+}
+
+.lp-console .text-slate-500,
+.lp-console .text-slate-600 {
+  color: var(--lp-subtle);
+}
+
+.lp-console .text-cyan-200,
+.lp-console .text-cyan-300,
+.lp-console .text-teal-200,
+.lp-console .text-teal-300 {
+  color: #ff8fb3;
+}
+
+.lp-console .text-emerald-200,
+.lp-console .text-emerald-300 {
+  color: #86efac;
+}
+
+/* ---------- surfaces ---------- */
+.lp-console .surface,
+.lp-console .surface-soft,
+.lp-console .dashboard-card,
+.lp-console .dashboard-panel,
+.lp-console .dashboard-hero-panel,
+.lp-console .dashboard-live-card {
+  border: 1px solid var(--lp-border);
+  border-radius: 12px;
+  background: #1b1b1f;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.lp-console .dashboard-hero-panel {
+  background:
+    radial-gradient(ellipse 50% 80% at 0% 0%, rgba(255, 61, 127, 0.07), transparent 70%),
+    #1b1b1f;
+}
+
+.lp-console .dashboard-panel-muted,
+.lp-console .dashboard-note-panel,
+.lp-console .dashboard-toggle-panel,
+.lp-console .dashboard-table-shell {
+  border: 1px solid var(--lp-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: none;
+}
+
+.lp-console .dashboard-live-card::after,
+.lp-console .dashboard-live-card-active::after {
+  display: none;
+}
+
+.lp-console .dashboard-live-card-active {
+  border-color: rgba(255, 61, 127, 0.4);
+}
+
+/* Large radii from the old design read as bubbly; tighten them. */
+.lp-console [class*="rounded-[1.5rem]"],
+.lp-console [class*="rounded-[1.7rem]"],
+.lp-console [class*="rounded-[1.4rem]"],
+.lp-console [class*="rounded-[1.55rem]"],
+.lp-console [class*="rounded-[1.45rem]"],
+.lp-console [class*="rounded-[1.35rem]"],
+.lp-console .rounded-3xl {
+  border-radius: 12px;
+}
+
+.lp-console .rounded-2xl {
+  border-radius: 10px;
+}
+
+/* ---------- chips and badges ---------- */
+.lp-console .dashboard-chip,
+.lp-console .dashboard-subtle-chip,
+.lp-console .dashboard-chip-muted,
+.lp-console .dashboard-chip-success,
+.lp-console .dashboard-chip-danger,
+.lp-console .dashboard-chip-warning,
+.lp-console .dashboard-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--lp-border);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--lp-muted);
+  box-shadow: none;
+}
+
+.lp-console .dashboard-chip-success {
+  border-color: rgba(74, 222, 128, 0.25);
+  background: rgba(74, 222, 128, 0.08);
+  color: #86efac;
+}
+
+.lp-console .dashboard-chip-danger {
+  border-color: rgba(255, 61, 127, 0.3);
+  background: rgba(255, 61, 127, 0.08);
+  color: #ff8fb3;
+}
+
+.lp-console .dashboard-chip-warning {
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--lp-amber);
+}
+
+.lp-console .dashboard-live-dot {
+  background: var(--lp-subtle);
+  box-shadow: none;
+}
+
+.lp-console .dashboard-live-dot-active {
+  background: var(--lp-green);
+}
+
+/* ---------- controls ---------- */
+.lp-console .field-input,
+.lp-console .dashboard-hero-input,
+.lp-console input[type="text"]:not(.auth-input),
+.lp-console input[type="number"],
+.lp-console input[type="email"]:not(.auth-input),
+.lp-console input[type="search"],
+.lp-console select,
+.lp-console textarea {
+  border-radius: 8px;
+  border: 1px solid var(--lp-border-strong);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--lp-text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 14px;
+  box-shadow: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.lp-console .field-input:focus,
+.lp-console .dashboard-hero-input:focus,
+.lp-console input:focus-visible,
+.lp-console select:focus-visible,
+.lp-console textarea:focus-visible {
+  outline: none;
+  border-color: var(--lp-accent);
+  box-shadow: 0 0 0 3px rgba(255, 61, 127, 0.15);
+}
+
+.lp-console .field-input::placeholder,
+.lp-console .dashboard-hero-input::placeholder {
+  color: var(--lp-subtle);
+}
+
+.lp-console .field-label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--lp-text);
+}
+
+.lp-console .dashboard-action-pill {
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--lp-border);
+  background: transparent;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lp-muted);
+  box-shadow: none;
+}
+
+.lp-console .dashboard-action-pill:hover {
+  border-color: var(--lp-border-strong);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--lp-text);
+}
+
+.lp-console .dashboard-action-pill-active {
+  border-color: rgba(255, 61, 127, 0.45);
+  background: rgba(255, 61, 127, 0.1);
+  color: var(--lp-text);
+}
+
+.lp-console .dashboard-text-link {
+  color: var(--lp-accent);
+}
+
+.lp-console .dashboard-text-link:hover {
+  color: #ff7aa6;
+}
+
+/* Brand buttons used by the new shell and redesigned screens. */
+.lp-console .console-btn {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.lp-console .console-btn-primary {
+  background: var(--lp-accent);
+  color: #fff;
+}
+
+.lp-console .console-btn-primary:hover {
+  background: #ff5a93;
+}
+
+.lp-console .console-btn-secondary {
+  border: 1px solid var(--lp-border-strong);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--lp-text);
+}
+
+.lp-console .console-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.lp-console .console-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lp-console .console-popover {
+  border-radius: 10px;
+  border: 1px solid var(--lp-border-strong);
+  background: #1d1d22;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- tables ---------- */
+.lp-console .data-table th,
+.lp-console .data-table td,
+.lp-console .dashboard-table .data-table th,
+.lp-console .dashboard-table .data-table td {
+  border-bottom-color: var(--lp-border);
+  color: var(--lp-text);
+}
+
+.lp-console .data-table th,
+.lp-console .dashboard-table .data-table th {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--lp-subtle);
+}
+
+.lp-console .dashboard-table .data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* ---------- background decorations from the old shell ---------- */
+.lp-console .bg-grid-overlay,
+.lp-console .grid-shell {
+  background-image: none;
+}

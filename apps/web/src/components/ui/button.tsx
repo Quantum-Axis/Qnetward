@@ -6,10 +6,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  primary: "bg-[#44d4c8] text-slate-950 shadow-[0_10px_28px_rgba(68,212,200,0.18)] hover:brightness-110",
-  secondary: "border border-white/10 bg-white/[0.04] text-slate-200 hover:border-teal-300/28 hover:bg-white/[0.07]",
-  ghost: "bg-transparent text-slate-200 hover:bg-white/6",
-  danger: "border border-rose-500/30 bg-rose-500/12 text-rose-200 hover:bg-rose-500/18",
+  primary: "bg-[#ff3d7f] text-white hover:bg-[#ff5a93]",
+  secondary: "border border-white/[0.14] bg-white/[0.03] text-[#ededf0] hover:bg-white/[0.07]",
+  ghost: "bg-transparent text-[#ededf0] hover:bg-white/[0.06]",
+  danger: "border border-[rgba(255,61,127,0.35)] bg-[rgba(255,61,127,0.08)] text-[#ff8fb3] hover:bg-[rgba(255,61,127,0.14)]",
 };
 
 export function Button({ className, variant = "primary", type = "button", ...props }: ButtonProps) {
@@ -17,7 +17,7 @@ export function Button({ className, variant = "primary", type = "button", ...pro
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40 disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff3d7f]/40 disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         className,
       )}

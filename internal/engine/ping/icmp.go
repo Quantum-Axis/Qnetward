@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 
-	"qnetward/internal/report"
+	"qnetward/internal/engine/report"
 )
 
 type Config struct {

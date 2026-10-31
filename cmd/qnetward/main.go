@@ -29,15 +29,15 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 
-	"qnetward/internal/cache"
-	"qnetward/internal/dnslookup"
-	"qnetward/internal/mailer"
-	"qnetward/internal/objectstore"
-	"qnetward/internal/ping"
-	"qnetward/internal/portscan"
-	"qnetward/internal/report"
+	"qnetward/internal/engine/dnslookup"
+	"qnetward/internal/engine/ping"
+	"qnetward/internal/engine/portscan"
+	"qnetward/internal/engine/report"
+	"qnetward/internal/engine/tcpping"
+	"qnetward/internal/platform/cache"
+	"qnetward/internal/platform/mailer"
+	"qnetward/internal/platform/objectstore"
 	"qnetward/internal/store"
-	"qnetward/internal/tcpping"
 )
 
 const (

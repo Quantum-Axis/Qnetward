@@ -457,4 +457,3 @@ func nullTimePtr(v sql.NullTime) *time.Time {
 	t := v.Time.UTC()
 	return &t
 }
-

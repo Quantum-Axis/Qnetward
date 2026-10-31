@@ -33,7 +33,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Go race test
-        run: go test -race ./cmd/qnetward ./internal/store ./internal/portscan ./internal/dnslookup
+        run: go test -race ./...
 
   frontend:
     runs-on: ubuntu-latest

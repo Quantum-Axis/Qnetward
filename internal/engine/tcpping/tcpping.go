@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"qnetward/internal/report"
+	"qnetward/internal/engine/report"
 )
 
 type Config struct {

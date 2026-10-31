@@ -18,7 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 
-	"qnetward/internal/mailer"
+	"qnetward/internal/platform/mailer"
 	"qnetward/internal/store"
 )
 

@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -106,6 +108,7 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 
+	cfg.AddrCheck = appTargetPolicy.CheckIP
 	rep, err := ping.RunStreamContext(r.Context(), req.Host, cfg, func(res report.Result) error {
 		storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
 		return nil
@@ -178,6 +181,7 @@ func handleTCPPing(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 
+	cfg.AddrCheck = appTargetPolicy.CheckIP
 	rep, err := tcpping.RunStreamContext(r.Context(), host, port, cfg, func(res report.Result) error {
 		storeResult(user.ID, "tcpping", host, res.Addr, port, res, time.Now())
 		return nil
@@ -228,6 +232,7 @@ func handlePortScan(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 
+	cfg.AddrCheck = appTargetPolicy.CheckIP
 	rep, err := portscan.RunContext(r.Context(), host, cfg)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
@@ -280,6 +285,10 @@ func handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
+	if err := checkCustomResolver(ctx, req.Resolver); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
 	rep, err := dnslookup.RunContext(ctx, target, dnslookup.Config{
 		Timeout:    timeout,
 		RecordType: req.RecordType,
@@ -324,4 +333,23 @@ func storeResult(userID int64, protocol, target, addr string, port int, res repo
 		rec.RttMs = &ms
 	}
 	appStore.InsertAsync(rec)
+}
+
+// checkCustomResolver applies the target policy to a user-supplied DNS
+// resolver. Named presets and the system resolver are always allowed.
+func checkCustomResolver(ctx context.Context, resolver string) error {
+	value := strings.ToLower(strings.TrimSpace(resolver))
+	switch value {
+	case "", "auto", "default", "system", "cloudflare", "google", "quad9":
+		return nil
+	}
+	host := value
+	if h, _, err := net.SplitHostPort(value); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if err := appTargetPolicy.CheckHost(ctx, host); err != nil {
+		return fmt.Errorf("resolver: %w", err)
+	}
+	return nil
 }

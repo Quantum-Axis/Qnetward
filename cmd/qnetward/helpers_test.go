@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"qnetward/internal/platform/mailer"
+	"qnetward/internal/platform/netguard"
 	"qnetward/internal/store"
 )
 
@@ -193,4 +194,9 @@ func testTableName(name string) string {
 	b.WriteString("_")
 	b.WriteString(fmt.Sprintf("%d", time.Now().UnixNano()))
 	return b.String()
+}
+
+func init() {
+	// Handler tests probe listeners on 127.0.0.1; the hosted default blocks that.
+	appTargetPolicy = netguard.Policy{AllowPrivate: true}
 }

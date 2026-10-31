@@ -137,3 +137,11 @@ func TestClassifyErrorNormalizesConnectexRefused(t *testing.T) {
 		t.Fatalf("expected normalized message, got %q", message)
 	}
 }
+
+func TestRunRejectsBlockedAddress(t *testing.T) {
+	blocked := errors.New("blocked")
+	cfg := Config{Ports: []int{80}, Timeout: time.Second, AddrCheck: func(net.IP) error { return blocked }}
+	if _, err := RunContext(context.Background(), "127.0.0.1", cfg); !errors.Is(err, blocked) {
+		t.Fatalf("expected AddrCheck error, got %v", err)
+	}
+}

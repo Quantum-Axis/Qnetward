@@ -13,6 +13,7 @@ import (
 
 	"qnetward/internal/platform/cache"
 	"qnetward/internal/platform/mailer"
+	"qnetward/internal/platform/netguard"
 	"qnetward/internal/platform/objectstore"
 	"qnetward/internal/store"
 )
@@ -51,6 +52,7 @@ func runServe(args []string) {
 	demoEnabled := fs.Bool("demo-enabled", envBool("QNETWARD_DEMO_ENABLED", false), "enable shared demo login")
 	demoName := fs.String("demo-name", envString("QNETWARD_DEMO_NAME", "Contributor Demo"), "display name for demo access")
 	demoEmail := fs.String("demo-email", envString("QNETWARD_DEMO_EMAIL", "demo@qnetward.local"), "display email for demo access")
+	allowPrivateTargets := fs.Bool("allow-private-targets", envBool("QNETWARD_ALLOW_PRIVATE_TARGETS", false), "allow probes to loopback, private, and link-local addresses (self-hosted LAN monitoring); cloud metadata endpoints stay blocked")
 	adminEmailsRaw := fs.String("admin-emails", envString("QNETWARD_ADMIN_EMAILS", ""), "comma-separated platform admin emails")
 
 	fs.Usage = func() {
@@ -156,6 +158,7 @@ func runServe(args []string) {
 	appPublicBaseURL = strings.TrimRight(strings.TrimSpace(*publicBaseURL), "/")
 	appDemoEnabled = *demoEnabled
 	appDemoName = strings.TrimSpace(*demoName)
+	appTargetPolicy = netguard.Policy{AllowPrivate: *allowPrivateTargets}
 	appDemoEmail = strings.TrimSpace(*demoEmail)
 	appDemoCreatedAt = time.Now().UTC()
 	if appDemoEnabled {
@@ -276,6 +279,10 @@ var appDemoName string
 var appDemoEmail string
 
 var appDemoCreatedAt time.Time
+
+// appTargetPolicy decides which addresses API-initiated probes may reach.
+// The CLI does not use it: it runs on the operator's own machine.
+var appTargetPolicy netguard.Policy
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

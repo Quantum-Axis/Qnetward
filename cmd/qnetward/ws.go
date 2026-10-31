@@ -10,12 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"qnetward/internal/engine/ping"
 	"qnetward/internal/engine/portscan"
 	"qnetward/internal/engine/report"
 	"qnetward/internal/engine/tcpping"
 	"qnetward/internal/store"
+
+	"github.com/gorilla/websocket"
 )
 
 type wsRequest struct {
@@ -225,6 +226,7 @@ func streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req ws
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
+	cfg.AddrCheck = appTargetPolicy.CheckIP
 	rep, err := ping.RunStreamContext(ctx, req.Host, cfg, func(res report.Result) error {
 		ts := time.Now()
 		storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, ts)
@@ -295,6 +297,7 @@ func streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
+	cfg.AddrCheck = appTargetPolicy.CheckIP
 	rep, err := tcpping.RunStreamContext(ctx, host, port, cfg, func(res report.Result) error {
 		ts := time.Now()
 		storeResult(user.ID, "tcpping", host, res.Addr, port, res, ts)
@@ -352,6 +355,7 @@ func streamPortScanWS(ctx context.Context, writer *wsWriter, req wsRequest) erro
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
+	cfg.AddrCheck = appTargetPolicy.CheckIP
 	rep, err := portscan.RunStreamContext(ctx, host, cfg, func(res portscan.Result) error {
 		ts := time.Now()
 		jr := toJSONPortScanResult(res)

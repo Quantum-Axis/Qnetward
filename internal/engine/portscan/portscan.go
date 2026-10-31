@@ -22,6 +22,9 @@ type Config struct {
 	Ports       []int
 	Timeout     time.Duration
 	Concurrency int
+	// AddrCheck, when set, vets every resolved address before scanning. The
+	// scan dials those exact addresses, so the check cannot be bypassed later.
+	AddrCheck func(net.IP) error
 }
 
 type Result struct {
@@ -143,6 +146,13 @@ func RunStreamContext(ctx context.Context, host string, cfg Config, onResult fun
 	dialHosts, resolvedAddr, err := resolveTargets(runCtx, host)
 	if err != nil {
 		return Report{}, err
+	}
+	if cfg.AddrCheck != nil {
+		for _, h := range dialHosts {
+			if err := cfg.AddrCheck(net.ParseIP(h)); err != nil {
+				return Report{}, err
+			}
+		}
 	}
 
 	jobs := make(chan int)

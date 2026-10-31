@@ -158,3 +158,18 @@ func TestRunStreamCallsOnResult(t *testing.T) {
 		t.Fatalf("onResult was called %d times, want 3 (seen=%v)", len(seen), seen)
 	}
 }
+
+func TestRunRejectsBlockedAddress(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("cannot listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	blocked := errors.New("blocked")
+	cfg := Config{Count: 1, Interval: time.Millisecond, Timeout: time.Second, AddrCheck: func(net.IP) error { return blocked }}
+	if _, err := RunContext(context.Background(), "127.0.0.1", port, cfg); !errors.Is(err, blocked) {
+		t.Fatalf("expected AddrCheck error, got %v", err)
+	}
+}

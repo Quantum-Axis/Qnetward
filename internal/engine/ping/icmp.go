@@ -24,6 +24,8 @@ type Config struct {
 	Size       int
 	ForceIPv6  bool
 	Continuous bool
+	// AddrCheck, when set, vets the resolved address before any packet is sent.
+	AddrCheck func(net.IP) error
 }
 
 func Run(host string, cfg Config) (report.Report, error) {
@@ -58,6 +60,11 @@ func RunStreamContext(ctx context.Context, host string, cfg Config, onResult fun
 	ipaddr, isIPv6, err := resolveAddr(host, cfg.ForceIPv6)
 	if err != nil {
 		return report.Report{}, err
+	}
+	if cfg.AddrCheck != nil {
+		if err := cfg.AddrCheck(ipaddr.IP); err != nil {
+			return report.Report{}, err
+		}
 	}
 
 	network := "ip4:icmp"

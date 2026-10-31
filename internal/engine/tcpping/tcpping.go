@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"strconv"
+	"syscall"
 	"time"
 
 	"qnetward/internal/engine/report"
@@ -15,6 +16,9 @@ type Config struct {
 	Interval   time.Duration
 	Timeout    time.Duration
 	Continuous bool
+	// AddrCheck, when set, vets every address the host resolves to before the
+	// run starts, and again on each connect (guarding against DNS rebinding).
+	AddrCheck func(net.IP) error
 }
 
 func Run(host string, port int, cfg Config) (report.Report, error) {
@@ -53,6 +57,12 @@ func RunStreamContext(ctx context.Context, host string, port int, cfg Config, on
 	}
 	results := make([]report.Result, 0, initialCapacity)
 	dialer := &net.Dialer{Timeout: cfg.Timeout}
+	if cfg.AddrCheck != nil {
+		if err := checkHost(ctx, host, cfg.AddrCheck); err != nil {
+			return report.Report{}, err
+		}
+		dialer.Control = dialControl(cfg.AddrCheck)
+	}
 	startedAt := time.Now()
 
 	for i := 1; ; i++ {
@@ -118,5 +128,31 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 		return ctx.Err()
 	case <-timer.C:
 		return nil
+	}
+}
+
+func checkHost(ctx context.Context, host string, check func(net.IP) error) error {
+	if ip := net.ParseIP(host); ip != nil {
+		return check(ip)
+	}
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return err
+	}
+	for _, addr := range addrs {
+		if err := check(addr.IP); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func dialControl(check func(net.IP) error) func(network, address string, c syscall.RawConn) error {
+	return func(_, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			host = address
+		}
+		return check(net.ParseIP(host))
 	}
 }

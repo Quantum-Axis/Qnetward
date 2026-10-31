@@ -3,6 +3,7 @@ package ping
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -162,5 +163,13 @@ func TestSleepContextCancelled(t *testing.T) {
 func TestSleepContextCompletes(t *testing.T) {
 	if err := sleepContext(context.Background(), 5*time.Millisecond); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunRejectsBlockedAddressBeforeSending(t *testing.T) {
+	blocked := errors.New("blocked")
+	cfg := Config{Count: 1, Timeout: time.Second, AddrCheck: func(net.IP) error { return blocked }}
+	if _, err := RunContext(context.Background(), "127.0.0.1", cfg); !errors.Is(err, blocked) {
+		t.Fatalf("expected AddrCheck error, got %v", err)
 	}
 }

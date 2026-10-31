@@ -182,6 +182,7 @@ QNETWARD_S3_BUCKET=qnetward-artifacts
 QNETWARD_S3_SSL=false
 QNETWARD_DEMO_ENABLED=false
 QNETWARD_ADMIN_EMAILS=admin@example.com
+QNETWARD_ALLOW_PRIVATE_TARGETS=false   # true only for self-hosted LAN monitoring
 ```
 
 Start the production stack:
@@ -241,6 +242,18 @@ GitHub Actions runs on every pull request and every push to `main`:
 - `apps/web` `pnpm lint` and `pnpm build`
 
 Playwright E2E and the Docker smoke test are run locally (see above).
+
+## Probe Target Safety
+
+The API refuses to probe addresses that would let a user reach the server's own network:
+loopback, RFC 1918 private ranges, carrier-grade NAT, link-local, multicast, and reserved
+ranges (see `internal/platform/netguard`). TCP ping checks the address at connect time, so a
+hostname that later re-resolves to a private IP (DNS rebinding) is still rejected. Custom DNS
+resolvers are checked the same way.
+
+Self-hosted installs that monitor their own LAN can set `QNETWARD_ALLOW_PRIVATE_TARGETS=true`.
+Cloud metadata endpoints such as `169.254.169.254` stay blocked either way. The CLI is not
+restricted, since it runs on the operator's own machine.
 
 ## Notes
 

@@ -211,6 +211,8 @@ Demo mode:
 
 ## Development
 
+Common tasks are in the `Makefile` (`make help`). Architecture decisions are recorded in [`docs/adr/`](docs/adr/README.md).
+
 Build:
 
 ```bash

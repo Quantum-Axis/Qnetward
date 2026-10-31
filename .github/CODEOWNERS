@@ -1,0 +1,8 @@
+# Default reviewer for everything until more maintainers join.
+* @Moparapairayat
+
+# Security-sensitive paths: changes here should get a careful second look.
+/internal/platform/netguard/ @Moparapairayat
+/cmd/qnetward/session.go @Moparapairayat
+/cmd/qnetward/auth_handlers.go @Moparapairayat
+/internal/store/ @Moparapairayat

@@ -7,6 +7,7 @@ import { apiRequest } from "@/lib/api";
 import { SessionResponse } from "@/lib/types";
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
+import { CommandPalette } from "@/components/app/command-palette";
 import { QnetwardMark } from "@/features/landing/qnetward-mark";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
@@ -54,6 +55,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <Sidebar session={session.data} />
+      <CommandPalette isAdmin={session.data.platform_role === "admin"} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar session={session.data} />
         <main id="main" className="flex-1 px-4 py-6 lg:px-8 lg:py-8">

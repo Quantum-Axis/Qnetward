@@ -5,30 +5,14 @@ import { usePathname } from "next/navigation";
 import { Menu, Plus } from "lucide-react";
 import { SessionResponse } from "@/lib/types";
 import { useShellStore } from "@/store/ui-store";
-
-const titles: Record<string, [section: string, page: string]> = {
-  "/overview": ["Diagnostics", "Overview"],
-  "/icmp-ping": ["Diagnostics", "ICMP ping"],
-  "/tcp-ping": ["Diagnostics", "TCP ping"],
-  "/port-scan": ["Diagnostics", "Port scan"],
-  "/dns-lookup": ["Diagnostics", "DNS lookup"],
-  "/history": ["Monitoring", "History"],
-  "/alerts": ["Monitoring", "Alert rules"],
-  "/workspace/team": ["Workspace", "Team"],
-  "/workspace/billing": ["Workspace", "Billing"],
-  "/settings": ["Workspace", "Settings"],
-  "/profile": ["Account", "Profile"],
-  "/security": ["Account", "Security"],
-  "/admin": ["Admin", "Overview"],
-  "/admin/users": ["Admin", "Users"],
-  "/admin/workspaces": ["Admin", "Workspaces"],
-  "/admin/system": ["Admin", "System"],
-};
+import { findNav } from "@/components/app/nav-config";
 
 export function Topbar({ session }: { session: SessionResponse }) {
   const pathname = usePathname();
   const { toggleSidebar } = useShellStore();
-  const [section, page] = titles[pathname] ?? ["", "Console"];
+  const match = findNav(pathname);
+  const section = match?.section ?? "";
+  const page = match?.item.label ?? "Console";
   const isDemo = session.mode === "demo";
 
   return (

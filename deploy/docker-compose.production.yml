@@ -12,7 +12,7 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ../apps/web
       dockerfile: Dockerfile
     image: qnetward-frontend:production
     restart: unless-stopped

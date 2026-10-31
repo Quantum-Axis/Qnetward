@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +51,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
+          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -97,7 +97,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
+          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Start stack
         run: docker compose -f deploy/docker-compose.production.yml --env-file .env.ci up -d --build
@@ -120,15 +120,15 @@ jobs:
         run: ./scripts/smoke-test.ps1 -BaseUrl 'http://127.0.0.1:8080'
 
       - name: Install frontend dependencies
-        run: pnpm --dir frontend install --frozen-lockfile
+        run: pnpm --dir apps/web install --frozen-lockfile
 
       - name: Install Playwright browser
-        run: pnpm --dir frontend exec playwright install --with-deps chromium
+        run: pnpm --dir apps/web exec playwright install --with-deps chromium
 
       - name: Run Playwright E2E
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
-        run: pnpm --dir frontend test:e2e
+        run: pnpm --dir apps/web test:e2e
 
       - name: Show logs on failure
         if: failure()

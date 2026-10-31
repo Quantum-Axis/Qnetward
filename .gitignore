@@ -22,5 +22,5 @@ deploy/cloudflared.runtime.yml
 # package manager / test artifacts
 .pnpm-store/
 node_modules/
-frontend/playwright-report/
-frontend/test-results/
+apps/web/playwright-report/
+apps/web/test-results/

@@ -31,26 +31,22 @@ Core capabilities:
 
 ## Architecture
 
-- `cmd/qnetward`
-  CLI entrypoint and backend API/probe server
-- `frontend`
-  primary Next.js frontend
-- `internal/cache`
-  Redis cache integration
-- `internal/objectstore`
-  S3-compatible object storage integration
-- `internal/ping`
-  ICMP ping implementation
-- `internal/tcpping`
-  TCP connect latency implementation
-- `internal/report`
-  result and summary model
-- `internal/store`
-  PostgreSQL/TimescaleDB persistence, batching, retention
-- `internal/portscan`
-  TCP connect port scanning
-- `deploy`
-  production `docker-compose` stack
+```
+apps/web/              Next.js dashboard
+cmd/qnetward/          CLI entrypoint and backend API/probe server
+internal/engine/       pure network engines (no HTTP, no DB)
+  ping/  tcpping/  portscan/  dnslookup/  report/
+internal/platform/     infrastructure adapters
+  cache/ (Redis)  objectstore/ (S3)  mailer/ (Resend)
+internal/store/        PostgreSQL/TimescaleDB persistence, batching, retention
+deploy/                production docker-compose stack
+scripts/               smoke tests and tooling
+```
+
+Inside `cmd/qnetward`, code is split by domain: `auth_handlers.go`,
+`session.go`, `workspace_handlers.go`, `admin_handlers.go`,
+`probe_handlers.go`, `history_handlers.go`, `alert_handlers.go`, `ws.go`,
+plus shared `httpx.go`, `origin.go`, `ratelimit.go`, and `config.go`.
 
 ## Tech Stack
 
@@ -243,8 +239,8 @@ GitHub Actions now runs:
 - `go test ./...`
 - `go vet ./...`
 - `go test -race ./cmd/qnetward ./internal/store ./internal/portscan ./internal/dnslookup`
-- frontend `pnpm lint`
-- frontend `pnpm build`
+- `apps/web` `pnpm lint`
+- `apps/web` `pnpm build`
 - frontend Playwright E2E
 - Docker compose smoke checks through `scripts/smoke-test.ps1`
 
@@ -266,9 +262,11 @@ Implemented now:
 - Realtime result streaming
 - History storage
 - Stop/cancel for active live runs
+- DNS lookup / inspector
+- Alert rules with email delivery
+- Workspaces, team invitations, and platform admin console
 
 Planned next:
 - Multi-target monitoring
 - HTTP/HTTPS checks
-- DNS toolkit
-- Alerts
+- Full DNS toolkit (DNSSEC, propagation)

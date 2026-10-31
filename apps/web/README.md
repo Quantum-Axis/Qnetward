@@ -75,8 +75,8 @@ Open:
 
 If you run the frontend only through Docker, you do **not** need local:
 
-- `frontend/node_modules`
-- `frontend/.next`
+- `apps/web/node_modules`
+- `apps/web/.next`
 
 The Docker image installs dependencies and builds the app inside the container.
 
@@ -99,7 +99,7 @@ pnpm start
 
 The production compose stack now treats this app as the primary UI:
 
-- `frontend/` serves the dashboard
+- `apps/web/` serves the dashboard
 - `cmd/qnetward` stays behind it as the API and realtime probe backend
 - `deploy/nginx.frontend-primary.conf` routes `/api`, `/healthz`, and `/ws` to Go
 

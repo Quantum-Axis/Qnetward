@@ -234,15 +234,13 @@ Run the HTTP smoke test against a running local stack:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 -BaseUrl http://127.0.0.1:8080
 ```
 
-GitHub Actions now runs:
+GitHub Actions runs on every pull request and every push to `main`:
 
-- `go test ./...`
 - `go vet ./...`
-- `go test -race ./cmd/qnetward ./internal/store ./internal/portscan ./internal/dnslookup`
-- `apps/web` `pnpm lint`
-- `apps/web` `pnpm build`
-- frontend Playwright E2E
-- Docker compose smoke checks through `scripts/smoke-test.ps1`
+- `go test -race -p 1 ./...` against a TimescaleDB service, so Postgres-backed tests run too
+- `apps/web` `pnpm lint` and `pnpm build`
+
+Playwright E2E and the Docker smoke test are run locally (see above).
 
 ## Notes
 

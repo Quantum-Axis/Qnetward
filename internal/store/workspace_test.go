@@ -254,10 +254,16 @@ func TestWorkspaceAdminCannotManageOwner(t *testing.T) {
 		t.Fatalf("AcceptWorkspaceInvitationByUserID returned error: %v", err)
 	}
 
-	if _, err := st.UpdateWorkspaceMemberRoleByUserID(ctx, admin.ID, owner.ID, "member"); err != ErrWorkspacePermissionDenied {
+	// The admin also owns a personal workspace, so act explicitly in the owner's
+	// workspace rather than letting a ByUserID helper pick the admin's own.
+	ownerWorkspace, err := st.GetWorkspaceContextByUserID(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("GetWorkspaceContextByUserID returned error: %v", err)
+	}
+	if _, err := st.UpdateWorkspaceMemberRoleByWorkspaceIDAndUserID(ctx, ownerWorkspace.ID, admin.ID, owner.ID, "member"); err != ErrWorkspacePermissionDenied {
 		t.Fatalf("expected permission denied updating owner, got %v", err)
 	}
-	if err := st.RemoveWorkspaceMemberByUserID(ctx, admin.ID, owner.ID); err != ErrWorkspacePermissionDenied {
+	if err := st.RemoveWorkspaceMemberByWorkspaceIDAndUserID(ctx, ownerWorkspace.ID, admin.ID, owner.ID); err != ErrWorkspacePermissionDenied {
 		t.Fatalf("expected permission denied removing owner, got %v", err)
 	}
 }

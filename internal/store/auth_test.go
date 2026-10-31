@@ -259,7 +259,7 @@ func TestCreatePasswordResetTokenKeepsSingleActiveRowPerUser(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			tokenHash := fmt.Sprintf("reset-token-%d", i)
+			tokenHash := fmt.Sprintf("reset-token-%d-%d", user.ID, i)
 			if err := st.CreatePasswordResetToken(ctx, user.ID, tokenHash, time.Now().Add(time.Hour)); err != nil {
 				errCh <- err
 			}

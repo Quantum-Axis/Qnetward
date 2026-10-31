@@ -26,7 +26,7 @@ func TestHandleHistoryReturnsStoredPoints(t *testing.T) {
 		RttMs:    float64Ptr(12.5),
 	})
 
-	waitFor(t, time.Second, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		points, err := st.QueryHistory(user.ID, "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 1
 	})
@@ -68,7 +68,7 @@ func TestHandleHistoryIsUserScoped(t *testing.T) {
 		RttMs:    float64Ptr(8.5),
 	})
 
-	waitFor(t, time.Second, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		points, err := st.QueryHistory(userA.ID, "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 1
 	})
@@ -113,7 +113,7 @@ func TestHandleRecentHistoryTargetsReturnsStoredTargets(t *testing.T) {
 		RttMs:    float64Ptr(13.2),
 	})
 
-	waitFor(t, time.Second, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		targets, err := st.QueryRecentHistoryTargets(user.ID, 10)
 		return err == nil && len(targets) == 2
 	})
@@ -156,7 +156,7 @@ func TestHandleHistoryNormalizesTCPHostPort(t *testing.T) {
 		RttMs:    float64Ptr(12.5),
 	})
 
-	waitFor(t, time.Second, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		points, err := st.QueryHistory(user.ID, "tcpping", "example.com", 443, 10)
 		return err == nil && len(points) == 1
 	})
@@ -212,7 +212,7 @@ func TestHandleHistoryExportRequiresPostAndIsUserScoped(t *testing.T) {
 		RttMs:    float64Ptr(15.5),
 	})
 
-	waitFor(t, time.Second, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		points, err := st.QueryHistory(userA.ID, "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 1
 	})

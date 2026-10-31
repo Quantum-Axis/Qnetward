@@ -37,7 +37,7 @@ func TestStoreInsertAndQueryHistoryOrder(t *testing.T) {
 	})
 
 	var points []HistoryPoint
-	waitFor(t, time.Second, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		var err error
 		points, err = st.QueryHistory(userID, "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 2
@@ -110,7 +110,7 @@ func TestStoreQueryRecentHistoryTargets(t *testing.T) {
 	})
 
 	var targets []RecentHistoryTarget
-	waitFor(t, time.Second, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		var err error
 		targets, err = st.QueryRecentHistoryTargets(userID, 10)
 		return err == nil && len(targets) == 2

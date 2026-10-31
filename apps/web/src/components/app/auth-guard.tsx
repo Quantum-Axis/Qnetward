@@ -20,11 +20,11 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     if (!session.isLoading && !session.data?.authenticated) {
       router.replace("/login");
     }
-    if (!session.isLoading && session.data?.read_only && pathname !== "/") {
-      router.replace("/");
+    if (!session.isLoading && session.data?.read_only && pathname !== "/overview") {
+      router.replace("/overview");
     }
     if (!session.isLoading && pathname.startsWith("/admin") && session.data?.platform_role !== "admin") {
-      router.replace("/");
+      router.replace("/overview");
     }
   }, [pathname, router, session.data?.authenticated, session.data?.platform_role, session.data?.read_only, session.isLoading]);
 
@@ -44,7 +44,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     return null;
   }
 
-  if (session.data.read_only && pathname !== "/") {
+  if (session.data.read_only && pathname !== "/overview") {
     return null;
   }
 

@@ -29,7 +29,7 @@ test("admin user can access admin routes and demo user is gated out", async ({ b
   const demoPage = await demoContext.newPage();
   await loginAsDemoUser(demoPage);
   await demoPage.goto("/admin");
-  await expect(demoPage).toHaveURL(/\/$/);
+  await expect(demoPage).toHaveURL(/\/overview$/);
   await expect(demoPage.getByText("Network Operations Overview")).toBeVisible();
   await demoContext.close();
 });

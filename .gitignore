@@ -24,3 +24,6 @@ deploy/cloudflared.runtime.yml
 node_modules/
 apps/web/playwright-report/
 apps/web/test-results/
+
+# neonctl context
+.neon

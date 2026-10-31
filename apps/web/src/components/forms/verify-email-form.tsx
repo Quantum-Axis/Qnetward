@@ -35,7 +35,7 @@ export function VerifyEmailForm() {
     mutationFn: (values: FormValues) => apiRequest<SessionResponse>("/api/auth/verify-email", { method: "POST", body: JSON.stringify(values) }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["session"] });
-      router.replace("/");
+      router.replace("/overview");
     },
     onError: (error: ApiError) => {
       setNotice({ tone: "error", message: error.message });

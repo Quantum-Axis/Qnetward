@@ -205,7 +205,7 @@ func buildConfiguredDashboardURL(panel string) string {
 func dashboardRoutePath(panel string) string {
 	switch strings.TrimSpace(panel) {
 	case "", "overview":
-		return "/"
+		return "/overview"
 	case "ping":
 		return "/icmp-ping"
 	case "tcpping":
@@ -223,7 +223,7 @@ func dashboardRoutePath(panel string) string {
 	case "profile":
 		return "/profile"
 	default:
-		return "/"
+		return "/overview"
 	}
 }
 

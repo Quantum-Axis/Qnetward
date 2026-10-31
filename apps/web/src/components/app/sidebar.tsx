@@ -26,7 +26,7 @@ const navGroups: NavGroup[] = [
     icon: "OP",
     defaultOpen: true,
     items: [
-      { href: "/", label: "Overview", icon: "OV" },
+      { href: "/overview", label: "Overview", icon: "OV" },
       { href: "/icmp-ping", label: "ICMP Ping", icon: "IC" },
       { href: "/tcp-ping", label: "TCP Ping", icon: "TC" },
       { href: "/port-scan", label: "Port Scan", icon: "PS" },

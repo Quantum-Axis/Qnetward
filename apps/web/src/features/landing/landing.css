@@ -1,0 +1,298 @@
+/* Marketing site styles. Scoped under .lp-root so the console theme is untouched. */
+
+@layer components {
+
+.lp-root {
+  --lp-bg: #141417;
+  --lp-bg-raised: #1b1b1f;
+  --lp-surface: #202025;
+  --lp-border: rgba(255, 255, 255, 0.08);
+  --lp-border-strong: rgba(255, 255, 255, 0.14);
+  --lp-text: #ededf0;
+  --lp-muted: #9a9aa3;
+  --lp-subtle: #6c6c75;
+  --lp-accent: #ff3d7f;
+  --lp-accent-soft: rgba(255, 61, 127, 0.14);
+  --lp-cyan: #4fd1e8;
+  --lp-green: #4ade80;
+  --lp-amber: #fbbf24;
+
+  min-height: 100vh;
+  background: var(--lp-bg);
+  color: var(--lp-text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.lp-mono {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+.lp-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-inline: 24px;
+}
+
+/* Blinking cursor after headlines */
+.lp-cursor::after {
+  content: "_";
+  color: var(--lp-accent);
+  animation: lp-blink 1.1s steps(1) infinite;
+  margin-left: 2px;
+}
+
+@keyframes lp-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.lp-glow {
+  background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(255, 61, 127, 0.22), transparent 70%);
+}
+
+.lp-card {
+  background: var(--lp-bg-raised);
+  border: 1px solid var(--lp-border);
+  border-radius: 12px;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.lp-card-hover:hover {
+  border-color: var(--lp-border-strong);
+  background: var(--lp-surface);
+  transform: translateY(-2px);
+}
+
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
+}
+
+.lp-btn-primary {
+  background: var(--lp-accent);
+  color: #fff;
+}
+
+.lp-btn-primary:hover {
+  background: #ff5a93;
+}
+
+.lp-btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--lp-border);
+  color: var(--lp-text);
+}
+
+.lp-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--lp-border-strong);
+}
+
+.lp-eyebrow {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lp-muted);
+}
+
+.lp-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lp-badge-new {
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+.lp-pulse {
+  animation: lp-pulse 2s ease-in-out infinite;
+}
+
+@keyframes lp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.lp-divider {
+  border-top: 1px solid var(--lp-border);
+}
+
+/* World map: arcs draw in and pulse, markers ping */
+.lp-map-arc {
+  stroke-dasharray: 6 5;
+  animation: lp-dash 2.4s linear infinite;
+}
+
+@keyframes lp-dash {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+.lp-map-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lp-ping 2.6s ease-out infinite;
+}
+
+@keyframes lp-ping {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Hero aurora: slow-moving blurred colour fields */
+.lp-aurora {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(130px);
+  opacity: 0.16;
+  will-change: transform;
+}
+
+.lp-aurora-a {
+  width: 480px;
+  height: 420px;
+  left: 50%;
+  top: -300px;
+  margin-left: -520px;
+  background: #ff3d7f;
+  animation: lp-drift-a 18s ease-in-out infinite alternate;
+}
+
+.lp-aurora-b {
+  width: 420px;
+  height: 380px;
+  left: 50%;
+  top: -260px;
+  margin-left: 100px;
+  background: #7c3aed;
+  animation: lp-drift-b 22s ease-in-out infinite alternate;
+}
+
+@keyframes lp-drift-a {
+  to {
+    transform: translate(90px, 30px) scale(1.08);
+  }
+}
+
+@keyframes lp-drift-b {
+  to {
+    transform: translate(-100px, 40px) scale(0.95);
+  }
+}
+
+/* Hero headline: pink on the left fading to white on the right, restarting on each line */
+.lp-hero-text {
+  background: linear-gradient(90deg, #fd5c86 0%, #ff86a6 32%, #ffc9d7 58%, #ffffff 78%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Scroll reveal (only hides once JS has marked the page ready) */
+.lp-reveal-ready .lp-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.lp-reveal-ready .lp-reveal.lp-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Pointer-following highlight on cards */
+.lp-spot {
+  position: relative;
+  isolation: isolate;
+}
+
+.lp-spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 61, 127, 0.1), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.lp-spot:hover::before {
+  opacity: 1;
+}
+
+.lp-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Monochrome tech logos that pick up their brand colour on hover */
+.lp-logo {
+  color: #5d5d66;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.lp-logo:hover {
+  color: var(--brand, var(--lp-text));
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-cursor::after,
+  .lp-pulse,
+  .lp-map-arc,
+  .lp-map-ping,
+  .lp-aurora {
+    animation: none;
+  }
+  .lp-card-hover:hover {
+    transform: none;
+  }
+}
+}

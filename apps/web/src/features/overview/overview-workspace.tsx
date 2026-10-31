@@ -11,7 +11,7 @@ import {
 } from "@/features/overview/overview-helpers";
 import { buildOverviewDemoData } from "@/features/overview/overview-demo-data";
 import { GettingStarted } from "@/features/overview/overview-view";
-import { ResponseTimeChart, StatCards, TargetHealthCard, TargetsSummary, WelcomeHeader } from "@/features/overview/overview-dashboard";
+import { ComingNext, ResponseTimeChart, StatCards, TargetHealthCard, TargetsSummary, WelcomeHeader } from "@/features/overview/overview-dashboard";
 
 function mergeTrackedRules(alertRules: AlertRule[], recentTargets: RecentHistoryTarget[]) {
   const merged = new Map<string, AlertRule>();
@@ -211,6 +211,7 @@ export function OverviewWorkspace() {
       </div>
       <TargetsSummary targets={targetSnapshots} />
       {hasData ? null : <GettingStarted hasAlertRules={alertRuleCount > 0} />}
+      <ComingNext />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, LogOut, PanelLeftClose, PanelLeftOpen, Search, Shield, User, Users, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, LogOut, PanelLeftClose, PanelLeftOpen, Search, Shield, User, Users, X } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import { AlertRule, SessionResponse, WorkspaceListResponse } from "@/lib/types";
 import { useShellStore } from "@/store/ui-store";
@@ -223,7 +223,19 @@ function UserMenu({ session, collapsed }: { session: SessionResponse; collapsed:
   );
 }
 
-function NavLink({ item, active, collapsed, badge, onNavigate }: { item: NavItem; active: boolean; collapsed: boolean; badge?: number; onNavigate: () => void }) {
+function NavLink({
+  item,
+  active,
+  collapsed,
+  badge,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+  badge?: number;
+  onNavigate: () => void;
+}) {
   return (
     <Link
       href={item.href}
@@ -236,8 +248,13 @@ function NavLink({ item, active, collapsed, badge, onNavigate }: { item: NavItem
         active ? "bg-white/[0.07] text-[var(--lp-text)]" : "text-[var(--lp-muted)] hover:bg-white/[0.04] hover:text-[var(--lp-text)]",
       )}
     >
-      <item.icon className={cn("h-4 w-4 shrink-0", active ? "text-[var(--lp-accent)]" : "text-[var(--lp-subtle)] group-hover:text-[var(--lp-muted)]")} />
+      <item.icon
+        className={cn("h-4 w-4 shrink-0", active ? "text-[var(--lp-accent)]" : "text-[var(--lp-subtle)] group-hover:text-[var(--lp-muted)]")}
+      />
       {collapsed ? null : <span className="flex-1 truncate">{item.label}</span>}
+      {item.soon && !collapsed ? (
+        <span className="rounded border border-[var(--lp-border)] px-1 text-[10px] leading-4 text-[var(--lp-subtle)]">Soon</span>
+      ) : null}
       {badge ? (
         <span
           className={cn(
@@ -249,14 +266,14 @@ function NavLink({ item, active, collapsed, badge, onNavigate }: { item: NavItem
           {badge}
         </span>
       ) : null}
-      <RailTip label={badge ? `${item.label} · ${badge} firing` : item.label} show={collapsed} />
+      <RailTip label={badge ? `${item.label} · ${badge} firing` : item.soon ? `${item.label} · preview` : item.label} show={collapsed} />
     </Link>
   );
 }
 
 export function Sidebar({ session }: { session: SessionResponse }) {
   const pathname = usePathname();
-  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleSidebarCollapsed, setPaletteOpen } = useShellStore();
+  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleSidebarCollapsed, setPaletteOpen, foldedSections, toggleSection } = useShellStore();
   const isDemo = session.mode === "demo";
   const isAdmin = session.platform_role === "admin";
   // The rail only collapses on desktop; the mobile drawer is always full width.
@@ -335,28 +352,45 @@ export function Sidebar({ session }: { session: SessionResponse }) {
         </div>
 
         <nav className={cn("flex-1 pb-4 pt-1", collapsed ? "overflow-visible px-2" : "overflow-y-auto px-3")} aria-label="Main">
-          {sidebarSections(isAdmin).map((section) => (
-            <div key={section.label} className="mt-4">
-              {collapsed ? (
-                <div className="mx-auto mb-2 h-px w-6 bg-[var(--lp-border)]" aria-hidden="true" />
-              ) : (
-                <p className="mb-1 px-2.5 text-[11px] font-medium text-[var(--lp-subtle)]">{section.label}</p>
-              )}
-              <ul className="space-y-0.5">
-                {section.items.map((item) => (
-                  <li key={item.href}>
-                    <NavLink
-                      item={item}
-                      active={pathname === item.href}
-                      collapsed={collapsed}
-                      badge={item.href === "/alerts" ? firing : undefined}
-                      onNavigate={close}
+          {sidebarSections(isAdmin).map((section) => {
+            const hasActive = section.items.some((item) => item.href === pathname);
+            const folded = !collapsed && !hasActive && foldedSections.includes(section.label);
+            const single = section.items.length === 1;
+            return (
+              <div key={section.label} className="mt-3 first:mt-2">
+                {collapsed ? (
+                  <div className="mx-auto mb-2 h-px w-6 bg-[var(--lp-border)]" aria-hidden="true" />
+                ) : single ? null : (
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.label)}
+                    aria-expanded={!folded}
+                    className="group mb-0.5 flex w-full items-center gap-1 rounded px-2.5 py-1 text-[11px] font-medium text-[var(--lp-subtle)] hover:text-[var(--lp-muted)]"
+                  >
+                    <span className="flex-1 text-left">{section.label}</span>
+                    <ChevronDown
+                      className={cn("h-3 w-3 opacity-0 transition-transform group-hover:opacity-100", folded && "-rotate-90 opacity-100")}
                     />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                  </button>
+                )}
+                {folded ? null : (
+                  <ul className="space-y-0.5">
+                    {section.items.map((item) => (
+                      <li key={item.href}>
+                        <NavLink
+                          item={item}
+                          active={pathname === item.href}
+                          collapsed={collapsed}
+                          badge={item.href === "/alerts" ? firing : undefined}
+                          onNavigate={close}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         <div className={cn("space-y-2 border-t border-[var(--lp-border)] py-2", collapsed ? "px-2" : "px-3")}>

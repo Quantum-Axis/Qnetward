@@ -567,3 +567,41 @@ export function TargetsSummary({ targets }: { targets: OverviewTargetSnapshot[] 
     </section>
   );
 }
+
+/* ------------------------------------------------------------ coming next */
+
+const upcoming = [
+  { href: "/monitors", title: "Monitors", body: "Round-the-clock HTTP, TLS, and ping checks from several regions.", phase: 2 },
+  { href: "/topology", title: "Topology", body: "A live map of your network built from LLDP and CDP.", phase: 3 },
+  { href: "/attack-surface", title: "Attack surface", body: "Subdomains, open services, and certificates you didn't know about.", phase: 4 },
+  { href: "/assistant", title: "AI assistant", body: "Ask about outages in plain language and get likely causes.", phase: 5 },
+];
+
+export function ComingNext() {
+  return (
+    <section aria-labelledby="next-title">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 id="next-title" className="text-[14px] font-medium">
+          Coming next
+        </h2>
+        <span className="text-[12px] text-[var(--lp-subtle)]">Previews with sample data</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {upcoming.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="group rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f] p-4 transition-colors hover:border-[var(--lp-border-strong)] hover:bg-[#202025]"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium">{item.title}</span>
+              <span className="rounded border border-[var(--lp-border)] px-1.5 text-[10px] leading-4 text-[var(--lp-subtle)]">Phase {item.phase}</span>
+            </div>
+            <p className="mt-2 text-[12px] leading-relaxed text-[var(--lp-muted)]">{item.body}</p>
+            <span className="mt-3 inline-block text-[12px] text-[var(--lp-accent)] opacity-80 group-hover:opacity-100">See preview →</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}

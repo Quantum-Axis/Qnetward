@@ -52,7 +52,7 @@ export function AuthLayoutCard({
             </svg>
           </div>
           <div className="auth-brand-copy">
-            <p className="font-space text-[1.3rem] font-bold tracking-[-0.04em] text-white">NetWatcher</p>
+            <p className="font-space text-[1.3rem] font-bold tracking-[-0.04em] text-white">Qnetward</p>
             <p className="auth-brand-subline">Secure network operations</p>
           </div>
         </div>

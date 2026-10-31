@@ -14,3 +14,13 @@ Thumbs.db
 .vscode/
 .tmp/
 deploy/cloudflared.runtime.yml
+
+# local env files
+.env.e2e
+.env.*.local
+
+# package manager / test artifacts
+.pnpm-store/
+node_modules/
+frontend/playwright-report/
+frontend/test-results/

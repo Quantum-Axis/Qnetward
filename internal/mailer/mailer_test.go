@@ -26,7 +26,7 @@ func TestSendPasswordResetBuildsResendRequest(t *testing.T) {
 
 	client, err := Open(Config{
 		APIKey:   "test-key",
-		From:     "NetWatcher <alerts@example.com>",
+		From:     "Qnetward <alerts@example.com>",
 		ReplyTo:  "support@example.com",
 		Endpoint: srv.URL,
 		Timeout:  5 * time.Second,
@@ -48,14 +48,14 @@ func TestSendPasswordResetBuildsResendRequest(t *testing.T) {
 	if gotAuth != "Bearer test-key" {
 		t.Fatalf("expected bearer auth, got %q", gotAuth)
 	}
-	if gotPayload["subject"] != "[NetWatcher] Reset Password Request" {
+	if gotPayload["subject"] != "[Qnetward] Reset Password Request" {
 		t.Fatalf("unexpected subject: %#v", gotPayload["subject"])
 	}
-	if gotPayload["from"] != "NetWatcher <alerts@example.com>" {
+	if gotPayload["from"] != "Qnetward <alerts@example.com>" {
 		t.Fatalf("unexpected from: %#v", gotPayload["from"])
 	}
 	html, _ := gotPayload["html"].(string)
-	if !strings.Contains(html, "NetWatcher") || !strings.Contains(html, "Reset Password") || !strings.Contains(html, "Credential Recovery") || !strings.Contains(html, "support@example.com") {
+	if !strings.Contains(html, "Qnetward") || !strings.Contains(html, "Reset Password") || !strings.Contains(html, "Credential Recovery") || !strings.Contains(html, "support@example.com") {
 		t.Fatalf("expected branded reset email html, got %q", html)
 	}
 }
@@ -74,7 +74,7 @@ func TestSendVerificationOTPBuildsResendRequest(t *testing.T) {
 
 	client, err := Open(Config{
 		APIKey:   "test-key",
-		From:     "NetWatcher <alerts@example.com>",
+		From:     "Qnetward <alerts@example.com>",
 		Endpoint: srv.URL,
 		Timeout:  5 * time.Second,
 	})
@@ -91,11 +91,11 @@ func TestSendVerificationOTPBuildsResendRequest(t *testing.T) {
 		t.Fatalf("SendVerificationOTP returned error: %v", err)
 	}
 
-	if gotPayload["subject"] != "[NetWatcher] Verify Your Email" {
+	if gotPayload["subject"] != "[Qnetward] Verify Your Email" {
 		t.Fatalf("unexpected subject: %#v", gotPayload["subject"])
 	}
 	html, _ := gotPayload["html"].(string)
-	if !strings.Contains(html, "NetWatcher") || !strings.Contains(html, "123456") || !strings.Contains(html, "Email Verification") {
+	if !strings.Contains(html, "Qnetward") || !strings.Contains(html, "123456") || !strings.Contains(html, "Email Verification") {
 		t.Fatalf("expected branded verification email html, got %q", html)
 	}
 }
@@ -114,7 +114,7 @@ func TestSendWelcomeBuildsResendRequest(t *testing.T) {
 
 	client, err := Open(Config{
 		APIKey:   "test-key",
-		From:     "NetWatcher <alerts@example.com>",
+		From:     "Qnetward <alerts@example.com>",
 		ReplyTo:  "support@example.com",
 		Endpoint: srv.URL,
 		Timeout:  5 * time.Second,
@@ -131,11 +131,11 @@ func TestSendWelcomeBuildsResendRequest(t *testing.T) {
 		t.Fatalf("SendWelcome returned error: %v", err)
 	}
 
-	if gotPayload["subject"] != "[NetWatcher] Access Activated" {
+	if gotPayload["subject"] != "[Qnetward] Access Activated" {
 		t.Fatalf("unexpected subject: %#v", gotPayload["subject"])
 	}
 	html, _ := gotPayload["html"].(string)
-	if !strings.Contains(html, "Welcome to NetWatcher") || !strings.Contains(html, "Open Dashboard") || !strings.Contains(html, "Recommended First Steps") {
+	if !strings.Contains(html, "Welcome to Qnetward") || !strings.Contains(html, "Open Dashboard") || !strings.Contains(html, "Recommended First Steps") {
 		t.Fatalf("expected branded welcome email html, got %q", html)
 	}
 }
@@ -154,7 +154,7 @@ func TestSendAlertBuildsResendRequest(t *testing.T) {
 
 	client, err := Open(Config{
 		APIKey:   "test-key",
-		From:     "NetWatcher <alerts@example.com>",
+		From:     "Qnetward <alerts@example.com>",
 		ReplyTo:  "support@example.com",
 		Endpoint: srv.URL,
 		Timeout:  5 * time.Second,
@@ -176,7 +176,7 @@ func TestSendAlertBuildsResendRequest(t *testing.T) {
 		t.Fatalf("SendAlert returned error: %v", err)
 	}
 
-	if gotPayload["subject"] != "[NetWatcher] Critical Alert" {
+	if gotPayload["subject"] != "[Qnetward] Critical Alert" {
 		t.Fatalf("unexpected subject: %#v", gotPayload["subject"])
 	}
 	html, _ := gotPayload["html"].(string)

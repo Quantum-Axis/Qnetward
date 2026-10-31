@@ -59,6 +59,112 @@ func TestCreateUserRejectsDuplicateEmail(t *testing.T) {
 	}
 }
 
+func TestUpdateUserProfileNameOnly(t *testing.T) {
+	st := openTestStore(t, Config{
+		BatchSize:     1,
+		FlushInterval: 5 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	email := fmt.Sprintf("profile_name_%d@example.com", time.Now().UnixNano())
+	user, err := st.CreateUser(ctx, "Original Operator", email, "hash-1", false)
+	if err != nil {
+		t.Fatalf("CreateUser returned error: %v", err)
+	}
+
+	updated, emailChanged, err := st.UpdateUserProfile(ctx, user.ID, "Updated Operator", email)
+	if err != nil {
+		t.Fatalf("UpdateUserProfile returned error: %v", err)
+	}
+	if emailChanged {
+		t.Fatal("expected name-only update to keep email unchanged")
+	}
+	if updated.Name != "Updated Operator" {
+		t.Fatalf("expected updated name, got %q", updated.Name)
+	}
+	if updated.Email != email {
+		t.Fatalf("expected unchanged email %q, got %q", email, updated.Email)
+	}
+	if updated.VerificationRequired {
+		t.Fatal("expected verification state to remain unchanged")
+	}
+}
+
+func TestUpdateUserProfileEmailChangeResetsVerification(t *testing.T) {
+	st := openTestStore(t, Config{
+		BatchSize:     1,
+		FlushInterval: 5 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	email := fmt.Sprintf("profile_email_%d@example.com", time.Now().UnixNano())
+	user, err := st.CreateUser(ctx, "Profile Operator", email, "hash-1", false)
+	if err != nil {
+		t.Fatalf("CreateUser returned error: %v", err)
+	}
+	if err := st.CreateEmailVerificationCode(ctx, user.ID, "stale-code", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("CreateEmailVerificationCode returned error: %v", err)
+	}
+
+	nextEmail := fmt.Sprintf("profile_email_updated_%d@example.com", time.Now().UnixNano())
+	updated, emailChanged, err := st.UpdateUserProfile(ctx, user.ID, "Profile Operator", nextEmail)
+	if err != nil {
+		t.Fatalf("UpdateUserProfile returned error: %v", err)
+	}
+	if !emailChanged {
+		t.Fatal("expected email change to be reported")
+	}
+	if updated.Email != nextEmail {
+		t.Fatalf("expected updated email %q, got %q", nextEmail, updated.Email)
+	}
+	if !updated.VerificationRequired {
+		t.Fatal("expected verification to be required after email change")
+	}
+	if updated.EmailVerifiedAt != nil {
+		t.Fatal("expected email verification timestamp to be cleared")
+	}
+
+	var codeCount int
+	if err := st.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM email_verification_codes
+		WHERE user_id = $1
+	`, user.ID).Scan(&codeCount); err != nil {
+		t.Fatalf("count verification codes: %v", err)
+	}
+	if codeCount != 0 {
+		t.Fatalf("expected stale verification codes to be deleted, got %d", codeCount)
+	}
+}
+
+func TestUpdateUserProfileRejectsDuplicateEmail(t *testing.T) {
+	st := openTestStore(t, Config{
+		BatchSize:     1,
+		FlushInterval: 5 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	firstEmail := fmt.Sprintf("profile_dupe_first_%d@example.com", time.Now().UnixNano())
+	secondEmail := fmt.Sprintf("profile_dupe_second_%d@example.com", time.Now().UnixNano())
+	first, err := st.CreateUser(ctx, "First Operator", firstEmail, "hash-1", false)
+	if err != nil {
+		t.Fatalf("CreateUser first returned error: %v", err)
+	}
+	if _, err := st.CreateUser(ctx, "Second Operator", secondEmail, "hash-2", false); err != nil {
+		t.Fatalf("CreateUser second returned error: %v", err)
+	}
+
+	if _, _, err := st.UpdateUserProfile(ctx, first.ID, "First Operator", secondEmail); !errors.Is(err, ErrUserExists) {
+		t.Fatalf("expected ErrUserExists, got %v", err)
+	}
+}
+
 func TestPasswordResetTokenFlow(t *testing.T) {
 	st := openTestStore(t, Config{
 		BatchSize:     1,

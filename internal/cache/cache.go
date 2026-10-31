@@ -31,7 +31,7 @@ func Open(cfg Config) (*Cache, error) {
 		cfg.TTL = 3 * time.Second
 	}
 	if strings.TrimSpace(cfg.Prefix) == "" {
-		cfg.Prefix = "netwatcher"
+		cfg.Prefix = "qnetward"
 	}
 
 	client := redis.NewClient(&redis.Options{

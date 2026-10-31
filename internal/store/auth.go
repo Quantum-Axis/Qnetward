@@ -28,6 +28,11 @@ type User struct {
 	CreatedAt            time.Time  `json:"created_at"`
 }
 
+type SessionDetails struct {
+	User              User
+	ActiveWorkspaceID int64
+}
+
 func NormalizeEmail(value string) (string, error) {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
@@ -50,8 +55,16 @@ func (s *Store) CreateUser(ctx context.Context, name, email, passwordHash string
 		return User{}, errors.New("name is required")
 	}
 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	var user User
-	err = s.db.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		INSERT INTO users (name, email, password_hash, verification_required)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, name, email, verification_required, email_verified_at, created_at
@@ -60,6 +73,12 @@ func (s *Store) CreateUser(ctx context.Context, name, email, passwordHash string
 		if strings.Contains(strings.ToLower(err.Error()), "idx_users_email_lower") {
 			return User{}, ErrUserExists
 		}
+		return User{}, err
+	}
+	if _, err := ensureDefaultWorkspaceTx(ctx, tx, user); err != nil {
+		return User{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return User{}, err
 	}
 	return user, nil
@@ -108,6 +127,73 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) 
 	return user, nil
 }
 
+func (s *Store) UpdateUserProfile(ctx context.Context, userID int64, name, email string) (User, bool, error) {
+	email, err := NormalizeEmail(email)
+	if err != nil {
+		return User{}, false, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return User{}, false, errors.New("name is required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, false, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	var current User
+	err = tx.QueryRowContext(ctx, `
+		SELECT id, name, email, verification_required, email_verified_at, created_at
+		FROM users
+		WHERE id = $1
+		FOR UPDATE
+	`, userID).Scan(&current.ID, &current.Name, &current.Email, &current.VerificationRequired, &current.EmailVerifiedAt, &current.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, false, ErrUserNotFound
+	}
+	if err != nil {
+		return User{}, false, err
+	}
+
+	emailChanged := current.Email != email
+	if !emailChanged && current.Name == name {
+		return current, false, tx.Commit()
+	}
+
+	var updated User
+	err = tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET
+			name = $2,
+			email = $3,
+			verification_required = CASE WHEN $4 THEN TRUE ELSE verification_required END,
+			email_verified_at = CASE WHEN $4 THEN NULL ELSE email_verified_at END
+		WHERE id = $1
+		RETURNING id, name, email, verification_required, email_verified_at, created_at
+	`, userID, name, email, emailChanged).Scan(&updated.ID, &updated.Name, &updated.Email, &updated.VerificationRequired, &updated.EmailVerifiedAt, &updated.CreatedAt)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "idx_users_email_lower") {
+			return User{}, false, ErrUserExists
+		}
+		return User{}, false, err
+	}
+
+	if emailChanged {
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM email_verification_codes
+			WHERE user_id = $1
+		`, userID); err != nil {
+			return User{}, false, err
+		}
+	}
+
+	return updated, emailChanged, tx.Commit()
+}
+
 func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO sessions (user_id, token_hash, expires_at)
@@ -117,20 +203,62 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash strin
 }
 
 func (s *Store) GetUserBySessionToken(ctx context.Context, tokenHash string) (User, error) {
-	var user User
-	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at
-		FROM sessions s
-		INNER JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > NOW()
-	`, tokenHash).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return User{}, ErrSessionNotFound
-	}
+	session, err := s.GetSessionDetailsByToken(ctx, tokenHash)
 	if err != nil {
 		return User{}, err
 	}
-	return user, nil
+	return session.User, nil
+}
+
+func (s *Store) GetSessionDetailsByToken(ctx context.Context, tokenHash string) (SessionDetails, error) {
+	var details SessionDetails
+	var user User
+	err := s.db.QueryRowContext(ctx, `
+		SELECT u.id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at, COALESCE(s.active_workspace_id, 0)
+		FROM sessions s
+		INNER JOIN users u ON u.id = s.user_id
+		WHERE s.token_hash = $1 AND s.expires_at > NOW()
+	`, tokenHash).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt, &details.ActiveWorkspaceID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SessionDetails{}, ErrSessionNotFound
+	}
+	if err != nil {
+		return SessionDetails{}, err
+	}
+	details.User = user
+	return details, nil
+}
+
+func (s *Store) SetSessionActiveWorkspace(ctx context.Context, tokenHash string, userID, workspaceID int64) error {
+	var exists bool
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM workspace_members
+			WHERE user_id = $1 AND workspace_id = $2
+		)
+	`, userID, workspaceID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrWorkspaceMemberNotFound
+	}
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE sessions
+		SET active_workspace_id = $3
+		WHERE token_hash = $1 AND user_id = $2
+	`, tokenHash, userID, workspaceID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrSessionNotFound
+	}
+	return nil
 }
 
 func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {

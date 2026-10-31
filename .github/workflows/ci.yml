@@ -33,7 +33,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Go race test
-        run: go test -race ./cmd/netwatcher ./internal/store ./internal/portscan ./internal/dnslookup
+        run: go test -race ./cmd/qnetward ./internal/store ./internal/portscan ./internal/dnslookup
 
   frontend:
     runs-on: ubuntu-latest
@@ -78,11 +78,15 @@ jobs:
           POSTGRES_PASSWORD=ci-postgres-password
           MINIO_ROOT_USER=minioadmin
           MINIO_ROOT_PASSWORD=ci-minio-password
-          NETWATCHER_PUBLIC_BASE_URL=http://127.0.0.1:8080
-          NETWATCHER_ALLOWED_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
-          NETWATCHER_RESEND_API_KEY=
-          NETWATCHER_EMAIL_FROM=NetWatcher <onboarding@example.com>
-          NETWATCHER_EMAIL_REPLY_TO=support@example.com
+          QNETWARD_PUBLIC_BASE_URL=http://127.0.0.1:8080
+          QNETWARD_ALLOWED_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
+          QNETWARD_DEMO_ENABLED=true
+          QNETWARD_DEMO_NAME=Contributor Demo
+          QNETWARD_DEMO_EMAIL=demo@qnetward.local
+          QNETWARD_ADMIN_EMAILS=e2e-admin@example.com
+          QNETWARD_RESEND_API_KEY=
+          QNETWARD_EMAIL_FROM=Qnetward <onboarding@example.com>
+          QNETWARD_EMAIL_REPLY_TO=support@example.com
           EOF
 
       - uses: pnpm/action-setup@v4

@@ -24,11 +24,14 @@ export async function provisionVerifiedUser(request: APIRequestContext, origin: 
     },
     data: candidate,
   });
+  if (signupResponse.status() === 409) {
+    return candidate;
+  }
   expect(signupResponse.ok()).toBeTruthy();
   const signupPayload = await signupResponse.json();
   expect(
     signupPayload.preview_code,
-    "preview_code is only available when email delivery is disabled; CI writes NETWATCHER_RESEND_API_KEY='' for this reason",
+    "preview_code is only available when email delivery is disabled; CI writes QNETWARD_RESEND_API_KEY='' for this reason",
   ).toBeTruthy();
 
   const verifyResponse = await request.post("/api/auth/verify-email", {
@@ -48,12 +51,22 @@ export async function provisionVerifiedUser(request: APIRequestContext, origin: 
 export async function loginAsVerifiedUser(page: Page, request: APIRequestContext, origin: string, user?: Partial<E2EUser>) {
   const candidate = await provisionVerifiedUser(request, origin, user);
 
+  await loginWithCredentials(page, candidate);
+
+  return candidate;
+}
+
+export async function loginWithCredentials(page: Page, user: Pick<E2EUser, "email" | "password">) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(candidate.email);
-  await page.locator("#login-password").fill(candidate.password);
+  await page.getByLabel("Email").fill(user.email);
+  await page.locator("#login-password").fill(user.password);
   await page.getByRole("button", { name: /^login$/i }).click();
 
   await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
+}
 
-  return candidate;
+export async function loginAsDemoUser(page: Page) {
+  await page.goto("/login");
+  await page.getByRole("button", { name: /continue as demo/i }).click();
+  await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
 }

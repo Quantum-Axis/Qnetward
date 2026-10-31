@@ -1,6 +1,6 @@
-# NetWatcher Frontend
+# Qnetward Frontend
 
-Next.js frontend for `NetWatcher`, now positioned as the primary UI while keeping the Go backend in place for auth, probes, history, alerts, and health.
+Next.js frontend for `Qnetward`, now positioned as the primary UI while keeping the Go backend in place for auth, probes, history, alerts, and health.
 
 ## Stack
 
@@ -54,7 +54,7 @@ Use this only if you want to develop the Next app locally.
 3. Start the Next dev server
 
 ```powershell
-cd d:\NetWatcher\frontend
+cd d:\Qnetward\frontend
 Copy-Item .env.example .env.local -Force
 pnpm install
 pnpm dev
@@ -63,7 +63,7 @@ pnpm dev
 For websocket-based realtime probes during local development, start the Go backend with:
 
 ```powershell
-$env:NETWATCHER_ALLOWED_ORIGINS="http://127.0.0.1:3000,http://localhost:3000"
+$env:QNETWARD_ALLOWED_ORIGINS="http://127.0.0.1:3000,http://localhost:3000"
 ```
 
 Open:
@@ -83,14 +83,14 @@ The Docker image installs dependencies and builds the app inside the container.
 Run the production stack from the repo root:
 
 ```powershell
-cd d:\NetWatcher
+cd d:\Qnetward
 docker compose -f deploy/docker-compose.production.yml --env-file .env up -d --build
 ```
 
 ## Local production build
 
 ```powershell
-cd d:\NetWatcher\frontend
+cd d:\Qnetward\frontend
 pnpm build
 pnpm start
 ```
@@ -100,7 +100,7 @@ pnpm start
 The production compose stack now treats this app as the primary UI:
 
 - `frontend/` serves the dashboard
-- `cmd/netwatcher` stays behind it as the API and realtime probe backend
+- `cmd/qnetward` stays behind it as the API and realtime probe backend
 - `deploy/nginx.frontend-primary.conf` routes `/api`, `/healthz`, and `/ws` to Go
 
 ## Checks
@@ -123,7 +123,7 @@ pnpm test:e2e
 The E2E auth flow expects signup to return `preview_code`, so for local runs use a stack with email delivery disabled:
 
 ```powershell
-$env:NETWATCHER_RESEND_API_KEY=""
+$env:QNETWARD_RESEND_API_KEY=""
 ```
 
 ## Next migration targets

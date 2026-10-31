@@ -1,32 +1,66 @@
 "use client";
 
-import { useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ProbeReport } from "@/lib/types";
 import { ProbeRunState, useRealtimeProbe } from "@/hooks/use-realtime-probe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMs } from "@/lib/utils";
 
-const pingSchema = z.object({
-  host: z.string().min(1, "Target is required"),
-  count: z.coerce.number().min(1).max(100),
-  interval_ms: z.coerce.number().min(100).max(60000),
-  timeout_ms: z.coerce.number().min(100).max(60000),
-  size: z.coerce.number().min(8).max(1500),
-  ipv6: z.boolean(),
-});
+const pingSchema = z
+  .object({
+    host: z.string().min(1, "Target is required"),
+    count: z.coerce.number(),
+    interval_ms: z.coerce.number().min(100).max(60000),
+    timeout_ms: z.coerce.number().min(100).max(60000),
+    size: z.coerce.number().min(8).max(1500),
+    ipv6: z.boolean(),
+    continuous: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    if (!Number.isFinite(data.count)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Count is required" });
+      return;
+    }
+    if (data.continuous) {
+      if (data.count < 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Count cannot be negative" });
+      }
+      return;
+    }
+    if (data.count < 1 || data.count > 100) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Count must be 1-100" });
+    }
+  });
 
-const tcpSchema = z.object({
-  host: z.string().min(1, "Target is required"),
-  port: z.coerce.number().min(1).max(65535),
-  count: z.coerce.number().min(1).max(100),
-  interval_ms: z.coerce.number().min(100).max(60000),
-  timeout_ms: z.coerce.number().min(100).max(60000),
-});
+const tcpSchema = z
+  .object({
+    host: z.string().min(1, "Target is required"),
+    port: z.coerce.number().min(1).max(65535),
+    count: z.coerce.number(),
+    interval_ms: z.coerce.number().min(100).max(60000),
+    timeout_ms: z.coerce.number().min(100).max(60000),
+    continuous: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    if (!Number.isFinite(data.count)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Count is required" });
+      return;
+    }
+    if (data.continuous) {
+      if (data.count < 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Count cannot be negative" });
+      }
+      return;
+    }
+    if (data.count < 1 || data.count > 100) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Count must be 1-100" });
+    }
+  });
 
 type PingValues = z.infer<typeof pingSchema>;
 type TCPValues = z.infer<typeof tcpSchema>;
@@ -83,12 +117,13 @@ function parseLatencyMs(value?: string | number | null) {
 
 export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
   const isPing = mode === "ping";
+  const [activeContinuous, setActiveContinuous] = useState(false);
   const schema = useMemo(() => (isPing ? pingSchema : tcpSchema), [isPing]);
   const form = useForm<PingInput | TCPInput, unknown, PingValues | TCPValues>({
     resolver: zodResolver(schema),
     defaultValues: isPing
-      ? { host: "", count: 5, interval_ms: 1000, timeout_ms: 2000, size: 32, ipv6: false }
-      : { host: "", port: 443, count: 5, interval_ms: 1000, timeout_ms: 2000 },
+      ? { host: "", count: 5, interval_ms: 1000, timeout_ms: 2000, size: 32, ipv6: false, continuous: false }
+      : { host: "", port: 443, count: 5, interval_ms: 1000, timeout_ms: 2000, continuous: false },
   });
 
   const { formError, report, run, runState, stop, isBusy } = useRealtimeProbe<PingValues | TCPValues>({
@@ -106,6 +141,8 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
   const summary = report?.summary;
   const label = isPing ? "ICMP Ping" : "TCP Ping";
   const protocolLabel = isPing ? "icmp" : "tcp";
+  const continuous = useWatch({ control: form.control, name: "continuous" }) === true;
+  const currentRunContinuous = report ? activeContinuous : continuous;
   const latestResult = report?.results.at(-1);
   const latencyChartData = useMemo(() => {
     const results = (report?.results ?? []).slice(-20);
@@ -152,9 +189,37 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
     }
     return Math.max(20, Math.ceil((latencyStats.rawAverage * 1.45) / 5) * 5);
   }, [latencyStats.rawAverage]);
+  const latencyCriticalThreshold = useMemo(() => {
+    if (typeof latencyStats.rawAverage !== "number") {
+      return null;
+    }
+    return Math.max(35, Math.ceil((latencyStats.rawAverage * 2.1) / 5) * 5);
+  }, [latencyStats.rawAverage]);
+  const warningBandTop = useMemo(() => {
+    if (typeof latencyNoticeThreshold !== "number") {
+      return null;
+    }
+    if (typeof latencyCriticalThreshold === "number") {
+      return Math.min(latencyCriticalThreshold, latencyChartMax);
+    }
+    return latencyChartMax;
+  }, [latencyChartMax, latencyCriticalThreshold, latencyNoticeThreshold]);
+  const displayedNoticeThreshold = useMemo(() => {
+    if (typeof latencyNoticeThreshold !== "number") {
+      return null;
+    }
+    return Math.min(latencyNoticeThreshold, latencyChartMax);
+  }, [latencyChartMax, latencyNoticeThreshold]);
+  const displayedCriticalThreshold = useMemo(() => {
+    if (typeof latencyCriticalThreshold !== "number") {
+      return null;
+    }
+    return Math.min(latencyCriticalThreshold, latencyChartMax);
+  }, [latencyChartMax, latencyCriticalThreshold]);
   const stats = [
     { label: "Events", value: String(report?.results.length ?? 0) },
     { label: "Signal", value: runStateLabel(runState).toLowerCase() },
+    { label: "Mode", value: currentRunContinuous ? "continuous" : "burst" },
     { label: "Last RTT", value: latestResult?.rtt || (typeof latestResult?.rtt_ms === "number" ? formatMs(latestResult.rtt_ms) : "-") },
     { label: "Packet Loss", value: typeof summary?.loss === "number" ? `${summary.loss.toFixed(1)}%` : "-" },
   ];
@@ -178,11 +243,18 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
             <span className={runState === "running" ? "dashboard-chip dashboard-chip-success" : "dashboard-chip dashboard-chip-muted"}>
               {runStateLabel(runState)}
             </span>
+            {currentRunContinuous ? <span className="dashboard-chip dashboard-chip-muted">Continuous</span> : null}
             <span className="dashboard-subtle-chip">{report?.target || form.getValues("host") || "No target selected"}</span>
           </div>
         </div>
 
-        <form className="space-y-4" onSubmit={form.handleSubmit((values) => void run(values))}>
+        <form
+          className="space-y-4"
+          onSubmit={form.handleSubmit((values) => {
+            setActiveContinuous(values.continuous === true);
+            void run(values);
+          })}
+        >
           <div className="flex flex-col gap-3 xl:flex-row">
             <div className="flex-1">
               <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-slate-500">Target Host</label>
@@ -203,9 +275,17 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
             )}
             <div>
               <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-slate-500">Count</label>
-              <Input type="number" className="bg-white/[0.04]" {...form.register("count", { valueAsNumber: true })} />
+              <Input
+                type="number"
+                className={`bg-white/[0.04] ${continuous ? "cursor-not-allowed opacity-70" : ""}`}
+                readOnly={continuous}
+                aria-disabled={continuous}
+                {...form.register("count", { valueAsNumber: true })}
+              />
               <p className="mt-2 text-[11px] leading-5 text-cyan-200/80">
-                By default, NetWatcher sends 5 packets per run. Adjust Count to send a custom number.
+                {continuous
+                  ? "Continuous mode sends packets until you press Stop. Count is ignored while it stays enabled."
+                  : "By default, Qnetward sends 5 packets per run. Adjust Count to send a custom number."}
               </p>
             </div>
             <div>
@@ -224,12 +304,18 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
             )}
           </div>
 
-          {isPing ? (
+          <div className="flex flex-wrap gap-4">
             <label className="inline-flex items-center gap-3 text-sm text-slate-400">
-              <input type="checkbox" {...form.register("ipv6")} />
-              Force IPv6
+              <input type="checkbox" {...form.register("continuous")} />
+              Continuous mode
             </label>
-          ) : null}
+            {isPing ? (
+              <label className="inline-flex items-center gap-3 text-sm text-slate-400">
+                <input type="checkbox" {...form.register("ipv6")} />
+                Force IPv6
+              </label>
+            ) : null}
+          </div>
 
           {formError ? <p className="rounded-lg border border-nw-red/30 bg-nw-red/10 px-4 py-3 text-sm text-nw-red">{formError}</p> : null}
 
@@ -253,7 +339,19 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
           <section className="dashboard-panel rounded-[1.5rem] p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-space text-[1.45rem] font-bold text-white">Latency (ms)</h3>
-              <span className="dashboard-subtle-chip">Realtime</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {typeof latencyNoticeThreshold === "number" ? (
+                  <span className="dashboard-subtle-chip border-amber-400/20 bg-amber-400/10 text-amber-200">
+                    Warn {formatMs(latencyNoticeThreshold)}
+                  </span>
+                ) : null}
+                {typeof latencyCriticalThreshold === "number" ? (
+                  <span className="dashboard-subtle-chip border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-200">
+                    Critical {formatMs(latencyCriticalThreshold)}
+                  </span>
+                ) : null}
+                <span className="dashboard-subtle-chip">Realtime</span>
+              </div>
             </div>
 
             {latencyChartData.length === 0 ? (
@@ -281,11 +379,37 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
                       axisLine={false}
                       width={44}
                     />
-                    {typeof latencyNoticeThreshold === "number" ? (
+                    {typeof displayedNoticeThreshold === "number" && typeof warningBandTop === "number" && warningBandTop > displayedNoticeThreshold ? (
+                      <ReferenceArea
+                        y1={displayedNoticeThreshold}
+                        y2={warningBandTop}
+                        fill="rgba(245,158,11,0.08)"
+                        ifOverflow="extendDomain"
+                      />
+                    ) : null}
+                    {typeof displayedCriticalThreshold === "number" && displayedCriticalThreshold < latencyChartMax ? (
+                      <ReferenceArea
+                        y1={displayedCriticalThreshold}
+                        y2={latencyChartMax}
+                        fill="rgba(217,70,239,0.09)"
+                        ifOverflow="extendDomain"
+                      />
+                    ) : null}
+                    {typeof displayedNoticeThreshold === "number" ? (
                       <ReferenceLine
-                        y={latencyNoticeThreshold}
+                        y={displayedNoticeThreshold}
                         stroke="rgba(245,158,11,0.28)"
                         strokeDasharray="5 6"
+                        label={{ value: "Warn", position: "insideTopRight", fill: "#f8b033", fontSize: 10 }}
+                        ifOverflow="extendDomain"
+                      />
+                    ) : null}
+                    {typeof displayedCriticalThreshold === "number" ? (
+                      <ReferenceLine
+                        y={displayedCriticalThreshold}
+                        stroke="rgba(217,70,239,0.34)"
+                        strokeDasharray="5 6"
+                        label={{ value: "Critical", position: "insideTopLeft", fill: "#f0abfc", fontSize: 10 }}
                         ifOverflow="extendDomain"
                       />
                     ) : null}
@@ -349,6 +473,22 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
               <div>
                 <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Average</p>
                 <p className="mt-1.5 text-base font-semibold text-sky-300">{latencyStats.average}</p>
+              </div>
+              <div>
+                <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Median</p>
+                <p className="mt-1.5 text-base font-semibold text-blue-200">{summaryValue(summary?.median)}</p>
+              </div>
+              <div>
+                <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Jitter</p>
+                <p className="mt-1.5 text-base font-semibold text-cyan-200">{summaryValue(summary?.jitter)}</p>
+              </div>
+              <div>
+                <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Std Dev</p>
+                <p className="mt-1.5 text-base font-semibold text-indigo-300">{summaryValue(summary?.stddev)}</p>
+              </div>
+              <div>
+                <p className="text-[0.68rem] uppercase tracking-[0.22em] text-slate-500">Loss Streak</p>
+                <p className="mt-1.5 text-base font-semibold text-fuchsia-300">{summaryValue(summary?.loss_streak)}</p>
               </div>
             </div>
           </section>
@@ -454,6 +594,22 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
               <div>
                 <span className="text-[9px] uppercase tracking-widest text-slate-500">Avg</span>
                 <p className="mt-1 text-sm font-semibold text-white">{summaryValue(summary?.avg)}</p>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase tracking-widest text-slate-500">Median</span>
+                <p className="mt-1 text-sm font-semibold text-white">{summaryValue(summary?.median)}</p>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase tracking-widest text-slate-500">Jitter</span>
+                <p className="mt-1 text-sm font-semibold text-white">{summaryValue(summary?.jitter)}</p>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase tracking-widest text-slate-500">Std Dev</span>
+                <p className="mt-1 text-sm font-semibold text-white">{summaryValue(summary?.stddev)}</p>
+              </div>
+              <div>
+                <span className="text-[9px] uppercase tracking-widest text-slate-500">Loss Streak</span>
+                <p className="mt-1 text-sm font-semibold text-white">{summaryValue(summary?.loss_streak)}</p>
               </div>
             </div>
           </article>

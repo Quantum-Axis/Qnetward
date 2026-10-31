@@ -275,7 +275,7 @@ export function OverviewWorkspace() {
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
-              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">NetWatcher Control Plane</p>
+              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Qnetward Control Plane</p>
               <h2 className="mt-1.5 font-space text-[1.6rem] font-bold leading-tight text-white sm:text-[1.8rem]">Network Operations Overview</h2>
             </div>
 

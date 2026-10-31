@@ -127,9 +127,9 @@ func TestStoreQueryRecentHistoryTargets(t *testing.T) {
 func openTestStore(t *testing.T, cfg Config) *Store {
 	t.Helper()
 
-	dsn := strings.TrimSpace(os.Getenv("NETWATCHER_TEST_POSTGRES_DSN"))
+	dsn := strings.TrimSpace(os.Getenv("QNETWARD_TEST_POSTGRES_DSN"))
 	if dsn == "" {
-		t.Skip("NETWATCHER_TEST_POSTGRES_DSN is not set")
+		t.Skip("QNETWARD_TEST_POSTGRES_DSN is not set")
 	}
 
 	cfg.DSN = dsn

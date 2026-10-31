@@ -1,4 +1,4 @@
-module netwatcher
+module qnetward
 
 go 1.25.0
 

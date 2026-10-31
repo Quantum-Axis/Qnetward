@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { loginAsVerifiedUser, resolveOrigin } from "./helpers/auth";
+import { loginAsDemoUser } from "./helpers/auth";
 
-test("history page loads stored ping data after a run", async ({ page, request, baseURL }) => {
-  const origin = resolveOrigin(baseURL);
-  await loginAsVerifiedUser(page, request, origin, {
-    name: "History Operator",
-  });
+test("history page loads stored ping data after a run", async ({ page }) => {
+  await loginAsDemoUser(page);
 
   await page.goto("/icmp-ping");
   await page.getByPlaceholder("example.com or 8.8.8.8").fill("127.0.0.1");

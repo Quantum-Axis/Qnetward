@@ -131,7 +131,7 @@ func (c *Client) SendPasswordReset(ctx context.Context, in PasswordResetInput) e
 
 	theme := emailTheme{
 		Eyebrow:    "Credential Recovery",
-		Title:      "Reset your NetWatcher password",
+		Title:      "Reset your Qnetward password",
 		Subtitle:   "A secure password reset was requested for your control surface.",
 		AccentFrom: "#66dcff",
 		AccentTo:   "#5a7cff",
@@ -139,7 +139,7 @@ func (c *Client) SendPasswordReset(ctx context.Context, in PasswordResetInput) e
 
 	htmlBody := renderEmailShell(theme, fmt.Sprintf(`
 <p style="margin:0 0 14px;color:#b6c4d6;font-size:15px;line-height:1.72">Hello %s,</p>
-<p style="margin:0 0 18px;color:#dbe6f3;font-size:15px;line-height:1.78">A password reset was requested for your NetWatcher account. Use the secure link below to choose a new password.</p>
+<p style="margin:0 0 18px;color:#dbe6f3;font-size:15px;line-height:1.78">A password reset was requested for your Qnetward account. Use the secure link below to choose a new password.</p>
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px">
   <tr>
     <td style="border-radius:14px;background:linear-gradient(135deg,%s 0%%,%s 100%%);box-shadow:0 18px 30px rgba(69,122,255,0.24)">
@@ -164,9 +164,9 @@ func (c *Client) SendPasswordReset(ctx context.Context, in PasswordResetInput) e
 	payload := map[string]any{
 		"from":    c.from,
 		"to":      []string{to},
-		"subject": "[NetWatcher] Reset Password Request",
+		"subject": "[Qnetward] Reset Password Request",
 		"html":    htmlBody,
-		"text":    fmt.Sprintf("NetWatcher\nCredential Recovery\n\nHello %s,\n\nA password reset was requested for your NetWatcher account.\nUse this secure link to reset your password:\n%s\n\nThis link expires in %d minutes.\nIf you did not request this change, you can ignore this email.\n%s", name, resetURL, minutes, renderEmailSupportFooterText(c.replyTo)),
+		"text":    fmt.Sprintf("Qnetward\nCredential Recovery\n\nHello %s,\n\nA password reset was requested for your Qnetward account.\nUse this secure link to reset your password:\n%s\n\nThis link expires in %d minutes.\nIf you did not request this change, you can ignore this email.\n%s", name, resetURL, minutes, renderEmailSupportFooterText(c.replyTo)),
 	}
 	if c.replyTo != "" {
 		payload["reply_to"] = []string{c.replyTo}
@@ -201,7 +201,7 @@ func (c *Client) SendVerificationOTP(ctx context.Context, in VerificationOTPInpu
 
 	theme := emailTheme{
 		Eyebrow:    "Email Verification",
-		Title:      "Verify your NetWatcher account",
+		Title:      "Verify your Qnetward account",
 		Subtitle:   "Confirm this mailbox before access is granted to the dashboard.",
 		AccentFrom: "#63ddb8",
 		AccentTo:   "#6fbfff",
@@ -209,7 +209,7 @@ func (c *Client) SendVerificationOTP(ctx context.Context, in VerificationOTPInpu
 
 	htmlBody := renderEmailShell(theme, fmt.Sprintf(`
 <p style="margin:0 0 14px;color:#b6c4d6;font-size:15px;line-height:1.72">Hello %s,</p>
-<p style="margin:0 0 18px;color:#dbe6f3;font-size:15px;line-height:1.78">Use the one-time verification code below to activate your NetWatcher access.</p>
+<p style="margin:0 0 18px;color:#dbe6f3;font-size:15px;line-height:1.78">Use the one-time verification code below to activate your Qnetward access.</p>
 <div style="margin:0 0 18px;padding:18px 16px;border-radius:18px;border:1px solid rgba(99,221,184,0.24);background:linear-gradient(180deg,#0d1d23,#0b1820);text-align:center">
   <p style="margin:0 0 10px;color:#8ec7b8;font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase">Verification Code</p>
   <p style="margin:0;color:#edfbff;font-size:32px;font-weight:800;letter-spacing:0.28em">%s</p>
@@ -228,9 +228,9 @@ func (c *Client) SendVerificationOTP(ctx context.Context, in VerificationOTPInpu
 	payload := map[string]any{
 		"from":    c.from,
 		"to":      []string{to},
-		"subject": "[NetWatcher] Verify Your Email",
+		"subject": "[Qnetward] Verify Your Email",
 		"html":    htmlBody,
-		"text":    fmt.Sprintf("NetWatcher\nEmail Verification\n\nHello %s,\n\nUse this one-time verification code to activate your NetWatcher account:\n%s\n\nThis code expires in %d minutes.\nIf you did not create this account, you can ignore this email.\n%s", name, code, minutes, renderEmailSupportFooterText(c.replyTo)),
+		"text":    fmt.Sprintf("Qnetward\nEmail Verification\n\nHello %s,\n\nUse this one-time verification code to activate your Qnetward account:\n%s\n\nThis code expires in %d minutes.\nIf you did not create this account, you can ignore this email.\n%s", name, code, minutes, renderEmailSupportFooterText(c.replyTo)),
 	}
 	if c.replyTo != "" {
 		payload["reply_to"] = []string{c.replyTo}
@@ -261,7 +261,7 @@ func (c *Client) SendWelcome(ctx context.Context, in WelcomeEmailInput) error {
 
 	theme := emailTheme{
 		Eyebrow:    "Access Activated",
-		Title:      "Welcome to NetWatcher",
+		Title:      "Welcome to Qnetward",
 		Subtitle:   "Your mailbox is verified and your monitoring workspace is ready.",
 		AccentFrom: "#67ddff",
 		AccentTo:   "#6d81ff",
@@ -269,7 +269,7 @@ func (c *Client) SendWelcome(ctx context.Context, in WelcomeEmailInput) error {
 
 	htmlBody := renderEmailShell(theme, fmt.Sprintf(`
 <p style="margin:0 0 14px;color:#b6c4d6;font-size:15px;line-height:1.72">Hello %s,</p>
-<p style="margin:0 0 18px;color:#dbe6f3;font-size:15px;line-height:1.78">Your email has been verified successfully. You now have access to the NetWatcher control surface.</p>
+<p style="margin:0 0 18px;color:#dbe6f3;font-size:15px;line-height:1.78">Your email has been verified successfully. You now have access to the Qnetward control surface.</p>
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px">
   <tr>
     <td style="border-radius:14px;background:linear-gradient(135deg,%s 0%%,%s 100%%);box-shadow:0 18px 30px rgba(69,122,255,0.24)">
@@ -294,9 +294,9 @@ func (c *Client) SendWelcome(ctx context.Context, in WelcomeEmailInput) error {
 	payload := map[string]any{
 		"from":    c.from,
 		"to":      []string{to},
-		"subject": "[NetWatcher] Access Activated",
+		"subject": "[Qnetward] Access Activated",
 		"html":    htmlBody,
-		"text":    fmt.Sprintf("NetWatcher\nAccess Activated\n\nHello %s,\n\nYour email has been verified successfully. Your monitoring workspace is ready.\nOpen your dashboard:\n%s\n%s", name, dashboardURL, renderEmailSupportFooterText(c.replyTo)),
+		"text":    fmt.Sprintf("Qnetward\nAccess Activated\n\nHello %s,\n\nYour email has been verified successfully. Your monitoring workspace is ready.\nOpen your dashboard:\n%s\n%s", name, dashboardURL, renderEmailSupportFooterText(c.replyTo)),
 	}
 	if c.replyTo != "" {
 		payload["reply_to"] = []string{c.replyTo}
@@ -326,7 +326,7 @@ func (c *Client) SendAlert(ctx context.Context, in AlertEmailInput) error {
 	}
 	summary := strings.TrimSpace(in.Summary)
 	if summary == "" {
-		summary = "A NetWatcher alert condition has been triggered."
+		summary = "A Qnetward alert condition has been triggered."
 	}
 	severity := strings.ToLower(strings.TrimSpace(in.Severity))
 	if severity == "" {
@@ -401,7 +401,7 @@ func (c *Client) SendAlert(ctx context.Context, in AlertEmailInput) error {
 %s
 `, escapeHTML(name), escapeHTML(summary), escapeHTML(label), escapeHTML(title), escapeHTML(target), escapeHTML(triggeredAt.UTC().Format(time.RFC1123)), actionBlock), renderEmailSupportFooter(c.replyTo))
 
-	textBody := fmt.Sprintf("NetWatcher\nMonitoring Alert\n\nHello %s,\n\n%s\n\nSeverity: %s\nTitle: %s\nTarget: %s\nTriggered: %s\n", name, summary, label, title, target, triggeredAt.UTC().Format(time.RFC1123))
+	textBody := fmt.Sprintf("Qnetward\nMonitoring Alert\n\nHello %s,\n\n%s\n\nSeverity: %s\nTitle: %s\nTarget: %s\nTriggered: %s\n", name, summary, label, title, target, triggeredAt.UTC().Format(time.RFC1123))
 	if dashboardURL != "" {
 		textBody += fmt.Sprintf("\nReview Alert:\n%s\n", dashboardURL)
 	}
@@ -410,7 +410,7 @@ func (c *Client) SendAlert(ctx context.Context, in AlertEmailInput) error {
 	payload := map[string]any{
 		"from":    c.from,
 		"to":      []string{to},
-		"subject": fmt.Sprintf("[NetWatcher] %s Alert", label),
+		"subject": fmt.Sprintf("[Qnetward] %s Alert", label),
 		"html":    htmlBody,
 		"text":    textBody,
 	}
@@ -479,7 +479,7 @@ linear-gradient(180deg,#07111b 0%%,#0a1522 100%%);padding:32px 16px">
                     <td align="left" style="font-size:0">
                       <span style="display:inline-block;width:42px;height:42px;line-height:42px;text-align:center;border-radius:14px;background:linear-gradient(135deg,%s 0%%,%s 100%%);color:#07111b;font-size:13px;font-weight:800;letter-spacing:0.16em">NW</span>
                       <span style="display:inline-block;vertical-align:top;padding-left:12px">
-                        <span style="display:block;color:#f7fbff;font-size:20px;font-weight:700;letter-spacing:-0.03em">NetWatcher</span>
+                        <span style="display:block;color:#f7fbff;font-size:20px;font-weight:700;letter-spacing:-0.03em">Qnetward</span>
                         <span style="display:block;color:#93a7c0;font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase">Secure Ops Mail</span>
                       </span>
                     </td>
@@ -507,7 +507,7 @@ radial-gradient(circle at top right, rgba(104,210,255,0.09), transparent 30%%)">
             </tr>
             <tr>
               <td style="padding:16px 8px 0 8px;text-align:center">
-                <p style="margin:0;color:#6f839a;font-size:12px;line-height:1.7">This message was sent by NetWatcher secure operations mail.</p>
+                <p style="margin:0;color:#6f839a;font-size:12px;line-height:1.7">This message was sent by Qnetward secure operations mail.</p>
                 %s
               </td>
             </tr>
@@ -531,7 +531,7 @@ radial-gradient(circle at top right, rgba(104,210,255,0.09), transparent 30%%)">
 func renderEmailSupportFooter(replyTo string) string {
 	replyTo = escapeHTML(strings.TrimSpace(replyTo))
 	if replyTo == "" {
-		return `<p style="margin:8px 0 0;color:#6f839a;font-size:12px;line-height:1.7">NetWatcher secure mail channel.</p>`
+		return `<p style="margin:8px 0 0;color:#6f839a;font-size:12px;line-height:1.7">Qnetward secure mail channel.</p>`
 	}
 	return fmt.Sprintf(`<p style="margin:8px 0 0;color:#6f839a;font-size:12px;line-height:1.7">Need help? Reply to <a href="mailto:%s" style="color:#8bdfff;text-decoration:none">%s</a>.</p>`, replyTo, replyTo)
 }
@@ -539,7 +539,7 @@ func renderEmailSupportFooter(replyTo string) string {
 func renderEmailSupportFooterText(replyTo string) string {
 	replyTo = strings.TrimSpace(replyTo)
 	if replyTo == "" {
-		return "\nNetWatcher secure mail channel.\n"
+		return "\nQnetward secure mail channel.\n"
 	}
 	return fmt.Sprintf("\nNeed help? Reply to %s.\n", replyTo)
 }

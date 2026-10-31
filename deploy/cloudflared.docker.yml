@@ -1,0 +1,7 @@
+tunnel: c9350853-c24b-4597-ae29-db7e4605c275
+credentials-file: /etc/cloudflared/c9350853-c24b-4597-ae29-db7e4605c275.json
+
+ingress:
+  - hostname: netwatcher.gitzen.cloud
+    service: http://host.docker.internal:8080
+  - service: http_status:404

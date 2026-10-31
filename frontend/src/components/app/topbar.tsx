@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronDown, LogOut, Menu, Settings, User } from "lucide-react";
+import { Building2, ChevronDown, CreditCard, LogOut, Menu, Settings, Shield, User } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
-import { SessionResponse } from "@/lib/types";
+import { SessionResponse, WorkspaceListResponse } from "@/lib/types";
 import { useShellStore } from "@/store/ui-store";
 
 export function Topbar({ session }: { session: SessionResponse }) {
@@ -15,6 +15,28 @@ export function Topbar({ session }: { session: SessionResponse }) {
   const { toggleSidebar } = useShellStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isDemo = session.mode === "demo";
+
+  const workspaceList = useQuery({
+    queryKey: ["workspace-list"],
+    queryFn: () => apiRequest<WorkspaceListResponse>("/api/workspaces"),
+    enabled: session.authenticated && !isDemo,
+  });
+
+  const switchWorkspace = useMutation({
+    mutationFn: (workspaceID: number) =>
+      apiRequest<{ ok: boolean; message: string }>("/api/workspaces", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: workspaceID }),
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      await queryClient.invalidateQueries({ queryKey: ["workspace-list"] });
+      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
+      await queryClient.invalidateQueries({ queryKey: ["incoming-workspace-invitations"] });
+      await queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
+      router.refresh();
+    },
+  });
 
   const logout = useMutation({
     mutationFn: () => apiRequest<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: JSON.stringify({}) }),
@@ -39,7 +61,7 @@ export function Topbar({ session }: { session: SessionResponse }) {
           </div>
           <div className="hidden items-baseline gap-2 sm:flex">
             <h1 className="font-display text-lg font-bold tracking-wide">
-              <span className="brand-gradient">NetWatcher</span>
+              <span className="brand-gradient">Qnetward</span>
             </h1>
             <span className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/45">Network diagnostics cockpit</span>
           </div>
@@ -47,6 +69,22 @@ export function Topbar({ session }: { session: SessionResponse }) {
       </div>
 
       <div className="relative flex items-center gap-2">
+        {!isDemo && (workspaceList.data?.workspaces?.length ?? 0) > 1 ? (
+          <select
+            aria-label="Active Workspace"
+            className="field-input hidden h-10 min-w-[220px] rounded-2xl px-3 py-2 text-sm lg:block"
+            disabled={switchWorkspace.isPending}
+            value={workspaceList.data?.active_workspace_id ?? session.active_workspace_id ?? 0}
+            onChange={(event) => switchWorkspace.mutate(Number(event.target.value))}
+          >
+            {(workspaceList.data?.workspaces ?? []).map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
+
         {isDemo ? (
           <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-100">
             Demo access
@@ -75,9 +113,23 @@ export function Topbar({ session }: { session: SessionResponse }) {
               <Link href="/settings" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-cyan-300/8" onClick={() => setDropdownOpen(false)}>
                 <Settings className="h-4 w-4 text-cyan-100/45" /> Settings
               </Link>
+              <Link href="/workspace/team" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-cyan-300/8" onClick={() => setDropdownOpen(false)}>
+                <Building2 className="h-4 w-4 text-cyan-100/45" /> Team
+              </Link>
+              <Link href="/workspace/billing" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-cyan-300/8" onClick={() => setDropdownOpen(false)}>
+                <CreditCard className="h-4 w-4 text-cyan-100/45" /> Billing
+              </Link>
               <Link href="/profile" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-cyan-300/8" onClick={() => setDropdownOpen(false)}>
                 <User className="h-4 w-4 text-cyan-100/45" /> Profile
               </Link>
+              <Link href="/security" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-cyan-300/8" onClick={() => setDropdownOpen(false)}>
+                <Shield className="h-4 w-4 text-cyan-100/45" /> Security
+              </Link>
+              {session.platform_role === "admin" ? (
+                <Link href="/admin" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-cyan-300/8" onClick={() => setDropdownOpen(false)}>
+                  <Building2 className="h-4 w-4 text-cyan-100/45" /> Admin
+                </Link>
+              ) : null}
 
               <button
                 type="button"

@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { loginAsVerifiedUser, resolveOrigin } from "./helpers/auth";
+import { loginAsDemoUser } from "./helpers/auth";
 
-test("dns inspector runs a lookup and renders record sections", async ({ page, request, baseURL }) => {
-  const origin = resolveOrigin(baseURL);
-  await loginAsVerifiedUser(page, request, origin, {
-    name: "DNS Operator",
-  });
+test("dns inspector runs a lookup and renders record sections", async ({ page }) => {
+  await loginAsDemoUser(page);
 
   await page.goto("/dns-lookup");
 

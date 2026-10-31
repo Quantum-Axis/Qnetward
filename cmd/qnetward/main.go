@@ -29,19 +29,19 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 
-	"netwatcher/internal/cache"
-	"netwatcher/internal/dnslookup"
-	"netwatcher/internal/mailer"
-	"netwatcher/internal/objectstore"
-	"netwatcher/internal/ping"
-	"netwatcher/internal/portscan"
-	"netwatcher/internal/report"
-	"netwatcher/internal/store"
-	"netwatcher/internal/tcpping"
+	"qnetward/internal/cache"
+	"qnetward/internal/dnslookup"
+	"qnetward/internal/mailer"
+	"qnetward/internal/objectstore"
+	"qnetward/internal/ping"
+	"qnetward/internal/portscan"
+	"qnetward/internal/report"
+	"qnetward/internal/store"
+	"qnetward/internal/tcpping"
 )
 
 const (
-	defaultProbeCount    = 4
+	defaultProbeCount    = 5
 	defaultProbeInterval = time.Second
 	defaultProbeTimeout  = 2 * time.Second
 	defaultPingSize      = 32
@@ -65,7 +65,7 @@ const (
 	maxHostLength        = 255
 	maxHistoryLimit      = 1000
 	maxConcurrentProbes  = 8
-	authCookieName       = "netwatcher_session"
+	authCookieName       = "qnetward_session"
 	defaultSessionTTL    = 30 * 24 * time.Hour
 	defaultResetTTL      = 30 * time.Minute
 	defaultVerifyCodeTTL = 10 * time.Minute
@@ -110,14 +110,14 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "NetWatcher - Networking toolkit")
+	fmt.Fprintln(os.Stderr, "Qnetward - Networking toolkit")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Usage:")
-	fmt.Fprintln(os.Stderr, "  netwatcher ping [flags] <host>")
-	fmt.Fprintln(os.Stderr, "  netwatcher tcpping [flags] <host>[:port]")
-	fmt.Fprintln(os.Stderr, "  netwatcher portscan [flags] <host>")
-	fmt.Fprintln(os.Stderr, "  netwatcher dns [flags] <host-or-ip>")
-	fmt.Fprintln(os.Stderr, "  netwatcher serve [flags]")
+	fmt.Fprintln(os.Stderr, "  qnetward ping [flags] <host>")
+	fmt.Fprintln(os.Stderr, "  qnetward tcpping [flags] <host>[:port]")
+	fmt.Fprintln(os.Stderr, "  qnetward portscan [flags] <host>")
+	fmt.Fprintln(os.Stderr, "  qnetward dns [flags] <host-or-ip>")
+	fmt.Fprintln(os.Stderr, "  qnetward serve [flags]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  ping     ICMP echo (requires root or CAP_NET_RAW)")
@@ -131,7 +131,7 @@ func runPing(args []string) {
 	fs := flag.NewFlagSet("ping", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	count := fs.Int("count", 4, "number of probes")
+	count := fs.Int("count", defaultProbeCount, "number of probes")
 	interval := fs.Duration("interval", time.Second, "interval between probes")
 	timeout := fs.Duration("timeout", 2*time.Second, "per-probe timeout")
 	size := fs.Int("size", 32, "ICMP payload size in bytes")
@@ -139,7 +139,7 @@ func runPing(args []string) {
 	jsonOut := fs.Bool("json", false, "JSON output")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: netwatcher ping [flags] <host>")
+		fmt.Fprintln(os.Stderr, "Usage: qnetward ping [flags] <host>")
 		fs.PrintDefaults()
 	}
 
@@ -153,7 +153,7 @@ func runPing(args []string) {
 	}
 
 	host := fs.Arg(0)
-	cfg, err := normalizePingConfig(*count, *interval, *timeout, *size, *ipv6)
+	cfg, err := normalizePingConfig(*count, *interval, *timeout, *size, *ipv6, false)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -176,14 +176,14 @@ func runTCPPing(args []string) {
 	fs := flag.NewFlagSet("tcpping", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	count := fs.Int("count", 4, "number of probes")
+	count := fs.Int("count", defaultProbeCount, "number of probes")
 	interval := fs.Duration("interval", time.Second, "interval between probes")
 	timeout := fs.Duration("timeout", 2*time.Second, "per-probe timeout")
 	port := fs.Int("port", 80, "TCP port")
 	jsonOut := fs.Bool("json", false, "JSON output")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: netwatcher tcpping [flags] <host>[:port]")
+		fmt.Fprintln(os.Stderr, "Usage: qnetward tcpping [flags] <host>[:port]")
 		fs.PrintDefaults()
 	}
 
@@ -212,7 +212,7 @@ func runTCPPing(args []string) {
 		}
 	}
 
-	host, resolvedPort, cfg, err := normalizeTCPPingRequest(host, *port, *count, *interval, *timeout)
+	host, resolvedPort, cfg, err := normalizeTCPPingRequest(host, *port, *count, *interval, *timeout, false)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -241,7 +241,7 @@ func runPortScan(args []string) {
 	jsonOut := fs.Bool("json", false, "JSON output")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: netwatcher portscan [flags] <host>")
+		fmt.Fprintln(os.Stderr, "Usage: qnetward portscan [flags] <host>")
 		fs.PrintDefaults()
 	}
 
@@ -283,7 +283,7 @@ func runDNSLookup(args []string) {
 	jsonOut := fs.Bool("json", false, "JSON output")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: netwatcher dns [flags] <host-or-ip>")
+		fmt.Fprintln(os.Stderr, "Usage: qnetward dns [flags] <host-or-ip>")
 		fs.PrintDefaults()
 	}
 
@@ -328,39 +328,40 @@ func runServe(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	listen := fs.String("listen", envString("NETWATCHER_LISTEN", "127.0.0.1:8080"), "listen address")
-	dbDSN := fs.String("db-dsn", envString("NETWATCHER_DB_DSN", ""), "postgres/timescaledb DSN")
-	dbBatch := fs.Int("db-batch", envInt("NETWATCHER_DB_BATCH", 100), "database batch insert size")
-	dbFlush := fs.Duration("db-flush", envDuration("NETWATCHER_DB_FLUSH", 1*time.Second), "database flush interval")
-	dbRetention := fs.Duration("db-retention", envDuration("NETWATCHER_DB_RETENTION", 168*time.Hour), "retention duration (0 to disable)")
-	dbCleanup := fs.Duration("db-cleanup", envDuration("NETWATCHER_DB_CLEANUP", 1*time.Hour), "retention cleanup interval")
-	dbMaxOpen := fs.Int("db-max-open", envInt("NETWATCHER_DB_MAX_OPEN", 20), "database max open connections")
-	dbMaxIdle := fs.Int("db-max-idle", envInt("NETWATCHER_DB_MAX_IDLE", 10), "database max idle connections")
-	dbConnMaxLifetime := fs.Duration("db-conn-max-lifetime", envDuration("NETWATCHER_DB_CONN_MAX_LIFETIME", 30*time.Minute), "database connection max lifetime")
-	timescale := fs.Bool("timescale", envBool("NETWATCHER_TIMESCALE", false), "require TimescaleDB extension when using postgres")
-	redisAddr := fs.String("redis-addr", envString("NETWATCHER_REDIS_ADDR", ""), "Redis address for history cache")
-	redisPassword := fs.String("redis-password", envString("NETWATCHER_REDIS_PASSWORD", ""), "Redis password")
-	redisDB := fs.Int("redis-db", envInt("NETWATCHER_REDIS_DB", 0), "Redis logical DB")
-	redisPrefix := fs.String("redis-prefix", envString("NETWATCHER_REDIS_PREFIX", "netwatcher"), "Redis key prefix")
-	redisTTL := fs.Duration("redis-cache-ttl", envDuration("NETWATCHER_REDIS_CACHE_TTL", 3*time.Second), "Redis history cache TTL")
-	s3Endpoint := fs.String("s3-endpoint", envString("NETWATCHER_S3_ENDPOINT", ""), "S3-compatible endpoint")
-	s3AccessKey := fs.String("s3-access-key", envString("NETWATCHER_S3_ACCESS_KEY", ""), "S3 access key")
-	s3SecretKey := fs.String("s3-secret-key", envString("NETWATCHER_S3_SECRET_KEY", ""), "S3 secret key")
-	s3Bucket := fs.String("s3-bucket", envString("NETWATCHER_S3_BUCKET", ""), "S3 bucket for exports and artifacts")
-	s3Region := fs.String("s3-region", envString("NETWATCHER_S3_REGION", "us-east-1"), "S3 region")
-	s3Prefix := fs.String("s3-prefix", envString("NETWATCHER_S3_PREFIX", "netwatcher"), "S3 object prefix")
-	s3UseSSL := fs.Bool("s3-ssl", envBool("NETWATCHER_S3_SSL", false), "use TLS for S3-compatible endpoint")
-	resendAPIKey := fs.String("resend-api-key", envString("NETWATCHER_RESEND_API_KEY", ""), "Resend API key for transactional email")
-	emailFrom := fs.String("email-from", envString("NETWATCHER_EMAIL_FROM", ""), "from address for transactional emails")
-	emailReplyTo := fs.String("email-reply-to", envString("NETWATCHER_EMAIL_REPLY_TO", ""), "reply-to address for transactional emails")
-	publicBaseURL := fs.String("public-base-url", envString("NETWATCHER_PUBLIC_BASE_URL", ""), "public base URL used in emails, for example https://netwatcher.example.com")
-	allowedOriginsRaw := fs.String("allowed-origins", envString("NETWATCHER_ALLOWED_ORIGINS", ""), "comma-separated additional allowed browser origins, for example http://127.0.0.1:3000")
-	demoEnabled := fs.Bool("demo-enabled", envBool("NETWATCHER_DEMO_ENABLED", false), "enable shared demo login")
-	demoName := fs.String("demo-name", envString("NETWATCHER_DEMO_NAME", "Contributor Demo"), "display name for demo access")
-	demoEmail := fs.String("demo-email", envString("NETWATCHER_DEMO_EMAIL", "demo@netwatcher.local"), "display email for demo access")
+	listen := fs.String("listen", envString("QNETWARD_LISTEN", "127.0.0.1:8080"), "listen address")
+	dbDSN := fs.String("db-dsn", envString("QNETWARD_DB_DSN", ""), "postgres/timescaledb DSN")
+	dbBatch := fs.Int("db-batch", envInt("QNETWARD_DB_BATCH", 100), "database batch insert size")
+	dbFlush := fs.Duration("db-flush", envDuration("QNETWARD_DB_FLUSH", 1*time.Second), "database flush interval")
+	dbRetention := fs.Duration("db-retention", envDuration("QNETWARD_DB_RETENTION", 168*time.Hour), "retention duration (0 to disable)")
+	dbCleanup := fs.Duration("db-cleanup", envDuration("QNETWARD_DB_CLEANUP", 1*time.Hour), "retention cleanup interval")
+	dbMaxOpen := fs.Int("db-max-open", envInt("QNETWARD_DB_MAX_OPEN", 20), "database max open connections")
+	dbMaxIdle := fs.Int("db-max-idle", envInt("QNETWARD_DB_MAX_IDLE", 10), "database max idle connections")
+	dbConnMaxLifetime := fs.Duration("db-conn-max-lifetime", envDuration("QNETWARD_DB_CONN_MAX_LIFETIME", 30*time.Minute), "database connection max lifetime")
+	timescale := fs.Bool("timescale", envBool("QNETWARD_TIMESCALE", false), "require TimescaleDB extension when using postgres")
+	redisAddr := fs.String("redis-addr", envString("QNETWARD_REDIS_ADDR", ""), "Redis address for history cache")
+	redisPassword := fs.String("redis-password", envString("QNETWARD_REDIS_PASSWORD", ""), "Redis password")
+	redisDB := fs.Int("redis-db", envInt("QNETWARD_REDIS_DB", 0), "Redis logical DB")
+	redisPrefix := fs.String("redis-prefix", envString("QNETWARD_REDIS_PREFIX", "qnetward"), "Redis key prefix")
+	redisTTL := fs.Duration("redis-cache-ttl", envDuration("QNETWARD_REDIS_CACHE_TTL", 3*time.Second), "Redis history cache TTL")
+	s3Endpoint := fs.String("s3-endpoint", envString("QNETWARD_S3_ENDPOINT", ""), "S3-compatible endpoint")
+	s3AccessKey := fs.String("s3-access-key", envString("QNETWARD_S3_ACCESS_KEY", ""), "S3 access key")
+	s3SecretKey := fs.String("s3-secret-key", envString("QNETWARD_S3_SECRET_KEY", ""), "S3 secret key")
+	s3Bucket := fs.String("s3-bucket", envString("QNETWARD_S3_BUCKET", ""), "S3 bucket for exports and artifacts")
+	s3Region := fs.String("s3-region", envString("QNETWARD_S3_REGION", "us-east-1"), "S3 region")
+	s3Prefix := fs.String("s3-prefix", envString("QNETWARD_S3_PREFIX", "qnetward"), "S3 object prefix")
+	s3UseSSL := fs.Bool("s3-ssl", envBool("QNETWARD_S3_SSL", false), "use TLS for S3-compatible endpoint")
+	resendAPIKey := fs.String("resend-api-key", envString("QNETWARD_RESEND_API_KEY", ""), "Resend API key for transactional email")
+	emailFrom := fs.String("email-from", envString("QNETWARD_EMAIL_FROM", ""), "from address for transactional emails")
+	emailReplyTo := fs.String("email-reply-to", envString("QNETWARD_EMAIL_REPLY_TO", ""), "reply-to address for transactional emails")
+	publicBaseURL := fs.String("public-base-url", envString("QNETWARD_PUBLIC_BASE_URL", ""), "public base URL used in emails, for example https://qnetward.example.com")
+	allowedOriginsRaw := fs.String("allowed-origins", envString("QNETWARD_ALLOWED_ORIGINS", ""), "comma-separated additional allowed browser origins, for example http://127.0.0.1:3000")
+	demoEnabled := fs.Bool("demo-enabled", envBool("QNETWARD_DEMO_ENABLED", false), "enable shared demo login")
+	demoName := fs.String("demo-name", envString("QNETWARD_DEMO_NAME", "Contributor Demo"), "display name for demo access")
+	demoEmail := fs.String("demo-email", envString("QNETWARD_DEMO_EMAIL", "demo@qnetward.local"), "display email for demo access")
+	adminEmailsRaw := fs.String("admin-emails", envString("QNETWARD_ADMIN_EMAILS", ""), "comma-separated platform admin emails")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: netwatcher serve [flags]")
+		fmt.Fprintln(os.Stderr, "Usage: qnetward serve [flags]")
 		fs.PrintDefaults()
 	}
 
@@ -375,6 +376,7 @@ func runServe(args []string) {
 		appMailer = nil
 		appPublicBaseURL = ""
 		appAllowedOrigins = nil
+		appAdminEmails = nil
 	}()
 
 	allowedOrigins, err := parseAllowedOrigins(*allowedOriginsRaw)
@@ -383,6 +385,12 @@ func runServe(args []string) {
 		os.Exit(2)
 	}
 	appAllowedOrigins = allowedOrigins
+	adminEmails, err := parseAdminEmails(*adminEmailsRaw)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	appAdminEmails = adminEmails
 
 	st, err := store.OpenConfigured(store.Config{
 		DSN:              *dbDSN,
@@ -462,7 +470,7 @@ func runServe(args []string) {
 			appDemoName = "Contributor Demo"
 		}
 		if appDemoEmail == "" {
-			appDemoEmail = "demo@netwatcher.local"
+			appDemoEmail = "demo@qnetward.local"
 		}
 	}
 
@@ -470,14 +478,23 @@ func runServe(args []string) {
 	mux.HandleFunc("/healthz", handleHealthz)
 	mux.HandleFunc("/api/healthz", handleHealthz)
 	mux.HandleFunc("/api/auth/session", handleAuthSession)
+	mux.HandleFunc("/api/auth/account-context", handleAuthAccountContext)
 	mux.HandleFunc("/api/auth/demo-login", handleAuthDemoLogin)
 	mux.HandleFunc("/api/auth/signup", handleAuthSignup)
 	mux.HandleFunc("/api/auth/login", handleAuthLogin)
 	mux.HandleFunc("/api/auth/logout", handleAuthLogout)
+	mux.HandleFunc("/api/auth/profile", handleAuthProfile)
 	mux.HandleFunc("/api/auth/verify-email", handleAuthVerifyEmail)
 	mux.HandleFunc("/api/auth/resend-verification", handleAuthResendVerification)
 	mux.HandleFunc("/api/auth/forgot-password", handleAuthForgotPassword)
 	mux.HandleFunc("/api/auth/reset-password", handleAuthResetPassword)
+	mux.HandleFunc("/api/workspaces", handleWorkspaces)
+	mux.HandleFunc("/api/workspace/team", handleWorkspaceTeam)
+	mux.HandleFunc("/api/workspace/invitations", handleWorkspaceInvitations)
+	mux.HandleFunc("/api/admin/overview", handleAdminOverview)
+	mux.HandleFunc("/api/admin/users", handleAdminUsers)
+	mux.HandleFunc("/api/admin/workspaces", handleAdminWorkspaces)
+	mux.HandleFunc("/api/admin/system", handleAdminSystem)
 	mux.HandleFunc("/api/ping", handlePing)
 	mux.HandleFunc("/api/tcpping", handleTCPPing)
 	mux.HandleFunc("/api/portscan", handlePortScan)
@@ -498,7 +515,7 @@ func runServe(args []string) {
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	fmt.Printf("NetWatcher UI listening on http://%s\n", *listen)
+	fmt.Printf("Qnetward UI listening on http://%s\n", *listen)
 	fmt.Printf("Database: postgres/timescale\n")
 	fmt.Printf("DB batch=%d flush=%s retention=%s max-open=%d max-idle=%d timescale=%t\n", *dbBatch, dbFlush.String(), dbRetention.String(), *dbMaxOpen, *dbMaxIdle, *timescale)
 	if rc != nil {
@@ -536,7 +553,7 @@ func newBackendFallbackHandler() http.Handler {
 		if r.URL.Path == "/" {
 			writeJSON(w, http.StatusOK, map[string]any{
 				"ok":      true,
-				"service": "netwatcher-api",
+				"service": "qnetward-api",
 				"ui":      "serve the Next.js frontend separately or use the frontend-primary Docker stack",
 			})
 			return
@@ -598,8 +615,8 @@ func normalizeArgs(fs *flag.FlagSet, args []string) []string {
 	return append(flags, pos...)
 }
 
-func normalizePingConfig(count int, interval, timeout time.Duration, size int, forceIPv6 bool) (ping.Config, error) {
-	normalizedCount, err := normalizeProbeCount(count)
+func normalizePingConfig(count int, interval, timeout time.Duration, size int, forceIPv6, continuous bool) (ping.Config, error) {
+	normalizedCount, err := normalizeProbeCountForMode(count, continuous)
 	if err != nil {
 		return ping.Config{}, err
 	}
@@ -617,15 +634,16 @@ func normalizePingConfig(count int, interval, timeout time.Duration, size int, f
 	}
 
 	return ping.Config{
-		Count:     normalizedCount,
-		Interval:  normalizedInterval,
-		Timeout:   normalizedTimeout,
-		Size:      normalizedSize,
-		ForceIPv6: forceIPv6,
+		Count:      normalizedCount,
+		Interval:   normalizedInterval,
+		Timeout:    normalizedTimeout,
+		Size:       normalizedSize,
+		ForceIPv6:  forceIPv6,
+		Continuous: continuous,
 	}, nil
 }
 
-func normalizeTCPPingRequest(host string, port, count int, interval, timeout time.Duration) (string, int, tcpping.Config, error) {
+func normalizeTCPPingRequest(host string, port, count int, interval, timeout time.Duration, continuous bool) (string, int, tcpping.Config, error) {
 	var err error
 	host, err = normalizeHost(host)
 	if err != nil {
@@ -638,7 +656,7 @@ func normalizeTCPPingRequest(host string, port, count int, interval, timeout tim
 		return "", 0, tcpping.Config{}, fmt.Errorf("port must be 1-65535")
 	}
 
-	normalizedCount, err := normalizeProbeCount(count)
+	normalizedCount, err := normalizeProbeCountForMode(count, continuous)
 	if err != nil {
 		return "", 0, tcpping.Config{}, err
 	}
@@ -652,9 +670,10 @@ func normalizeTCPPingRequest(host string, port, count int, interval, timeout tim
 	}
 
 	return host, port, tcpping.Config{
-		Count:    normalizedCount,
-		Interval: normalizedInterval,
-		Timeout:  normalizedTimeout,
+		Count:      normalizedCount,
+		Interval:   normalizedInterval,
+		Timeout:    normalizedTimeout,
+		Continuous: continuous,
 	}, nil
 }
 
@@ -725,6 +744,19 @@ func normalizeProbeCount(count int) (int, error) {
 	}
 	if count < 1 || count > maxProbeCount {
 		return 0, fmt.Errorf("count must be 1-%d", maxProbeCount)
+	}
+	return count, nil
+}
+
+func normalizeProbeCountForMode(count int, continuous bool) (int, error) {
+	if !continuous {
+		return normalizeProbeCount(count)
+	}
+	if count < 0 {
+		return 0, fmt.Errorf("count cannot be negative")
+	}
+	if count == 0 || count > maxProbeCount {
+		return defaultProbeCount, nil
 	}
 	return count, nil
 }
@@ -900,15 +932,27 @@ func historyCSVRows(points []store.HistoryPoint) [][]string {
 	return rows
 }
 
-func envString(key, fallback string) string {
+// lookupEnv reads key and, for QNETWARD_* keys, falls back to the legacy
+// NETWATCHER_* name so deployments configured before the rename keep working.
+func lookupEnv(key string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	if suffix, ok := strings.CutPrefix(key, "QNETWARD_"); ok {
+		return strings.TrimSpace(os.Getenv("NETWATCHER_" + suffix))
+	}
+	return ""
+}
+
+func envString(key, fallback string) string {
+	if value := lookupEnv(key); value != "" {
 		return value
 	}
 	return fallback
 }
 
 func envInt(key string, fallback int) int {
-	value := strings.TrimSpace(os.Getenv(key))
+	value := lookupEnv(key)
 	if value == "" {
 		return fallback
 	}
@@ -920,7 +964,7 @@ func envInt(key string, fallback int) int {
 }
 
 func envBool(key string, fallback bool) bool {
-	value := strings.TrimSpace(os.Getenv(key))
+	value := lookupEnv(key)
 	if value == "" {
 		return fallback
 	}
@@ -932,7 +976,7 @@ func envBool(key string, fallback bool) bool {
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {
-	value := strings.TrimSpace(os.Getenv(key))
+	value := lookupEnv(key)
 	if value == "" {
 		return fallback
 	}
@@ -1010,12 +1054,20 @@ func printSummary(rep report.Report) {
 	fmt.Printf("--- %s %s statistics ---\n", rep.Target, rep.Protocol)
 	fmt.Printf("%d probes, %d replies, %.1f%% loss\n", rep.Summary.Sent, rep.Summary.Recv, rep.Summary.Loss)
 	if rep.Summary.Recv > 0 {
-		fmt.Printf("rtt min/avg/max/stddev = %s/%s/%s/%s\n",
+		fmt.Printf("rtt min/avg/max/median/stddev = %s/%s/%s/%s/%s\n",
 			formatDuration(rep.Summary.Min),
 			formatDuration(rep.Summary.Avg),
 			formatDuration(rep.Summary.Max),
+			formatDuration(rep.Summary.Median),
 			formatDuration(rep.Summary.StdDev),
 		)
+		fmt.Printf("jitter = %s\n", formatDuration(rep.Summary.Jitter))
+	}
+	if rep.Summary.LossStreak > 0 {
+		fmt.Printf("max consecutive loss = %d\n", rep.Summary.LossStreak)
+	}
+	if rep.Summary.Duration > 0 {
+		fmt.Printf("duration = %s\n", formatDuration(rep.Summary.Duration))
 	}
 }
 
@@ -1030,18 +1082,21 @@ type jsonResult struct {
 }
 
 type jsonSummary struct {
-	Sent     int     `json:"sent"`
-	Recv     int     `json:"recv"`
-	Loss     float64 `json:"loss"`
-	Min      string  `json:"min,omitempty"`
-	Avg      string  `json:"avg,omitempty"`
-	Max      string  `json:"max,omitempty"`
-	StdDev   string  `json:"stddev,omitempty"`
-	Scanned  int     `json:"scanned,omitempty"`
-	Open     int     `json:"open,omitempty"`
-	Closed   int     `json:"closed,omitempty"`
-	Timeout  int     `json:"timeout,omitempty"`
-	Duration string  `json:"duration,omitempty"`
+	Sent       int     `json:"sent"`
+	Recv       int     `json:"recv"`
+	Loss       float64 `json:"loss"`
+	Min        string  `json:"min,omitempty"`
+	Avg        string  `json:"avg,omitempty"`
+	Max        string  `json:"max,omitempty"`
+	Median     string  `json:"median,omitempty"`
+	StdDev     string  `json:"stddev,omitempty"`
+	Jitter     string  `json:"jitter,omitempty"`
+	LossStreak int     `json:"loss_streak,omitempty"`
+	Scanned    int     `json:"scanned,omitempty"`
+	Open       int     `json:"open,omitempty"`
+	Closed     int     `json:"closed,omitempty"`
+	Timeout    int     `json:"timeout,omitempty"`
+	Duration   string  `json:"duration,omitempty"`
 }
 
 type jsonReport struct {
@@ -1190,6 +1245,31 @@ type authForgotPasswordRequest struct {
 	Email string `json:"email"`
 }
 
+type authProfileUpdateRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type workspaceInvitationRequest struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+type workspaceMemberUpdateRequest struct {
+	UserID int64  `json:"user_id"`
+	Role   string `json:"role"`
+}
+
+type workspaceMemberRemoveRequest struct {
+	UserID       int64 `json:"user_id"`
+	InvitationID int64 `json:"invitation_id,omitempty"`
+}
+
+type workspaceInvitationActionRequest struct {
+	InvitationID int64  `json:"invitation_id"`
+	Action       string `json:"action"`
+}
+
 type authResetPasswordRequest struct {
 	Token           string `json:"token"`
 	Password        string `json:"password"`
@@ -1224,11 +1304,90 @@ type authUser struct {
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
+type authWorkspace struct {
+	ID            int64     `json:"id"`
+	Name          string    `json:"name"`
+	Plan          string    `json:"plan"`
+	BillingStatus string    `json:"billing_status"`
+	Role          string    `json:"role"`
+	MemberCount   int       `json:"member_count"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+type authWorkspaceMember struct {
+	UserID    int64     `json:"user_id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	JoinedAt  time.Time `json:"joined_at"`
+	IsCurrent bool      `json:"is_current"`
+}
+
+type authWorkspaceInvitation struct {
+	ID            int64     `json:"id"`
+	WorkspaceID   int64     `json:"workspace_id"`
+	WorkspaceName string    `json:"workspace_name,omitempty"`
+	Email         string    `json:"email"`
+	Role          string    `json:"role"`
+	Status        string    `json:"status"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	CreatedAt     time.Time `json:"created_at"`
+	InviterName   string    `json:"inviter_name"`
+}
+
+type authAdminUser struct {
+	ID                  int64      `json:"id"`
+	Name                string     `json:"name"`
+	Email               string     `json:"email"`
+	EmailVerifiedAt     *time.Time `json:"email_verified_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	OwnedWorkspaceCount int        `json:"owned_workspace_count"`
+	WorkspaceCount      int        `json:"workspace_count"`
+	ActiveSessionCount  int        `json:"active_session_count"`
+	PlatformRole        string     `json:"platform_role"`
+}
+
+type authAdminWorkspace struct {
+	ID                     int64     `json:"id"`
+	Name                   string    `json:"name"`
+	Plan                   string    `json:"plan"`
+	BillingStatus          string    `json:"billing_status"`
+	CreatedAt              time.Time `json:"created_at"`
+	OwnerUserID            int64     `json:"owner_user_id"`
+	OwnerName              string    `json:"owner_name"`
+	OwnerEmail             string    `json:"owner_email"`
+	MemberCount            int       `json:"member_count"`
+	PendingInvitationCount int       `json:"pending_invitation_count"`
+	ActiveSessionCount     int       `json:"active_session_count"`
+}
+
+type authAdminSystemRuntime struct {
+	DatabaseDriver string `json:"database_driver,omitempty"`
+	RedisEnabled   bool   `json:"redis_enabled"`
+	ObjectStorage  bool   `json:"object_storage_enabled"`
+	EmailDelivery  bool   `json:"email_delivery_enabled"`
+}
+
+type authAdminSystemFeatures struct {
+	PublicBaseURL    string `json:"public_base_url,omitempty"`
+	DemoEnabled      bool   `json:"demo_enabled"`
+	SessionTTLHours  int    `json:"session_ttl_hours"`
+	ConfiguredAdmins int    `json:"configured_admins"`
+}
+
+type authAdminSystemResponse struct {
+	Overview store.AdminOverview     `json:"overview"`
+	Runtime  authAdminSystemRuntime  `json:"runtime"`
+	Features authAdminSystemFeatures `json:"features"`
+}
+
 type authSessionResponse struct {
-	Authenticated bool      `json:"authenticated"`
-	User          *authUser `json:"user,omitempty"`
-	Mode          string    `json:"mode,omitempty"`
-	ReadOnly      bool      `json:"read_only,omitempty"`
+	Authenticated     bool      `json:"authenticated"`
+	User              *authUser `json:"user,omitempty"`
+	Mode              string    `json:"mode,omitempty"`
+	ReadOnly          bool      `json:"read_only,omitempty"`
+	PlatformRole      string    `json:"platform_role,omitempty"`
+	ActiveWorkspaceID int64     `json:"active_workspace_id,omitempty"`
 }
 
 type authMessageResponse struct {
@@ -1251,6 +1410,7 @@ type pingRequest struct {
 	TimeoutMs  int    `json:"timeout_ms"`
 	Size       int    `json:"size"`
 	IPv6       bool   `json:"ipv6"`
+	Continuous bool   `json:"continuous,omitempty"`
 }
 
 type tcpPingRequest struct {
@@ -1259,6 +1419,7 @@ type tcpPingRequest struct {
 	Count      int    `json:"count"`
 	IntervalMs int    `json:"interval_ms"`
 	TimeoutMs  int    `json:"timeout_ms"`
+	Continuous bool   `json:"continuous,omitempty"`
 }
 
 type portScanRequest struct {
@@ -1294,6 +1455,7 @@ type wsRequest struct {
 	TimeoutMs   int    `json:"timeout_ms"`
 	Size        int    `json:"size"`
 	IPv6        bool   `json:"ipv6"`
+	Continuous  bool   `json:"continuous,omitempty"`
 	Concurrency int    `json:"concurrency,omitempty"`
 }
 
@@ -1395,6 +1557,7 @@ var appObjectStore *objectstore.Client
 var appMailer *mailer.Client
 var appPublicBaseURL string
 var appAllowedOrigins map[string]struct{}
+var appAdminEmails map[string]struct{}
 var appDemoEnabled bool
 var appDemoName string
 var appDemoEmail string
@@ -1432,16 +1595,18 @@ func handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if appStore != nil {
-		user, _, err := currentSessionUser(r)
+		user, _, activeWorkspaceID, err := currentSessionState(r)
 		if err == nil {
 			mode := "authenticated"
 			if isDemoUser(user) {
 				mode = "demo"
 			}
 			writeJSON(w, http.StatusOK, authSessionResponse{
-				Authenticated: true,
-				User:          toAuthUser(user),
-				Mode:          mode,
+				Authenticated:     true,
+				User:              toAuthUser(user),
+				Mode:              mode,
+				PlatformRole:      platformRoleForUser(user),
+				ActiveWorkspaceID: activeWorkspaceID,
 			})
 			return
 		}
@@ -1451,6 +1616,507 @@ func handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, authSessionResponse{Authenticated: false})
+}
+
+func handleAuthAccountContext(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+
+	user, ok := requireAuthenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	_, _, activeWorkspaceID, _ := currentSessionState(r)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, authWorkspaceContextResponse{
+		Workspace: toAuthWorkspace(workspace),
+	})
+}
+
+func handleWorkspaces(w http.ResponseWriter, r *http.Request) {
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+
+	user, tokenHash, activeWorkspaceID, err := currentSessionState(r)
+	if err != nil {
+		if errors.Is(err, store.ErrSessionNotFound) || errors.Is(err, http.ErrNoCookie) {
+			writeJSON(w, http.StatusUnauthorized, apiError{Error: "authentication required"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		workspaces, err := appStore.ListWorkspaceContextsByUserID(ctx, user.ID)
+		if err != nil {
+			if errors.Is(err, store.ErrUserNotFound) {
+				workspace, ensureErr := appStore.EnsureDefaultWorkspaceForUser(ctx, user)
+				if ensureErr != nil {
+					writeJSON(w, http.StatusInternalServerError, apiError{Error: ensureErr.Error()})
+					return
+				}
+				workspaces = []store.WorkspaceContext{workspace}
+			} else {
+				writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+				return
+			}
+		}
+
+		if activeWorkspaceID == 0 && len(workspaces) > 0 {
+			activeWorkspaceID = workspaces[0].ID
+		}
+		resp := workspaceListResponse{ActiveWorkspaceID: activeWorkspaceID}
+		for _, workspace := range workspaces {
+			resp.Workspaces = append(resp.Workspaces, toAuthWorkspace(workspace))
+		}
+		writeJSON(w, http.StatusOK, resp)
+	case http.MethodPost:
+		if !isAllowedRequestOrigin(r) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
+			return
+		}
+		var req struct {
+			WorkspaceID int64 `json:"workspace_id"`
+		}
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			return
+		}
+		if req.WorkspaceID <= 0 {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "workspace id is required"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if err := appStore.SetSessionActiveWorkspace(ctx, tokenHash, user.ID, req.WorkspaceID); err != nil {
+			if errors.Is(err, store.ErrWorkspaceMemberNotFound) {
+				writeJSON(w, http.StatusNotFound, apiError{Error: "workspace not available for this user"})
+				return
+			}
+			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, authMessageResponse{
+			OK:      true,
+			Message: "Active workspace updated.",
+		})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+	}
+}
+
+func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+
+	user, ok := requireAuthenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	_, _, activeWorkspaceID, _ := currentSessionState(r)
+
+	switch r.Method {
+	case http.MethodGet:
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+
+		members, err := appStore.ListWorkspaceMembersByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+		invitations, err := appStore.ListWorkspaceInvitationsByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, workspaceTeamResponse{
+			Workspace:   toAuthWorkspace(workspace),
+			Members:     toAuthWorkspaceMembers(members),
+			Invitations: toAuthWorkspaceInvitations(invitations),
+		})
+	case http.MethodPost:
+		if !isAllowedRequestOrigin(r) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
+			return
+		}
+		if isDemoUser(user) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot issue workspace invitations"})
+			return
+		}
+
+		var req workspaceInvitationRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+
+		invitation, err := appStore.CreateWorkspaceInvitationByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.Email, req.Role, time.Now().Add(7*24*time.Hour))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrWorkspaceInviteConflict):
+				writeJSON(w, http.StatusConflict, apiError{Error: "user is already a member of this workspace"})
+			case errors.Is(err, store.ErrWorkspacePermissionDenied):
+				writeJSON(w, http.StatusForbidden, apiError{Error: "workspace invitation role is not allowed for this operator"})
+			case errors.Is(err, store.ErrWorkspaceRoleInvalid):
+				writeJSON(w, http.StatusBadRequest, apiError{Error: "workspace role must be owner, admin, member, or viewer"})
+			default:
+				writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, authMessageResponse{
+			OK:      true,
+			Message: fmt.Sprintf("Invitation queued for %s as %s.", invitation.Email, invitation.Role),
+			Email:   invitation.Email,
+		})
+	case http.MethodPatch:
+		if !isAllowedRequestOrigin(r) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
+			return
+		}
+		if isDemoUser(user) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot modify workspace members"})
+			return
+		}
+
+		var req workspaceMemberUpdateRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			return
+		}
+		if req.UserID <= 0 {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "workspace member user id is required"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+
+		member, err := appStore.UpdateWorkspaceMemberRoleByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.UserID, req.Role)
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrWorkspaceMemberNotFound):
+				writeJSON(w, http.StatusNotFound, apiError{Error: "workspace member not found"})
+			case errors.Is(err, store.ErrWorkspacePermissionDenied):
+				writeJSON(w, http.StatusForbidden, apiError{Error: "workspace member update is not allowed"})
+			case errors.Is(err, store.ErrWorkspaceRoleInvalid):
+				writeJSON(w, http.StatusBadRequest, apiError{Error: "workspace role must be admin, member, or viewer"})
+			default:
+				writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusOK, authMessageResponse{
+			OK:      true,
+			Message: fmt.Sprintf("Updated %s to %s.", member.Email, member.Role),
+			Email:   member.Email,
+		})
+	case http.MethodDelete:
+		if !isAllowedRequestOrigin(r) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
+			return
+		}
+		if isDemoUser(user) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot modify workspace members"})
+			return
+		}
+
+		var req workspaceMemberRemoveRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			return
+		}
+		if req.UserID <= 0 && req.InvitationID <= 0 {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "workspace member user id or invitation id is required"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+
+		if req.InvitationID > 0 {
+			invitation, err := appStore.CancelWorkspaceInvitationByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.InvitationID)
+			if err != nil {
+				switch {
+				case errors.Is(err, store.ErrWorkspaceInvitationNotFound):
+					writeJSON(w, http.StatusNotFound, apiError{Error: "workspace invitation not found"})
+				case errors.Is(err, store.ErrWorkspacePermissionDenied):
+					writeJSON(w, http.StatusForbidden, apiError{Error: "workspace invitation revoke is not allowed"})
+				default:
+					writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+				}
+				return
+			}
+
+			writeJSON(w, http.StatusOK, authMessageResponse{
+				OK:      true,
+				Message: fmt.Sprintf("Revoked invitation for %s.", invitation.Email),
+				Email:   invitation.Email,
+			})
+			return
+		}
+
+		if err := appStore.RemoveWorkspaceMemberByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.UserID); err != nil {
+			switch {
+			case errors.Is(err, store.ErrWorkspaceMemberNotFound):
+				writeJSON(w, http.StatusNotFound, apiError{Error: "workspace member not found"})
+			case errors.Is(err, store.ErrWorkspacePermissionDenied):
+				writeJSON(w, http.StatusForbidden, apiError{Error: "workspace member removal is not allowed"})
+			default:
+				writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusOK, authMessageResponse{
+			OK:      true,
+			Message: "Workspace member removed.",
+		})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+	}
+}
+
+func handleWorkspaceInvitations(w http.ResponseWriter, r *http.Request) {
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+
+	user, ok := requireAuthenticatedUser(w, r)
+	if !ok {
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		invitations, err := appStore.ListIncomingWorkspaceInvitationsByEmail(ctx, user.Email)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, workspaceInvitationsResponse{
+			Invitations: toAuthWorkspaceInvitations(invitations),
+		})
+	case http.MethodPost:
+		if !isAllowedRequestOrigin(r) {
+			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
+			return
+		}
+
+		var req workspaceInvitationActionRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			return
+		}
+		if strings.TrimSpace(strings.ToLower(req.Action)) != "accept" {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "workspace invitation action must be accept"})
+			return
+		}
+		if req.InvitationID <= 0 {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "workspace invitation id is required"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		invitation, err := appStore.AcceptWorkspaceInvitationByUserID(ctx, user.ID, req.InvitationID)
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrWorkspaceInvitationNotFound):
+				writeJSON(w, http.StatusNotFound, apiError{Error: "workspace invitation not found"})
+			case errors.Is(err, store.ErrWorkspaceInvitationExpired):
+				writeJSON(w, http.StatusConflict, apiError{Error: "workspace invitation is expired"})
+			default:
+				writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusOK, authMessageResponse{
+			OK:      true,
+			Message: fmt.Sprintf("Joined %s as %s.", invitation.WorkspaceName, invitation.Role),
+		})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+	}
+}
+
+func handleAdminOverview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+	if _, ok := requirePlatformAdmin(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	overview, err := appStore.GetAdminOverview(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, overview)
+}
+
+func handleAdminUsers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+	if _, ok := requirePlatformAdmin(w, r); !ok {
+		return
+	}
+
+	limit := parseAdminListLimit(r.URL.Query().Get("limit"))
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	users, err := appStore.ListAdminUsers(ctx, limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, adminUsersResponse{
+		Users: toAuthAdminUsers(users),
+	})
+}
+
+func handleAdminWorkspaces(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+	if _, ok := requirePlatformAdmin(w, r); !ok {
+		return
+	}
+
+	limit := parseAdminListLimit(r.URL.Query().Get("limit"))
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	workspaces, err := appStore.ListAdminWorkspaces(ctx, limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, adminWorkspacesResponse{
+		Workspaces: toAuthAdminWorkspaces(workspaces),
+	})
+}
+
+func handleAdminSystem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+	if _, ok := requirePlatformAdmin(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	overview, err := appStore.GetAdminOverview(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, authAdminSystemResponse{
+		Overview: overview,
+		Runtime: authAdminSystemRuntime{
+			DatabaseDriver: appStore.Driver(),
+			RedisEnabled:   appCache != nil,
+			ObjectStorage:  appObjectStore != nil,
+			EmailDelivery:  appMailer != nil,
+		},
+		Features: authAdminSystemFeatures{
+			PublicBaseURL:    appPublicBaseURL,
+			DemoEnabled:      appDemoEnabled,
+			SessionTTLHours:  int(defaultSessionTTL / time.Hour),
+			ConfiguredAdmins: len(appAdminEmails),
+		},
+	})
 }
 
 func handleAuthDemoLogin(w http.ResponseWriter, r *http.Request) {
@@ -1660,6 +2326,93 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	clearLegacyDemoCookie(w, r)
 	clearLegacyPreviewCookie(w, r)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func handleAuthProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+	if !isAllowedRequestOrigin(r) {
+		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
+		return
+	}
+	if appStore == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return
+	}
+
+	user, ok := requireAuthenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	if isDemoUser(user) {
+		writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot modify the shared profile"})
+		return
+	}
+
+	var req authProfileUpdateRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
+
+	name, err := normalizeDisplayName(req.Name)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
+	email, err := store.NormalizeEmail(req.Email)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	updatedUser, emailChanged, err := appStore.UpdateUserProfile(ctx, user.ID, name, email)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrUserExists):
+			writeJSON(w, http.StatusConflict, apiError{Error: "user already exists"})
+		case errors.Is(err, store.ErrUserNotFound):
+			writeJSON(w, http.StatusNotFound, apiError{Error: "user not found"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		}
+		return
+	}
+
+	if emailChanged {
+		resp, challengeErr := prepareVerificationChallenge(ctx, r, updatedUser)
+		if challengeErr != nil {
+			log.Printf("profile verification challenge failed for %s: %v", updatedUser.Email, challengeErr)
+			writeJSON(w, http.StatusOK, authMessageResponse{
+				OK:                   true,
+				Authenticated:        true,
+				User:                 toAuthUser(updatedUser),
+				Email:                updatedUser.Email,
+				VerificationRequired: updatedUser.VerificationRequired,
+				Message:              "Profile updated. Verification delivery could not be issued automatically; request a new OTP from this page.",
+			})
+			return
+		}
+		resp.Authenticated = true
+		resp.User = toAuthUser(updatedUser)
+		resp.Email = updatedUser.Email
+		resp.Message = "Profile updated. Enter the OTP sent to your new email address to re-verify the account."
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, authMessageResponse{
+		OK:            true,
+		Authenticated: true,
+		User:          toAuthUser(updatedUser),
+		Email:         updatedUser.Email,
+		Message:       "Profile updated.",
+	})
 }
 
 func handleAuthVerifyEmail(w http.ResponseWriter, r *http.Request) {
@@ -2070,7 +2823,7 @@ func normalizeAlertRuleRequest(user store.User, req alertRuleRequest) (store.Ale
 				port = parsedPort
 			}
 		}
-		normalizedTarget, normalizedPort, _, err := normalizeTCPPingRequest(target, port, 1, defaultProbeInterval, defaultProbeTimeout)
+		normalizedTarget, normalizedPort, _, err := normalizeTCPPingRequest(target, port, 1, defaultProbeInterval, defaultProbeTimeout, false)
 		if err != nil {
 			return store.AlertRule{}, err
 		}
@@ -2142,15 +2895,50 @@ func requireAuthenticatedUser(w http.ResponseWriter, r *http.Request) (store.Use
 	return user, true
 }
 
-func currentSessionUser(r *http.Request) (store.User, string, error) {
+func requirePlatformAdmin(w http.ResponseWriter, r *http.Request) (store.User, bool) {
+	user, ok := requireAuthenticatedUser(w, r)
+	if !ok {
+		return store.User{}, false
+	}
+	if !isPlatformAdmin(user) {
+		writeJSON(w, http.StatusForbidden, apiError{Error: "platform admin access required"})
+		return store.User{}, false
+	}
+	return user, true
+}
+
+func parseAdminListLimit(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 50
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit <= 0 {
+		return 50
+	}
+	if limit > 200 {
+		return 200
+	}
+	return limit
+}
+
+func currentSessionState(r *http.Request) (store.User, string, int64, error) {
 	tokenHash, err := sessionTokenHashFromRequest(r)
 	if err != nil {
-		return store.User{}, "", err
+		return store.User{}, "", 0, err
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	user, err := appStore.GetUserBySessionToken(ctx, tokenHash)
+	session, err := appStore.GetSessionDetailsByToken(ctx, tokenHash)
+	if err != nil {
+		return store.User{}, "", 0, err
+	}
+	return session.User, tokenHash, session.ActiveWorkspaceID, nil
+}
+
+func currentSessionUser(r *http.Request) (store.User, string, error) {
+	user, tokenHash, _, err := currentSessionState(r)
 	if err != nil {
 		return store.User{}, "", err
 	}
@@ -2207,6 +2995,42 @@ func isDemoUser(user store.User) bool {
 		return false
 	}
 	return strings.EqualFold(user.Email, appDemoEmail)
+}
+
+func isPlatformAdmin(user store.User) bool {
+	if len(appAdminEmails) == 0 {
+		return false
+	}
+	_, ok := appAdminEmails[strings.ToLower(strings.TrimSpace(user.Email))]
+	return ok
+}
+
+func platformRoleForUser(user store.User) string {
+	if isPlatformAdmin(user) {
+		return "admin"
+	}
+	return "user"
+}
+
+func resolveActiveWorkspace(ctx context.Context, user store.User, activeWorkspaceID int64) (store.WorkspaceContext, error) {
+	if activeWorkspaceID > 0 {
+		workspace, err := appStore.GetWorkspaceContextByWorkspaceIDAndUserID(ctx, activeWorkspaceID, user.ID)
+		if err == nil {
+			return workspace, nil
+		}
+		if !errors.Is(err, store.ErrWorkspaceMemberNotFound) {
+			return store.WorkspaceContext{}, err
+		}
+	}
+
+	workspace, err := appStore.GetWorkspaceContextByUserID(ctx, user.ID)
+	if err != nil {
+		if errors.Is(err, store.ErrUserNotFound) {
+			return appStore.EnsureDefaultWorkspaceForUser(ctx, user)
+		}
+		return store.WorkspaceContext{}, err
+	}
+	return workspace, nil
 }
 
 func generateSessionToken() (string, string, error) {
@@ -2281,7 +3105,7 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 
 func clearLegacyDemoCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "netwatcher_demo",
+		Name:     "qnetward_demo",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
@@ -2294,7 +3118,7 @@ func clearLegacyDemoCookie(w http.ResponseWriter, r *http.Request) {
 
 func clearLegacyPreviewCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "netwatcher_preview",
+		Name:     "qnetward_preview",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
@@ -2559,6 +3383,116 @@ func toAuthUser(user store.User) *authUser {
 	}
 }
 
+type authWorkspaceContextResponse struct {
+	Workspace *authWorkspace `json:"workspace,omitempty"`
+}
+
+type workspaceListResponse struct {
+	ActiveWorkspaceID int64            `json:"active_workspace_id,omitempty"`
+	Workspaces        []*authWorkspace `json:"workspaces,omitempty"`
+}
+
+type workspaceTeamResponse struct {
+	Workspace   *authWorkspace            `json:"workspace,omitempty"`
+	Members     []authWorkspaceMember     `json:"members,omitempty"`
+	Invitations []authWorkspaceInvitation `json:"invitations,omitempty"`
+}
+
+type workspaceInvitationsResponse struct {
+	Invitations []authWorkspaceInvitation `json:"invitations,omitempty"`
+}
+
+type adminUsersResponse struct {
+	Users []authAdminUser `json:"users,omitempty"`
+}
+
+type adminWorkspacesResponse struct {
+	Workspaces []authAdminWorkspace `json:"workspaces,omitempty"`
+}
+
+func toAuthWorkspace(workspace store.WorkspaceContext) *authWorkspace {
+	return &authWorkspace{
+		ID:            workspace.ID,
+		Name:          workspace.Name,
+		Plan:          workspace.Plan,
+		BillingStatus: workspace.BillingStatus,
+		Role:          workspace.Role,
+		MemberCount:   workspace.MemberCount,
+		CreatedAt:     workspace.CreatedAt,
+	}
+}
+
+func toAuthWorkspaceMembers(members []store.WorkspaceMember) []authWorkspaceMember {
+	resp := make([]authWorkspaceMember, 0, len(members))
+	for _, member := range members {
+		resp = append(resp, authWorkspaceMember{
+			UserID:    member.UserID,
+			Name:      member.Name,
+			Email:     member.Email,
+			Role:      member.Role,
+			JoinedAt:  member.JoinedAt,
+			IsCurrent: member.IsCurrent,
+		})
+	}
+	return resp
+}
+
+func toAuthWorkspaceInvitations(invitations []store.WorkspaceInvitation) []authWorkspaceInvitation {
+	resp := make([]authWorkspaceInvitation, 0, len(invitations))
+	for _, invitation := range invitations {
+		resp = append(resp, authWorkspaceInvitation{
+			ID:            invitation.ID,
+			WorkspaceID:   invitation.WorkspaceID,
+			WorkspaceName: invitation.WorkspaceName,
+			Email:         invitation.Email,
+			Role:          invitation.Role,
+			Status:        invitation.Status,
+			ExpiresAt:     invitation.ExpiresAt,
+			CreatedAt:     invitation.CreatedAt,
+			InviterName:   invitation.InviterName,
+		})
+	}
+	return resp
+}
+
+func toAuthAdminUsers(users []store.AdminUserSummary) []authAdminUser {
+	resp := make([]authAdminUser, 0, len(users))
+	for _, user := range users {
+		resp = append(resp, authAdminUser{
+			ID:                  user.ID,
+			Name:                user.Name,
+			Email:               user.Email,
+			EmailVerifiedAt:     user.EmailVerifiedAt,
+			CreatedAt:           user.CreatedAt,
+			OwnedWorkspaceCount: user.OwnedWorkspaceCount,
+			WorkspaceCount:      user.WorkspaceCount,
+			ActiveSessionCount:  user.ActiveSessionCount,
+			PlatformRole:        platformRoleForUser(store.User{Email: user.Email}),
+		})
+	}
+	return resp
+}
+
+func toAuthAdminWorkspaces(workspaces []store.AdminWorkspaceSummary) []authAdminWorkspace {
+	resp := make([]authAdminWorkspace, 0, len(workspaces))
+	for _, workspace := range workspaces {
+		resp = append(resp, authAdminWorkspace{
+			ID:                     workspace.ID,
+			Name:                   workspace.Name,
+			Plan:                   workspace.Plan,
+			BillingStatus:          workspace.BillingStatus,
+			CreatedAt:              workspace.CreatedAt,
+			OwnerUserID:            workspace.OwnerUserID,
+			OwnerName:              workspace.OwnerName,
+			OwnerEmail:             workspace.OwnerEmail,
+			MemberCount:            workspace.MemberCount,
+			PendingInvitationCount: workspace.PendingInvitationCount,
+			ActiveSessionCount:     workspace.ActiveSessionCount,
+		})
+	}
+	return resp
+}
+
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
@@ -2669,7 +3603,11 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 	}
 	size := req.Size
 
-	cfg, err := normalizePingConfig(count, interval, timeout, size, req.IPv6)
+	if req.Continuous {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: "continuous mode requires realtime streaming"})
+		return
+	}
+	cfg, err := normalizePingConfig(count, interval, timeout, size, req.IPv6, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -2737,7 +3675,11 @@ func handleTCPPing(w http.ResponseWriter, r *http.Request) {
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
 
-	host, port, cfg, err := normalizeTCPPingRequest(host, port, count, interval, timeout)
+	if req.Continuous {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: "continuous mode requires realtime streaming"})
+		return
+	}
+	host, port, cfg, err := normalizeTCPPingRequest(host, port, count, interval, timeout, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -3118,7 +4060,7 @@ func streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req ws
 	if err != nil {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
-	cfg, err := normalizePingConfig(req.Count, interval, timeout, size, req.IPv6)
+	cfg, err := normalizePingConfig(req.Count, interval, timeout, size, req.IPv6, req.Continuous)
 	if err != nil {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
@@ -3188,7 +4130,7 @@ func streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
 
-	host, port, cfg, err := normalizeTCPPingRequest(host, port, req.Count, interval, timeout)
+	host, port, cfg, err := normalizeTCPPingRequest(host, port, req.Count, interval, timeout, req.Continuous)
 	if err != nil {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
@@ -3361,6 +4303,22 @@ func parseAllowedOrigins(raw string) (map[string]struct{}, error) {
 		origins[normalized] = struct{}{}
 	}
 	return origins, nil
+}
+
+func parseAdminEmails(raw string) (map[string]struct{}, error) {
+	adminEmails := make(map[string]struct{})
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		email, err := store.NormalizeEmail(item)
+		if err != nil {
+			return nil, fmt.Errorf("invalid admin email %q: %w", item, err)
+		}
+		adminEmails[email] = struct{}{}
+	}
+	return adminEmails, nil
 }
 
 func hostsEquivalentForOrigin(left, right string) bool {
@@ -3609,15 +4567,21 @@ func toJSONPortScanReport(rep portscan.Report) jsonReport {
 
 func toJSONSummary(s report.Summary) jsonSummary {
 	js := jsonSummary{
-		Sent: s.Sent,
-		Recv: s.Recv,
-		Loss: s.Loss,
+		Sent:       s.Sent,
+		Recv:       s.Recv,
+		Loss:       s.Loss,
+		LossStreak: s.LossStreak,
 	}
 	if s.Recv > 0 {
 		js.Min = formatDuration(s.Min)
 		js.Avg = formatDuration(s.Avg)
 		js.Max = formatDuration(s.Max)
+		js.Median = formatDuration(s.Median)
 		js.StdDev = formatDuration(s.StdDev)
+		js.Jitter = formatDuration(s.Jitter)
+	}
+	if s.Duration > 0 {
+		js.Duration = formatDuration(s.Duration)
 	}
 	return js
 }

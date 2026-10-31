@@ -18,12 +18,12 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 
-	"netwatcher/internal/mailer"
-	"netwatcher/internal/store"
+	"qnetward/internal/mailer"
+	"qnetward/internal/store"
 )
 
 func TestNormalizePingConfigDefaultsAndBounds(t *testing.T) {
-	cfg, err := normalizePingConfig(0, 0, 0, 0, true)
+	cfg, err := normalizePingConfig(0, 0, 0, 0, true, false)
 	if err != nil {
 		t.Fatalf("normalizePingConfig returned error: %v", err)
 	}
@@ -43,23 +43,41 @@ func TestNormalizePingConfigDefaultsAndBounds(t *testing.T) {
 	if !cfg.ForceIPv6 {
 		t.Fatal("expected ForceIPv6 to be preserved")
 	}
+	if cfg.Continuous {
+		t.Fatal("expected continuous mode to remain disabled")
+	}
 
-	if _, err := normalizePingConfig(maxProbeCount+1, time.Second, time.Second, defaultPingSize, false); err == nil {
+	continuousCfg, err := normalizePingConfig(5, time.Second, 2*time.Second, defaultPingSize, false, true)
+	if err != nil {
+		t.Fatalf("normalizePingConfig with continuous returned error: %v", err)
+	}
+	if !continuousCfg.Continuous {
+		t.Fatal("expected continuous mode to be preserved")
+	}
+	continuousOverflowCfg, err := normalizePingConfig(maxProbeCount+1, time.Second, 2*time.Second, defaultPingSize, false, true)
+	if err != nil {
+		t.Fatalf("normalizePingConfig should ignore oversized count in continuous mode: %v", err)
+	}
+	if continuousOverflowCfg.Count != defaultProbeCount {
+		t.Fatalf("expected continuous oversized count to normalize to %d, got %d", defaultProbeCount, continuousOverflowCfg.Count)
+	}
+
+	if _, err := normalizePingConfig(maxProbeCount+1, time.Second, time.Second, defaultPingSize, false, false); err == nil {
 		t.Fatal("expected count validation error")
 	}
-	if _, err := normalizePingConfig(defaultProbeCount, minProbeInterval-time.Millisecond, time.Second, defaultPingSize, false); err == nil {
+	if _, err := normalizePingConfig(defaultProbeCount, minProbeInterval-time.Millisecond, time.Second, defaultPingSize, false, false); err == nil {
 		t.Fatal("expected interval validation error")
 	}
-	if _, err := normalizePingConfig(defaultProbeCount, time.Second, minProbeTimeout-time.Millisecond, defaultPingSize, false); err == nil {
+	if _, err := normalizePingConfig(defaultProbeCount, time.Second, minProbeTimeout-time.Millisecond, defaultPingSize, false, false); err == nil {
 		t.Fatal("expected timeout validation error")
 	}
-	if _, err := normalizePingConfig(defaultProbeCount, time.Second, time.Second, minPingSize-1, false); err == nil {
+	if _, err := normalizePingConfig(defaultProbeCount, time.Second, time.Second, minPingSize-1, false, false); err == nil {
 		t.Fatal("expected size validation error")
 	}
 }
 
 func TestNormalizeTCPPingRequestDefaultsAndBounds(t *testing.T) {
-	host, port, cfg, err := normalizeTCPPingRequest("  example.com  ", 0, 0, 0, 0)
+	host, port, cfg, err := normalizeTCPPingRequest("  example.com  ", 0, 0, 0, 0, false)
 	if err != nil {
 		t.Fatalf("normalizeTCPPingRequest returned error: %v", err)
 	}
@@ -74,10 +92,25 @@ func TestNormalizeTCPPingRequestDefaultsAndBounds(t *testing.T) {
 		t.Fatalf("expected default count %d, got %d", defaultProbeCount, cfg.Count)
 	}
 
-	if _, _, _, err := normalizeTCPPingRequest("", 443, 1, time.Second, time.Second); err == nil {
+	_, _, continuousCfg, err := normalizeTCPPingRequest("example.com", 443, 5, time.Second, 2*time.Second, true)
+	if err != nil {
+		t.Fatalf("normalizeTCPPingRequest with continuous returned error: %v", err)
+	}
+	if !continuousCfg.Continuous {
+		t.Fatal("expected continuous mode to be preserved")
+	}
+	_, _, continuousOverflowCfg, err := normalizeTCPPingRequest("example.com", 443, maxProbeCount+1, time.Second, 2*time.Second, true)
+	if err != nil {
+		t.Fatalf("normalizeTCPPingRequest should ignore oversized count in continuous mode: %v", err)
+	}
+	if continuousOverflowCfg.Count != defaultProbeCount {
+		t.Fatalf("expected continuous oversized count to normalize to %d, got %d", defaultProbeCount, continuousOverflowCfg.Count)
+	}
+
+	if _, _, _, err := normalizeTCPPingRequest("", 443, 1, time.Second, time.Second, false); err == nil {
 		t.Fatal("expected host validation error")
 	}
-	if _, _, _, err := normalizeTCPPingRequest("example.com", 70000, 1, time.Second, time.Second); err == nil {
+	if _, _, _, err := normalizeTCPPingRequest("example.com", 70000, 1, time.Second, time.Second, false); err == nil {
 		t.Fatal("expected port validation error")
 	}
 }
@@ -158,6 +191,23 @@ func TestHandlePingRejectsInvalidPayload(t *testing.T) {
 	}
 }
 
+func TestHandlePingRejectsContinuousOverHTTP(t *testing.T) {
+	st := installTestStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/ping", strings.NewReader(`{"host":"example.com","continuous":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(issueTestSessionCookie(t, st))
+	rr := httptest.NewRecorder()
+
+	handlePing(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "continuous mode requires realtime streaming") {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
 func TestHandleAuthSessionReturnsUnauthenticatedWithoutCookie(t *testing.T) {
 	installTestStore(t)
 
@@ -179,6 +229,484 @@ func TestHandleAuthSessionReturnsUnauthenticatedWithoutCookie(t *testing.T) {
 	}
 }
 
+func TestHandleAuthAccountContextReturnsWorkspace(t *testing.T) {
+	st := installTestStore(t)
+	user, cookie := issueTestSession(t, st)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/account-context", nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleAuthAccountContext(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp authWorkspaceContextResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode account context response: %v", err)
+	}
+	if resp.Workspace == nil {
+		t.Fatal("expected workspace context")
+	}
+	if resp.Workspace.Role != "owner" {
+		t.Fatalf("expected owner role, got %q", resp.Workspace.Role)
+	}
+	if resp.Workspace.MemberCount != 1 {
+		t.Fatalf("expected member count 1, got %d", resp.Workspace.MemberCount)
+	}
+	if !strings.Contains(resp.Workspace.Name, user.Name) {
+		t.Fatalf("expected workspace name to include user name, got %q", resp.Workspace.Name)
+	}
+}
+
+func TestHandleWorkspaceTeamReturnsMembersAndInvitations(t *testing.T) {
+	st := installTestStore(t)
+	user, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := st.CreateWorkspaceInvitationByUserID(ctx, user.ID, fmt.Sprintf("invite-%d@example.com", time.Now().UnixNano()), "member", time.Now().Add(72*time.Hour)); err != nil {
+		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspace/team", nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleWorkspaceTeam(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp workspaceTeamResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode workspace team response: %v", err)
+	}
+	if resp.Workspace == nil {
+		t.Fatal("expected workspace payload")
+	}
+	if len(resp.Members) != 1 {
+		t.Fatalf("expected one workspace member, got %d", len(resp.Members))
+	}
+	if len(resp.Invitations) != 1 {
+		t.Fatalf("expected one invitation, got %d", len(resp.Invitations))
+	}
+}
+
+func TestHandleWorkspaceTeamCreatesInvitation(t *testing.T) {
+	st := installTestStore(t)
+	user, cookie := issueTestSession(t, st)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspace/team", strings.NewReader(fmt.Sprintf(`{"email":"team-%d@example.com","role":"admin"}`, time.Now().UnixNano())))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleWorkspaceTeam(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	invitations, err := st.ListWorkspaceInvitationsByUserID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListWorkspaceInvitationsByUserID returned error: %v", err)
+	}
+	if len(invitations) != 1 {
+		t.Fatalf("expected one invitation, got %d", len(invitations))
+	}
+	if invitations[0].Role != "admin" {
+		t.Fatalf("expected admin role invite, got %q", invitations[0].Role)
+	}
+}
+
+func TestHandleWorkspaceTeamUpdatesMemberRole(t *testing.T) {
+	st := installTestStore(t)
+	owner, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	memberEmail := fmt.Sprintf("member-update-%d@example.com", time.Now().UnixNano())
+	member, err := st.CreateUser(ctx, "Update Member", memberEmail, "hash-member", false)
+	if err != nil {
+		t.Fatalf("CreateUser member returned error: %v", err)
+	}
+	invitation, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, member.Email, "member", time.Now().Add(72*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
+	}
+	if _, err := st.AcceptWorkspaceInvitationByUserID(ctx, member.ID, invitation.ID); err != nil {
+		t.Fatalf("AcceptWorkspaceInvitationByUserID returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/workspace/team", strings.NewReader(fmt.Sprintf(`{"user_id":%d,"role":"admin"}`, member.ID)))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleWorkspaceTeam(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	members, err := st.ListWorkspaceMembersByUserID(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("ListWorkspaceMembersByUserID returned error: %v", err)
+	}
+	if len(members) != 2 || members[1].Role != "admin" {
+		t.Fatalf("expected second member to be admin, got %#v", members)
+	}
+}
+
+func TestHandleWorkspaceTeamRemovesMember(t *testing.T) {
+	st := installTestStore(t)
+	owner, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	memberEmail := fmt.Sprintf("member-remove-%d@example.com", time.Now().UnixNano())
+	member, err := st.CreateUser(ctx, "Remove Member", memberEmail, "hash-member", false)
+	if err != nil {
+		t.Fatalf("CreateUser member returned error: %v", err)
+	}
+	invitation, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, member.Email, "member", time.Now().Add(72*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
+	}
+	if _, err := st.AcceptWorkspaceInvitationByUserID(ctx, member.ID, invitation.ID); err != nil {
+		t.Fatalf("AcceptWorkspaceInvitationByUserID returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/workspace/team", strings.NewReader(fmt.Sprintf(`{"user_id":%d}`, member.ID)))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleWorkspaceTeam(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	members, err := st.ListWorkspaceMembersByUserID(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("ListWorkspaceMembersByUserID returned error: %v", err)
+	}
+	if len(members) != 1 {
+		t.Fatalf("expected one member after delete, got %d", len(members))
+	}
+}
+
+func TestHandleWorkspaceInvitationsReturnsIncomingInvites(t *testing.T) {
+	st := installTestStore(t)
+	invitee, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ownerEmail := fmt.Sprintf("owner-%d@example.com", time.Now().UnixNano())
+	owner, err := st.CreateUser(ctx, "Owner Operator", ownerEmail, "hash-owner", false)
+	if err != nil {
+		t.Fatalf("CreateUser owner returned error: %v", err)
+	}
+	if _, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, invitee.Email, "viewer", time.Now().Add(72*time.Hour)); err != nil {
+		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspace/invitations", nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleWorkspaceInvitations(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp workspaceInvitationsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode workspace invitations response: %v", err)
+	}
+	if len(resp.Invitations) != 1 {
+		t.Fatalf("expected one incoming invitation, got %d", len(resp.Invitations))
+	}
+	if resp.Invitations[0].WorkspaceName == "" {
+		t.Fatal("expected workspace name on incoming invitation")
+	}
+}
+
+func TestHandleWorkspaceInvitationsAcceptsInvite(t *testing.T) {
+	st := installTestStore(t)
+	invitee, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ownerEmail := fmt.Sprintf("owner-accept-%d@example.com", time.Now().UnixNano())
+	owner, err := st.CreateUser(ctx, "Owner Accept", ownerEmail, "hash-owner", false)
+	if err != nil {
+		t.Fatalf("CreateUser owner returned error: %v", err)
+	}
+	invitation, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, invitee.Email, "viewer", time.Now().Add(72*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspace/invitations", strings.NewReader(fmt.Sprintf(`{"invitation_id":%d,"action":"accept"}`, invitation.ID)))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleWorkspaceInvitations(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	members, err := st.ListWorkspaceMembersByUserID(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("ListWorkspaceMembersByUserID returned error: %v", err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members after accept, got %d", len(members))
+	}
+}
+
+func TestHandleWorkspacesListsAndSwitchesActiveWorkspace(t *testing.T) {
+	st := installTestStore(t)
+	user, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ownerEmail := fmt.Sprintf("workspace-switch-owner-%d@example.com", time.Now().UnixNano())
+	owner, err := st.CreateUser(ctx, "Switch Owner", ownerEmail, "hash-owner", false)
+	if err != nil {
+		t.Fatalf("CreateUser owner returned error: %v", err)
+	}
+	invitation, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, user.Email, "member", time.Now().Add(72*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
+	}
+	if _, err := st.AcceptWorkspaceInvitationByUserID(ctx, user.ID, invitation.ID); err != nil {
+		t.Fatalf("AcceptWorkspaceInvitationByUserID returned error: %v", err)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/workspaces", nil)
+	getReq.AddCookie(cookie)
+	getRR := httptest.NewRecorder()
+	handleWorkspaces(getRR, getReq)
+
+	if getRR.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", getRR.Code, getRR.Body.String())
+	}
+
+	var listResp workspaceListResponse
+	if err := json.Unmarshal(getRR.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode workspace list response: %v", err)
+	}
+	if len(listResp.Workspaces) != 2 {
+		t.Fatalf("expected 2 workspaces, got %d", len(listResp.Workspaces))
+	}
+
+	targetWorkspaceID := listResp.Workspaces[1].ID
+	switchReq := httptest.NewRequest(http.MethodPost, "/api/workspaces", strings.NewReader(fmt.Sprintf(`{"workspace_id":%d}`, targetWorkspaceID)))
+	switchReq.Header.Set("Content-Type", "application/json")
+	switchReq.AddCookie(cookie)
+	switchRR := httptest.NewRecorder()
+	handleWorkspaces(switchRR, switchReq)
+
+	if switchRR.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", switchRR.Code, switchRR.Body.String())
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	sessionReq.AddCookie(cookie)
+	sessionRR := httptest.NewRecorder()
+	handleAuthSession(sessionRR, sessionReq)
+
+	var sessionResp authSessionResponse
+	if err := json.Unmarshal(sessionRR.Body.Bytes(), &sessionResp); err != nil {
+		t.Fatalf("decode session response: %v", err)
+	}
+	if sessionResp.ActiveWorkspaceID != targetWorkspaceID {
+		t.Fatalf("expected active workspace id %d, got %d", targetWorkspaceID, sessionResp.ActiveWorkspaceID)
+	}
+}
+
+func TestHandleWorkspaceTeamRevokesInvitation(t *testing.T) {
+	st := installTestStore(t)
+	owner, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	invitation, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, fmt.Sprintf("revoke-handler-%d@example.com", time.Now().UnixNano()), "viewer", time.Now().Add(72*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/workspace/team", strings.NewReader(fmt.Sprintf(`{"invitation_id":%d}`, invitation.ID)))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleWorkspaceTeam(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	invitations, err := st.ListWorkspaceInvitationsByUserID(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("ListWorkspaceInvitationsByUserID returned error: %v", err)
+	}
+	if len(invitations) != 1 {
+		t.Fatalf("expected 1 invitation, got %d", len(invitations))
+	}
+	if invitations[0].Status != "revoked" {
+		t.Fatalf("expected revoked invitation, got %q", invitations[0].Status)
+	}
+}
+
+func TestHandleAdminOverviewRequiresAdmin(t *testing.T) {
+	st := installTestStore(t)
+	_, cookie := issueTestSession(t, st)
+
+	previous := appAdminEmails
+	appAdminEmails = map[string]struct{}{}
+	t.Cleanup(func() {
+		appAdminEmails = previous
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/overview", nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleAdminOverview(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleAdminOverviewReturnsCountsForAdmin(t *testing.T) {
+	st := installTestStore(t)
+	user, cookie := issueTestSession(t, st)
+
+	previous := appAdminEmails
+	appAdminEmails = map[string]struct{}{strings.ToLower(user.Email): {}}
+	t.Cleanup(func() {
+		appAdminEmails = previous
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/overview", nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleAdminOverview(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var overview store.AdminOverview
+	if err := json.Unmarshal(rr.Body.Bytes(), &overview); err != nil {
+		t.Fatalf("decode admin overview: %v", err)
+	}
+	if overview.UserCount < 1 || overview.WorkspaceCount < 1 {
+		t.Fatalf("unexpected admin overview payload: %#v", overview)
+	}
+}
+
+func TestHandleAdminUsersWorkspacesAndSystemReturnPayloads(t *testing.T) {
+	st := installTestStore(t)
+	user, cookie := issueTestSession(t, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := st.CreateSession(ctx, user.ID, fmt.Sprintf("extra-session-%d", time.Now().UnixNano()), time.Now().Add(24*time.Hour)); err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+
+	previousAdmins := appAdminEmails
+	previousDemoEnabled := appDemoEnabled
+	previousPublicBaseURL := appPublicBaseURL
+	appAdminEmails = map[string]struct{}{strings.ToLower(user.Email): {}}
+	appDemoEnabled = true
+	appPublicBaseURL = "https://qnetward.gitzen.cloud"
+	t.Cleanup(func() {
+		appAdminEmails = previousAdmins
+		appDemoEnabled = previousDemoEnabled
+		appPublicBaseURL = previousPublicBaseURL
+	})
+
+	usersReq := httptest.NewRequest(http.MethodGet, "/api/admin/users?limit=10", nil)
+	usersReq.AddCookie(cookie)
+	usersRR := httptest.NewRecorder()
+	handleAdminUsers(usersRR, usersReq)
+
+	if usersRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 from admin users, got %d: %s", usersRR.Code, usersRR.Body.String())
+	}
+
+	var usersResp adminUsersResponse
+	if err := json.Unmarshal(usersRR.Body.Bytes(), &usersResp); err != nil {
+		t.Fatalf("decode admin users response: %v", err)
+	}
+	if len(usersResp.Users) == 0 {
+		t.Fatal("expected admin users payload")
+	}
+	if usersResp.Users[0].PlatformRole == "" {
+		t.Fatal("expected platform role in admin users payload")
+	}
+
+	workspacesReq := httptest.NewRequest(http.MethodGet, "/api/admin/workspaces?limit=10", nil)
+	workspacesReq.AddCookie(cookie)
+	workspacesRR := httptest.NewRecorder()
+	handleAdminWorkspaces(workspacesRR, workspacesReq)
+
+	if workspacesRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 from admin workspaces, got %d: %s", workspacesRR.Code, workspacesRR.Body.String())
+	}
+
+	var workspacesResp adminWorkspacesResponse
+	if err := json.Unmarshal(workspacesRR.Body.Bytes(), &workspacesResp); err != nil {
+		t.Fatalf("decode admin workspaces response: %v", err)
+	}
+	if len(workspacesResp.Workspaces) == 0 {
+		t.Fatal("expected admin workspaces payload")
+	}
+	if workspacesResp.Workspaces[0].OwnerEmail == "" {
+		t.Fatal("expected workspace owner email in admin workspaces payload")
+	}
+
+	systemReq := httptest.NewRequest(http.MethodGet, "/api/admin/system", nil)
+	systemReq.AddCookie(cookie)
+	systemRR := httptest.NewRecorder()
+	handleAdminSystem(systemRR, systemReq)
+
+	if systemRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 from admin system, got %d: %s", systemRR.Code, systemRR.Body.String())
+	}
+
+	var systemResp authAdminSystemResponse
+	if err := json.Unmarshal(systemRR.Body.Bytes(), &systemResp); err != nil {
+		t.Fatalf("decode admin system response: %v", err)
+	}
+	if systemResp.Features.PublicBaseURL != "https://qnetward.gitzen.cloud" {
+		t.Fatalf("unexpected public base url: %#v", systemResp.Features)
+	}
+	if systemResp.Features.ConfiguredAdmins != 1 {
+		t.Fatalf("expected 1 configured admin, got %d", systemResp.Features.ConfiguredAdmins)
+	}
+	if systemResp.Overview.UserCount < 1 {
+		t.Fatalf("unexpected system overview payload: %#v", systemResp.Overview)
+	}
+}
+
 func TestAuthDemoLoginFlow(t *testing.T) {
 	installTestStore(t)
 	originalEnabled := appDemoEnabled
@@ -194,7 +722,7 @@ func TestAuthDemoLoginFlow(t *testing.T) {
 
 	appDemoEnabled = true
 	appDemoName = "Contributor Demo"
-	appDemoEmail = "demo@netwatcher.local"
+	appDemoEmail = "demo@qnetward.local"
 	appDemoCreatedAt = time.Now().UTC()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/demo-login", strings.NewReader(`{}`))
@@ -250,7 +778,7 @@ func TestAuthLogoutClearsDemoCookie(t *testing.T) {
 
 	appDemoEnabled = true
 	appDemoName = "Contributor Demo"
-	appDemoEmail = "demo-logout@netwatcher.local"
+	appDemoEmail = "demo-logout@qnetward.local"
 
 	ctx := context.Background()
 	user, err := appStore.GetUserByEmail(ctx, appDemoEmail)
@@ -296,6 +824,114 @@ func TestAuthLogoutClearsDemoCookie(t *testing.T) {
 	}
 	if !cleared {
 		t.Fatal("expected auth cookie to be cleared")
+	}
+}
+
+func TestAuthProfileUpdateChangesName(t *testing.T) {
+	st := installTestStore(t)
+	user, cookie := issueTestSession(t, st)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/auth/profile", strings.NewReader(fmt.Sprintf(`{"name":"Updated Operator","email":"%s"}`, user.Email)))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleAuthProfile(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp authMessageResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode profile update response: %v", err)
+	}
+	if resp.User == nil || resp.User.Name != "Updated Operator" {
+		t.Fatalf("unexpected profile update response: %#v", resp)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	refreshed, err := st.GetUserBySessionToken(ctx, hashSessionToken(cookie.Value))
+	if err != nil {
+		t.Fatalf("load updated user: %v", err)
+	}
+	if refreshed.Name != "Updated Operator" {
+		t.Fatalf("expected persisted name update, got %q", refreshed.Name)
+	}
+}
+
+func TestAuthProfileUpdateEmailChangeIssuesVerification(t *testing.T) {
+	st := installTestStore(t)
+	_, cookie := issueTestSession(t, st)
+	resetAuthRateLimiterForTest(t)
+
+	nextEmail := fmt.Sprintf("updated_%d@example.com", time.Now().UnixNano())
+	req := httptest.NewRequest(http.MethodPatch, "/api/auth/profile", strings.NewReader(fmt.Sprintf(`{"name":"Session Test User","email":"%s"}`, nextEmail)))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleAuthProfile(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp authMessageResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode profile email update response: %v", err)
+	}
+	if resp.User == nil || resp.User.Email != nextEmail {
+		t.Fatalf("unexpected profile email update response: %#v", resp)
+	}
+	if !resp.VerificationRequired {
+		t.Fatalf("expected verification to be required after email change: %#v", resp)
+	}
+	if resp.PreviewCode == "" {
+		t.Fatalf("expected preview verification code when mailer is disabled: %#v", resp)
+	}
+}
+
+func TestAuthProfileUpdateRejectsDemoSession(t *testing.T) {
+	installTestStore(t)
+	originalEnabled := appDemoEnabled
+	originalName := appDemoName
+	originalEmail := appDemoEmail
+	originalCreatedAt := appDemoCreatedAt
+	t.Cleanup(func() {
+		appDemoEnabled = originalEnabled
+		appDemoName = originalName
+		appDemoEmail = originalEmail
+		appDemoCreatedAt = originalCreatedAt
+	})
+
+	appDemoEnabled = true
+	appDemoName = "Contributor Demo"
+	appDemoEmail = "demo-profile@qnetward.local"
+	appDemoCreatedAt = time.Now().UTC()
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/demo-login", strings.NewReader(`{}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRR := httptest.NewRecorder()
+	handleAuthDemoLogin(loginRR, loginReq)
+	if loginRR.Code != http.StatusOK {
+		t.Fatalf("expected demo login 200, got %d: %s", loginRR.Code, loginRR.Body.String())
+	}
+	cookie := extractAuthCookie(t, loginRR.Result())
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/auth/profile", strings.NewReader(`{"name":"Changed Demo","email":"demo-profile@qnetward.local"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+
+	handleAuthProfile(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "demo access cannot modify") {
+		t.Fatalf("unexpected response body: %s", rr.Body.String())
 	}
 }
 
@@ -711,14 +1347,14 @@ func TestAlertRulesCRUDFlow(t *testing.T) {
 
 func TestBuildDashboardURLUsesPanel(t *testing.T) {
 	oldBase := appPublicBaseURL
-	appPublicBaseURL = "https://netwatcher.example.com"
+	appPublicBaseURL = "https://qnetward.example.com"
 	t.Cleanup(func() {
 		appPublicBaseURL = oldBase
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/", nil)
 	got := buildDashboardURL(req, "alerts")
-	want := "https://netwatcher.example.com/alerts"
+	want := "https://qnetward.example.com/alerts"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -733,7 +1369,7 @@ func TestNewBackendFallbackHandler(t *testing.T) {
 	if rootRR.Code != http.StatusOK {
 		t.Fatalf("root: expected 200, got %d", rootRR.Code)
 	}
-	if !strings.Contains(rootRR.Body.String(), "netwatcher-api") {
+	if !strings.Contains(rootRR.Body.String(), "qnetward-api") {
 		t.Fatalf("root: unexpected body %q", rootRR.Body.String())
 	}
 
@@ -1132,6 +1768,23 @@ func TestHandleTCPPingStoresPerProbeTimestamps(t *testing.T) {
 	<-done
 }
 
+func TestHandleTCPPingRejectsContinuousOverHTTP(t *testing.T) {
+	st := installTestStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/tcpping", strings.NewReader(`{"host":"example.com","port":443,"continuous":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(issueTestSessionCookie(t, st))
+	rr := httptest.NewRecorder()
+
+	handleTCPPing(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "continuous mode requires realtime streaming") {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
 func TestIsAllowedWSOriginAcceptsSameHostAndRejectsDifferentHost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/ws", nil)
 	req.Host = "127.0.0.1:8080"
@@ -1321,7 +1974,7 @@ func TestHandleWSStopCancelsActiveRun(t *testing.T) {
 func newPingFlagSet() *flag.FlagSet {
 	fs := flag.NewFlagSet("ping", flag.ContinueOnError)
 	fs.Bool("ipv6", false, "")
-	fs.Int("count", 4, "")
+	fs.Int("count", defaultProbeCount, "")
 	return fs
 }
 
@@ -1334,9 +1987,9 @@ func newTCPPingFlagSet() *flag.FlagSet {
 func openTestStore(t *testing.T) *store.Store {
 	t.Helper()
 
-	dsn := strings.TrimSpace(os.Getenv("NETWATCHER_TEST_POSTGRES_DSN"))
+	dsn := strings.TrimSpace(os.Getenv("QNETWARD_TEST_POSTGRES_DSN"))
 	if dsn == "" {
-		t.Skip("NETWATCHER_TEST_POSTGRES_DSN is not set")
+		t.Skip("QNETWARD_TEST_POSTGRES_DSN is not set")
 	}
 
 	st, err := store.OpenConfigured(store.Config{
@@ -1384,7 +2037,7 @@ func installFailingTestMailer(t *testing.T) {
 
 	client, err := mailer.Open(mailer.Config{
 		APIKey:   "test-key",
-		From:     "NetWatcher <alerts@example.com>",
+		From:     "Qnetward <alerts@example.com>",
 		ReplyTo:  "support@example.com",
 		Endpoint: srv.URL,
 		Timeout:  5 * time.Second,
@@ -1496,4 +2149,17 @@ func testTableName(name string) string {
 	b.WriteString("_")
 	b.WriteString(fmt.Sprintf("%d", time.Now().UnixNano()))
 	return b.String()
+}
+
+func TestLookupEnvFallsBackToLegacyName(t *testing.T) {
+	t.Setenv("QNETWARD_LOOKUP_TEST", "")
+	t.Setenv("NETWATCHER_LOOKUP_TEST", "legacy")
+	if got := lookupEnv("QNETWARD_LOOKUP_TEST"); got != "legacy" {
+		t.Fatalf("expected legacy fallback, got %q", got)
+	}
+
+	t.Setenv("QNETWARD_LOOKUP_TEST", "current")
+	if got := lookupEnv("QNETWARD_LOOKUP_TEST"); got != "current" {
+		t.Fatalf("expected current value to win, got %q", got)
+	}
 }

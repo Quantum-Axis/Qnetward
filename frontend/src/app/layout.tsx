@@ -14,8 +14,8 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "NetWatcher Console",
-  description: "Next.js frontend migration for NetWatcher",
+  title: "Qnetward Console",
+  description: "Next.js frontend migration for Qnetward",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

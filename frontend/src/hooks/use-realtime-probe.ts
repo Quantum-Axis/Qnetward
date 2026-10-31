@@ -20,8 +20,12 @@ type RealtimeProbeConfig<TRequest extends Record<string, unknown>> = {
   buildInitialReport: (request: TRequest) => ProbeReport;
 };
 
+function isContinuousRequest(request: Record<string, unknown>) {
+  return request.continuous === true;
+}
+
 function getRealtimeWebSocketURL() {
-  const explicit = process.env.NEXT_PUBLIC_NETWATCHER_WS_URL?.trim();
+  const explicit = (process.env.NEXT_PUBLIC_QNETWARD_WS_URL ?? process.env.NEXT_PUBLIC_NETWATCHER_WS_URL)?.trim();
   if (explicit) {
     return explicit;
   }
@@ -161,6 +165,11 @@ export function useRealtimeProbe<TRequest extends Record<string, unknown>>(confi
 
       const wsURL = getRealtimeWebSocketURL();
       if (typeof window === "undefined" || !("WebSocket" in window) || !wsURL) {
+        if (isContinuousRequest(request)) {
+          setFormError("Continuous mode requires realtime streaming support.");
+          setRunState("error");
+          return;
+        }
         await runViaHTTP(request, initialReport, runToken);
         return;
       }
@@ -180,6 +189,14 @@ export function useRealtimeProbe<TRequest extends Record<string, unknown>>(confi
           ws.send(JSON.stringify({ type, ...request }));
           requestDispatched = true;
         } catch {
+          if (isContinuousRequest(request)) {
+            fallbackStarted = true;
+            socketRef.current = null;
+            ws.close();
+            setFormError("Continuous mode requires realtime streaming support.");
+            setRunState("error");
+            return;
+          }
           fallbackStarted = true;
           socketRef.current = null;
           ws.close();
@@ -229,6 +246,14 @@ export function useRealtimeProbe<TRequest extends Record<string, unknown>>(confi
           return;
         }
         if (!requestDispatched && !fallbackStarted) {
+          if (isContinuousRequest(request)) {
+            fallbackStarted = true;
+            socketRef.current = null;
+            ws.close();
+            setFormError("Continuous mode requires realtime streaming support.");
+            setRunState("error");
+            return;
+          }
           fallbackStarted = true;
           socketRef.current = null;
           ws.close();

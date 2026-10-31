@@ -14,15 +14,16 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 
-	"netwatcher/internal/report"
+	"qnetward/internal/report"
 )
 
 type Config struct {
-	Count     int
-	Interval  time.Duration
-	Timeout   time.Duration
-	Size      int
-	ForceIPv6 bool
+	Count      int
+	Interval   time.Duration
+	Timeout    time.Duration
+	Size       int
+	ForceIPv6  bool
+	Continuous bool
 }
 
 func Run(host string, cfg Config) (report.Report, error) {
@@ -41,7 +42,7 @@ func RunStreamContext(ctx context.Context, host string, cfg Config, onResult fun
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if cfg.Count <= 0 {
+	if cfg.Count <= 0 && !cfg.Continuous {
 		return report.Report{}, errors.New("count must be greater than 0")
 	}
 	if cfg.Size < 8 {
@@ -89,40 +90,50 @@ func RunStreamContext(ctx context.Context, host string, cfg Config, onResult fun
 	}()
 
 	id := os.Getpid() & 0xffff
-	results := make([]report.Result, 0, cfg.Count)
+	initialCapacity := cfg.Count
+	if initialCapacity < 0 {
+		initialCapacity = 0
+	}
+	results := make([]report.Result, 0, initialCapacity)
 	dst := ipaddr
+	startedAt := time.Now()
 
-	for i := 1; i <= cfg.Count; i++ {
+	for i := 1; ; i++ {
+		if !cfg.Continuous && i > cfg.Count {
+			break
+		}
 		if err := ctx.Err(); err != nil {
-			return buildReport(host, ipaddr.String(), results), err
+			return buildReport(host, ipaddr.String(), results, time.Since(startedAt)), err
 		}
 		res, err := sendOnce(ctx, conn, dst, proto, echoType, echoReplyType, id, i, cfg.Timeout, cfg.Size)
 		if err != nil {
-			return buildReport(host, ipaddr.String(), results), err
+			return buildReport(host, ipaddr.String(), results, time.Since(startedAt)), err
 		}
 		results = append(results, res)
 		if onResult != nil {
 			if err := onResult(res); err != nil {
-				return buildReport(host, ipaddr.String(), results), err
+				return buildReport(host, ipaddr.String(), results, time.Since(startedAt)), err
 			}
 		}
-		if i < cfg.Count {
+		if cfg.Continuous || i < cfg.Count {
 			if err := sleepContext(ctx, cfg.Interval); err != nil {
-				return buildReport(host, ipaddr.String(), results), err
+				return buildReport(host, ipaddr.String(), results, time.Since(startedAt)), err
 			}
 		}
 	}
 
-	return buildReport(host, ipaddr.String(), results), nil
+	return buildReport(host, ipaddr.String(), results, time.Since(startedAt)), nil
 }
 
-func buildReport(host, addr string, results []report.Result) report.Report {
+func buildReport(host, addr string, results []report.Result, duration time.Duration) report.Report {
+	summary := report.Summarize(results, len(results))
+	summary.Duration = duration
 	return report.Report{
 		Protocol: "icmp",
 		Target:   host,
 		Addr:     addr,
 		Results:  results,
-		Summary:  report.Summarize(results, len(results)),
+		Summary:  summary,
 	}
 }
 

@@ -7,13 +7,14 @@ import (
 	"strconv"
 	"time"
 
-	"netwatcher/internal/report"
+	"qnetward/internal/report"
 )
 
 type Config struct {
-	Count    int
-	Interval time.Duration
-	Timeout  time.Duration
+	Count      int
+	Interval   time.Duration
+	Timeout    time.Duration
+	Continuous bool
 }
 
 func Run(host string, port int, cfg Config) (report.Report, error) {
@@ -32,7 +33,7 @@ func RunStreamContext(ctx context.Context, host string, port int, cfg Config, on
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if cfg.Count <= 0 {
+	if cfg.Count <= 0 && !cfg.Continuous {
 		return report.Report{}, errors.New("count must be greater than 0")
 	}
 	if port <= 0 || port > 65535 {
@@ -46,12 +47,20 @@ func RunStreamContext(ctx context.Context, host string, port int, cfg Config, on
 	}
 
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
-	results := make([]report.Result, 0, cfg.Count)
+	initialCapacity := cfg.Count
+	if initialCapacity < 0 {
+		initialCapacity = 0
+	}
+	results := make([]report.Result, 0, initialCapacity)
 	dialer := &net.Dialer{Timeout: cfg.Timeout}
+	startedAt := time.Now()
 
-	for i := 1; i <= cfg.Count; i++ {
+	for i := 1; ; i++ {
+		if !cfg.Continuous && i > cfg.Count {
+			break
+		}
 		if err := ctx.Err(); err != nil {
-			return buildReport(host, addr, port, results), err
+			return buildReport(host, addr, port, results, time.Since(startedAt)), err
 		}
 
 		start := time.Now()
@@ -59,7 +68,7 @@ func RunStreamContext(ctx context.Context, host string, port int, cfg Config, on
 		var res report.Result
 		if err != nil {
 			if ctx.Err() != nil {
-				return buildReport(host, addr, port, results), ctx.Err()
+				return buildReport(host, addr, port, results, time.Since(startedAt)), ctx.Err()
 			}
 			res = report.Result{Seq: i, Error: err.Error()}
 		} else {
@@ -70,28 +79,30 @@ func RunStreamContext(ctx context.Context, host string, port int, cfg Config, on
 		results = append(results, res)
 		if onResult != nil {
 			if err := onResult(res); err != nil {
-				return buildReport(host, addr, port, results), err
+				return buildReport(host, addr, port, results, time.Since(startedAt)), err
 			}
 		}
 
-		if i < cfg.Count {
+		if cfg.Continuous || i < cfg.Count {
 			if err := sleepContext(ctx, cfg.Interval); err != nil {
-				return buildReport(host, addr, port, results), err
+				return buildReport(host, addr, port, results, time.Since(startedAt)), err
 			}
 		}
 	}
 
-	return buildReport(host, addr, port, results), nil
+	return buildReport(host, addr, port, results, time.Since(startedAt)), nil
 }
 
-func buildReport(host, addr string, port int, results []report.Result) report.Report {
+func buildReport(host, addr string, port int, results []report.Result, duration time.Duration) report.Report {
+	summary := report.Summarize(results, len(results))
+	summary.Duration = duration
 	return report.Report{
 		Protocol: "tcp",
 		Target:   host,
 		Addr:     addr,
 		Port:     port,
 		Results:  results,
-		Summary:  report.Summarize(results, len(results)),
+		Summary:  summary,
 	}
 }
 

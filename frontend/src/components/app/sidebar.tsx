@@ -22,35 +22,48 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: "Diagnostics",
-    icon: "DG",
+    label: "Operations",
+    icon: "OP",
     defaultOpen: true,
     items: [
+      { href: "/", label: "Overview", icon: "OV" },
       { href: "/icmp-ping", label: "ICMP Ping", icon: "IC" },
       { href: "/tcp-ping", label: "TCP Ping", icon: "TC" },
       { href: "/port-scan", label: "Port Scan", icon: "PS" },
+      { href: "/dns-lookup", label: "DNS Lookup", icon: "DN" },
+      { href: "/history", label: "History", icon: "HI" },
     ],
   },
   {
-    label: "Monitoring",
-    icon: "MN",
+    label: "Workspace",
+    icon: "WS",
     defaultOpen: true,
     items: [
-      { href: "/history", label: "History", icon: "HI" },
+      { href: "/workspace/team", label: "Team", icon: "TM" },
+      { href: "/workspace/billing", label: "Billing", icon: "BL" },
       { href: "/alerts", label: "Alert Rules", icon: "AL" },
+      { href: "/settings", label: "Settings", icon: "ST" },
     ],
   },
   {
-    label: "Discovery",
-    icon: "DC",
+    label: "Account",
+    icon: "AC",
     defaultOpen: true,
-    items: [{ href: "/dns-lookup", label: "DNS Lookup", icon: "DN" }],
+    items: [
+      { href: "/profile", label: "Profile", icon: "PR" },
+      { href: "/security", label: "Security", icon: "SC" },
+    ],
   },
-  { label: "Security", icon: "SC" },
-  { label: "Advanced Ops", icon: "AX" },
-  { label: "Infrastructure", icon: "IF" },
-  { label: "Reporting", icon: "RX" },
-  { label: "Integration", icon: "IT" },
+  {
+    label: "Admin",
+    icon: "AD",
+    items: [
+      { href: "/admin", label: "Overview", icon: "OV" },
+      { href: "/admin/users", label: "Users", icon: "US" },
+      { href: "/admin/workspaces", label: "Workspaces", icon: "WK" },
+      { href: "/admin/system", label: "System", icon: "SY" },
+    ],
+  },
 ];
 
 export function Sidebar({ session }: { session: SessionResponse }) {
@@ -92,21 +105,6 @@ export function Sidebar({ session }: { session: SessionResponse }) {
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100/40">Main</span>
           </div>
 
-          <div className="mb-1 px-2">
-            <Link
-              href="/"
-              onClick={() => setSidebarOpen(false)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                pathname === "/"
-                  ? "border border-cyan-300/22 bg-cyan-300/12 text-cyan-100 shadow-[0_0_18px_rgba(64,240,255,0.08)]"
-                  : "text-muted-foreground hover:bg-cyan-300/8 hover:text-foreground"
-              }`}
-            >
-              <span className={`grid h-7 w-7 place-items-center rounded-md text-[10px] font-bold tracking-wider ${pathname === "/" ? "bg-[linear-gradient(135deg,rgba(23,211,194,0.96),rgba(52,129,255,0.96))] text-slate-950" : "bg-secondary/70 text-foreground"}`}>OV</span>
-              Overview
-            </Link>
-          </div>
-
           <nav className="flex-1 space-y-0.5 px-2 pb-4">
             {isDemo ? (
               <div className="mx-2 mb-3 rounded-2xl border border-cyan-300/18 bg-cyan-300/10 px-3 py-3 text-xs leading-6 text-cyan-100">
@@ -114,7 +112,9 @@ export function Sidebar({ session }: { session: SessionResponse }) {
               </div>
             ) : null}
 
-            {navGroups.map((group) => {
+            {navGroups
+              .filter((group) => group.label !== "Admin" || session.platform_role === "admin")
+              .map((group) => {
                 const isOpen = openGroups.has(group.label);
                 const hasActive = group.items?.some((item) => item.href === pathname) ?? false;
                 const hasChildren = (group.items?.length ?? 0) > 0;

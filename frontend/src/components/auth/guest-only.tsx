@@ -23,7 +23,7 @@ export function GuestOnly({ children }: { children: ReactNode }) {
     return (
       <div className="grid-shell flex min-h-screen items-center justify-center px-6">
         <div className="surface w-full max-w-md rounded-3xl p-8 text-center">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">NetWatcher</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Qnetward</p>
           <h2 className="mt-3 font-space text-3xl font-bold text-white">Preparing access</h2>
           <p className="mt-2 text-sm text-slate-400">Checking whether an operator session already exists.</p>
         </div>

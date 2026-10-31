@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     depends_on:
       - frontend
-      - netwatcher
+      - qnetward
     ports:
       - "8080:8080"
     volumes:
@@ -14,53 +14,54 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-    image: netwatcher-frontend:production
+    image: qnetward-frontend:production
     restart: unless-stopped
     depends_on:
-      - netwatcher
+      - qnetward
     environment:
-      NETWATCHER_BACKEND_URL: http://netwatcher:8080
+      QNETWARD_BACKEND_URL: http://qnetward:8080
 
-  netwatcher:
+  qnetward:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: netwatcher:production
+    image: qnetward:production
     restart: unless-stopped
     depends_on:
       - timescaledb
       - redis
       - minio
     environment:
-      NETWATCHER_LISTEN: 0.0.0.0:8080
-      NETWATCHER_DB_DSN: postgres://netwatcher:${POSTGRES_PASSWORD}@timescaledb:5432/netwatcher?sslmode=disable
-      NETWATCHER_TIMESCALE: "true"
-      NETWATCHER_DB_BATCH: "250"
-      NETWATCHER_DB_FLUSH: 1s
-      NETWATCHER_DB_RETENTION: 720h
-      NETWATCHER_DB_CLEANUP: 1h
-      NETWATCHER_DB_MAX_OPEN: "25"
-      NETWATCHER_DB_MAX_IDLE: "10"
-      NETWATCHER_DB_CONN_MAX_LIFETIME: 30m
-      NETWATCHER_REDIS_ADDR: redis:6379
-      NETWATCHER_REDIS_DB: "0"
-      NETWATCHER_REDIS_PREFIX: netwatcher
-      NETWATCHER_REDIS_CACHE_TTL: 3s
-      NETWATCHER_S3_ENDPOINT: minio:9000
-      NETWATCHER_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
-      NETWATCHER_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-      NETWATCHER_S3_BUCKET: netwatcher-artifacts
-      NETWATCHER_S3_REGION: us-east-1
-      NETWATCHER_S3_PREFIX: production
-      NETWATCHER_S3_SSL: "false"
-      NETWATCHER_PUBLIC_BASE_URL: ${NETWATCHER_PUBLIC_BASE_URL}
-      NETWATCHER_ALLOWED_ORIGINS: ${NETWATCHER_ALLOWED_ORIGINS}
-      NETWATCHER_DEMO_ENABLED: ${NETWATCHER_DEMO_ENABLED}
-      NETWATCHER_DEMO_NAME: ${NETWATCHER_DEMO_NAME}
-      NETWATCHER_DEMO_EMAIL: ${NETWATCHER_DEMO_EMAIL}
-      NETWATCHER_RESEND_API_KEY: ${NETWATCHER_RESEND_API_KEY}
-      NETWATCHER_EMAIL_FROM: ${NETWATCHER_EMAIL_FROM}
-      NETWATCHER_EMAIL_REPLY_TO: ${NETWATCHER_EMAIL_REPLY_TO}
+      QNETWARD_LISTEN: 0.0.0.0:8080
+      QNETWARD_DB_DSN: postgres://netwatcher:${POSTGRES_PASSWORD}@timescaledb:5432/netwatcher?sslmode=disable
+      QNETWARD_TIMESCALE: "true"
+      QNETWARD_DB_BATCH: "250"
+      QNETWARD_DB_FLUSH: 1s
+      QNETWARD_DB_RETENTION: 720h
+      QNETWARD_DB_CLEANUP: 1h
+      QNETWARD_DB_MAX_OPEN: "25"
+      QNETWARD_DB_MAX_IDLE: "10"
+      QNETWARD_DB_CONN_MAX_LIFETIME: 30m
+      QNETWARD_REDIS_ADDR: redis:6379
+      QNETWARD_REDIS_DB: "0"
+      QNETWARD_REDIS_PREFIX: qnetward
+      QNETWARD_REDIS_CACHE_TTL: 3s
+      QNETWARD_S3_ENDPOINT: minio:9000
+      QNETWARD_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      QNETWARD_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      QNETWARD_S3_BUCKET: netwatcher-artifacts
+      QNETWARD_S3_REGION: us-east-1
+      QNETWARD_S3_PREFIX: production
+      QNETWARD_S3_SSL: "false"
+      QNETWARD_PUBLIC_BASE_URL: ${QNETWARD_PUBLIC_BASE_URL:-${NETWATCHER_PUBLIC_BASE_URL:-}}
+      QNETWARD_ALLOWED_ORIGINS: ${QNETWARD_ALLOWED_ORIGINS:-${NETWATCHER_ALLOWED_ORIGINS:-}}
+      QNETWARD_DEMO_ENABLED: ${QNETWARD_DEMO_ENABLED:-${NETWATCHER_DEMO_ENABLED:-}}
+      QNETWARD_DEMO_NAME: ${QNETWARD_DEMO_NAME:-${NETWATCHER_DEMO_NAME:-}}
+      QNETWARD_DEMO_EMAIL: ${QNETWARD_DEMO_EMAIL:-${NETWATCHER_DEMO_EMAIL:-}}
+      QNETWARD_ADMIN_EMAILS: ${QNETWARD_ADMIN_EMAILS:-${NETWATCHER_ADMIN_EMAILS:-}}
+      QNETWARD_RESEND_API_KEY: ${QNETWARD_RESEND_API_KEY:-${NETWATCHER_RESEND_API_KEY:-}}
+      QNETWARD_EMAIL_FROM: ${QNETWARD_EMAIL_FROM:-${NETWATCHER_EMAIL_FROM:-}}
+      QNETWARD_EMAIL_REPLY_TO: ${QNETWARD_EMAIL_REPLY_TO:-${NETWATCHER_EMAIL_REPLY_TO:-}}
     cap_add:
       - NET_RAW
 

@@ -23,13 +23,16 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     if (!session.isLoading && session.data?.read_only && pathname !== "/") {
       router.replace("/");
     }
-  }, [pathname, router, session.data?.authenticated, session.data?.read_only, session.isLoading]);
+    if (!session.isLoading && pathname.startsWith("/admin") && session.data?.platform_role !== "admin") {
+      router.replace("/");
+    }
+  }, [pathname, router, session.data?.authenticated, session.data?.platform_role, session.data?.read_only, session.isLoading]);
 
   if (session.isLoading) {
     return (
       <div className="dashboard-shell grid-shell flex min-h-screen items-center justify-center px-6">
         <div className="surface w-full max-w-md rounded-3xl p-8 text-center">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">NetWatcher</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Qnetward</p>
           <h2 className="mt-3 font-space text-3xl font-bold brand-gradient">Loading session</h2>
           <p className="mt-2 text-sm text-slate-400">Preparing your monitoring workspace.</p>
         </div>
@@ -42,6 +45,10 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   if (session.data.read_only && pathname !== "/") {
+    return null;
+  }
+
+  if (pathname.startsWith("/admin") && session.data.platform_role !== "admin") {
     return null;
   }
 

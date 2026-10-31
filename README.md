@@ -1,6 +1,6 @@
-# Net-Watcher
+# Qnetward
 
-Net-Watcher is a self-hosted network diagnostics toolkit built with Go and a Next.js frontend. It combines a CLI, a backend API/probe engine, realtime probe streaming, and a production stack built around PostgreSQL/TimescaleDB, Redis, and S3-compatible object storage.
+Qnetward is a self-hosted network diagnostics toolkit built with Go and a Next.js frontend. It combines a CLI, a backend API/probe engine, realtime probe streaming, and a production stack built around PostgreSQL/TimescaleDB, Redis, and S3-compatible object storage.
 
 
 ## Contributors
@@ -31,7 +31,7 @@ Core capabilities:
 
 ## Architecture
 
-- `cmd/netwatcher`
+- `cmd/qnetward`
   CLI entrypoint and backend API/probe server
 - `frontend`
   primary Next.js frontend
@@ -69,9 +69,9 @@ Core capabilities:
 ### CLI
 
 ```bash
-./netwatcher ping 8.8.8.8
-./netwatcher tcpping example.com --port 443
-./netwatcher portscan --ports 22,80,443 example.com
+./qnetward ping 8.8.8.8
+./qnetward tcpping example.com --port 443
+./qnetward portscan --ports 22,80,443 example.com
 ```
 
 ### Web UI
@@ -99,8 +99,8 @@ Core capabilities:
 
 ```powershell
 go mod tidy
-go build -o netwatcher.exe .\cmd\netwatcher
-.\netwatcher.exe serve --listen 127.0.0.1:8080 --db-dsn "postgres://netwatcher:change-me@127.0.0.1:5432/netwatcher?sslmode=disable" --timescale
+go build -o qnetward.exe .\cmd\qnetward
+.\qnetward.exe serve --listen 127.0.0.1:8080 --db-dsn "postgres://qnetward:change-me@127.0.0.1:5432/qnetward?sslmode=disable" --timescale
 ```
 
 Open:
@@ -114,8 +114,8 @@ frontend: http://127.0.0.1:3000
 
 ```bash
 go mod tidy
-go build -o netwatcher ./cmd/netwatcher
-./netwatcher serve --listen 127.0.0.1:8080 --db-dsn "postgres://netwatcher:change-me@127.0.0.1:5432/netwatcher?sslmode=disable" --timescale
+go build -o qnetward ./cmd/qnetward
+./qnetward serve --listen 127.0.0.1:8080 --db-dsn "postgres://qnetward:change-me@127.0.0.1:5432/qnetward?sslmode=disable" --timescale
 ```
 
 Open:
@@ -128,7 +128,7 @@ frontend: http://127.0.0.1:3000
 For ICMP on Linux, root or `CAP_NET_RAW` may be required:
 
 ```bash
-sudo setcap cap_net_raw+ep ./netwatcher
+sudo setcap cap_net_raw+ep ./qnetward
 ```
 
 ## Example API Requests
@@ -176,15 +176,16 @@ Recommended production stack:
 Environment variables:
 
 ```bash
-NETWATCHER_DB_DSN=postgres://netwatcher:change-me@timescaledb:5432/netwatcher?sslmode=disable
-NETWATCHER_TIMESCALE=true
-NETWATCHER_REDIS_ADDR=redis:6379
-NETWATCHER_S3_ENDPOINT=minio:9000
-NETWATCHER_S3_ACCESS_KEY=minioadmin
-NETWATCHER_S3_SECRET_KEY=change-me
-NETWATCHER_S3_BUCKET=netwatcher-artifacts
-NETWATCHER_S3_SSL=false
-NETWATCHER_DEMO_ENABLED=false
+QNETWARD_DB_DSN=postgres://qnetward:change-me@timescaledb:5432/qnetward?sslmode=disable
+QNETWARD_TIMESCALE=true
+QNETWARD_REDIS_ADDR=redis:6379
+QNETWARD_S3_ENDPOINT=minio:9000
+QNETWARD_S3_ACCESS_KEY=minioadmin
+QNETWARD_S3_SECRET_KEY=change-me
+QNETWARD_S3_BUCKET=qnetward-artifacts
+QNETWARD_S3_SSL=false
+QNETWARD_DEMO_ENABLED=false
+QNETWARD_ADMIN_EMAILS=admin@example.com
 ```
 
 Start the production stack:
@@ -216,7 +217,7 @@ Demo mode:
 Build:
 
 ```bash
-go build -o netwatcher ./cmd/netwatcher
+go build -o qnetward ./cmd/qnetward
 ```
 
 Run internal tests:
@@ -241,7 +242,7 @@ GitHub Actions now runs:
 
 - `go test ./...`
 - `go vet ./...`
-- `go test -race ./cmd/netwatcher ./internal/store ./internal/portscan ./internal/dnslookup`
+- `go test -race ./cmd/qnetward ./internal/store ./internal/portscan ./internal/dnslookup`
 - frontend `pnpm lint`
 - frontend `pnpm build`
 - frontend Playwright E2E

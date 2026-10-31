@@ -10,8 +10,8 @@ export type LiveTelemetrySample = {
   addr?: string;
 };
 
-const eventName = "netwatcher:live-telemetry";
-const channelName = "netwatcher-live-telemetry";
+const eventName = "qnetward:live-telemetry";
+const channelName = "qnetward-live-telemetry";
 
 let sharedChannel: BroadcastChannel | null = null;
 

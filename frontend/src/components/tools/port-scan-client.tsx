@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,6 +19,69 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 type FormInput = z.input<typeof schema>;
+
+const scanPresets = [
+  { id: "top-ports", label: "Top 20", ports: "20-25,53,80,110,111,135,139,143,443,445,993,995,1433,3306,3389,5432,5900,6379,8080", concurrency: 48 },
+  { id: "web", label: "Web", ports: "80,81,443,444,3000,4000,5000,7001,8000,8080,8081,8443,9000", concurrency: 32 },
+  { id: "mail", label: "Mail", ports: "25,110,143,465,587,993,995,4190", concurrency: 24 },
+  { id: "database", label: "Database", ports: "1433,1521,27017,3306,50000,5432,6379,9042", concurrency: 16 },
+  { id: "infra", label: "Infra", ports: "22,53,67,68,80,123,161,389,443,636,2049,2379,2380,6443,8080", concurrency: 24 },
+];
+
+const serviceLabels: Record<number, string> = {
+  20: "FTP Data",
+  21: "FTP",
+  22: "SSH",
+  23: "Telnet",
+  25: "SMTP",
+  53: "DNS",
+  67: "DHCP",
+  68: "DHCP",
+  80: "HTTP",
+  81: "HTTP Alt",
+  110: "POP3",
+  111: "RPCbind",
+  123: "NTP",
+  135: "MSRPC",
+  139: "NetBIOS",
+  143: "IMAP",
+  161: "SNMP",
+  389: "LDAP",
+  443: "HTTPS",
+  444: "HTTPS Alt",
+  445: "SMB",
+  465: "SMTPS",
+  587: "Submission",
+  636: "LDAPS",
+  993: "IMAPS",
+  995: "POP3S",
+  1433: "MSSQL",
+  1521: "Oracle",
+  2049: "NFS",
+  2379: "etcd",
+  2380: "etcd Peer",
+  3000: "Web App",
+  3306: "MySQL",
+  3389: "RDP",
+  4000: "Web App",
+  4190: "Sieve",
+  5000: "Web API",
+  5432: "Postgres",
+  5900: "VNC",
+  6379: "Redis",
+  6443: "Kubernetes",
+  7001: "App Server",
+  8000: "HTTP Alt",
+  8080: "HTTP Alt",
+  8081: "HTTP Alt",
+  8443: "HTTPS Alt",
+  9000: "Admin API",
+  9042: "Cassandra",
+  27017: "MongoDB",
+  50000: "DB2",
+};
+
+type PortScanSortKey = "port" | "state" | "rtt";
 
 function runStateLabel(state: ProbeRunState) {
   switch (state) {
@@ -50,6 +114,8 @@ function stateTone(state?: string) {
 }
 
 export function PortScanClient() {
+  const [openOnly, setOpenOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<PortScanSortKey>("port");
   const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -72,6 +138,48 @@ export function PortScanClient() {
   });
 
   const latestResult = report?.results.at(-1);
+  const visibleResults = useMemo(() => {
+    const base = [...(report?.results ?? [])];
+    const filtered = openOnly ? base.filter((result) => result.state === "open") : base;
+
+    filtered.sort((left, right) => {
+      if (sortKey === "state") {
+        const rank = (state?: string) => {
+          switch (state) {
+            case "open":
+              return 0;
+            case "timeout":
+              return 1;
+            case "closed":
+              return 2;
+            default:
+              return 3;
+          }
+        };
+        const stateDiff = rank(left.state) - rank(right.state);
+        if (stateDiff !== 0) {
+          return stateDiff;
+        }
+        return (left.port ?? 0) - (right.port ?? 0);
+      }
+
+      if (sortKey === "rtt") {
+        const leftRTT = typeof left.rtt_ms === "number" ? left.rtt_ms : Number.MAX_SAFE_INTEGER;
+        const rightRTT = typeof right.rtt_ms === "number" ? right.rtt_ms : Number.MAX_SAFE_INTEGER;
+        if (leftRTT !== rightRTT) {
+          return leftRTT - rightRTT;
+        }
+      }
+
+      return (left.port ?? 0) - (right.port ?? 0);
+    });
+
+    return filtered;
+  }, [openOnly, report?.results, sortKey]);
+  const openPortCount = useMemo(
+    () => (report?.results ?? []).filter((result) => result.state === "open").length,
+    [report?.results],
+  );
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -113,6 +221,22 @@ export function PortScanClient() {
             </div>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            {scanPresets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="rounded-full border border-border/40 bg-card/50 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition hover:border-cyan-400/30 hover:text-cyan-200"
+                onClick={() => {
+                  form.setValue("ports", preset.ports, { shouldDirty: true, shouldTouch: true });
+                  form.setValue("concurrency", preset.concurrency, { shouldDirty: true, shouldTouch: true });
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
           {formError ? <p className="rounded-lg border border-nw-red/30 bg-nw-red/10 px-4 py-3 text-sm text-nw-red">{formError}</p> : null}
 
           <p className="text-[10px] text-muted-foreground">Scans the specified host using the provided port set or ranges.</p>
@@ -145,22 +269,43 @@ export function PortScanClient() {
           <section className="rounded-xl border border-border/40 bg-card/60 p-5 backdrop-blur-sm">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display font-bold text-foreground">Results</h3>
-              <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold uppercase text-muted-foreground">{runStateLabel(runState)}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 rounded-full border border-border/40 bg-card/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={openOnly}
+                    onChange={(event) => setOpenOnly(event.target.checked)}
+                  />
+                  Open only
+                </label>
+                <select
+                  className="rounded-full border border-border/40 bg-card/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground outline-none"
+                  value={sortKey}
+                  onChange={(event) => setSortKey(event.target.value as PortScanSortKey)}
+                >
+                  <option value="port">Sort: Port</option>
+                  <option value="state">Sort: State</option>
+                  <option value="rtt">Sort: RTT</option>
+                </select>
+                <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold uppercase text-muted-foreground">{runStateLabel(runState)}</span>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/30">
                     <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Port</th>
+                    <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Service</th>
                     <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">State</th>
                     <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">RTT</th>
                     <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Detail</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(report?.results ?? []).map((result, index) => (
+                  {visibleResults.map((result, index) => (
                     <tr key={`${result.port ?? index}-${result.addr ?? "na"}`} className="border-b border-border/10">
                       <td className="py-2 font-mono text-foreground">{result.port ?? "-"}</td>
+                      <td className="py-2 text-xs font-medium text-cyan-200">{serviceLabels[result.port ?? 0] ?? "Custom"}</td>
                       <td className="py-2">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${stateTone(result.state)}`}>{result.state || "closed"}</span>
                       </td>
@@ -170,14 +315,16 @@ export function PortScanClient() {
                       <td className="py-2 font-mono text-muted-foreground">{result.addr || result.error || "-"}</td>
                     </tr>
                   ))}
-                  {report && report.results.length === 0 ? (
+                  {report && visibleResults.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">Awaiting port results.</td>
+                      <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                        {openOnly ? "No open ports matched the current filter." : "Awaiting port results."}
+                      </td>
                     </tr>
                   ) : null}
                   {!report ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">Run a scan to populate results.</td>
+                      <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">Run a scan to populate results.</td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -222,8 +369,9 @@ export function PortScanClient() {
             {[
               { label: "Events", value: String(report?.results.length ?? 0) },
               { label: "Signal", value: runStateLabel(runState).toLowerCase() },
+              { label: "Open Ports", value: String(openPortCount) },
               { label: "Last RTT", value: latestResult?.rtt || (typeof latestResult?.rtt_ms === "number" ? formatMs(latestResult.rtt_ms) : "-") },
-              { label: "Feed State", value: report ? "warm" : "cold" },
+              { label: "Sort", value: sortKey },
             ].map((item) => (
               <article key={item.label} className="rounded-lg border border-border/40 bg-card/60 p-3 text-center">
                 <span className="mb-0.5 block text-[9px] uppercase tracking-widest text-muted-foreground">{item.label}</span>

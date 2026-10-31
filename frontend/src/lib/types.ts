@@ -11,6 +11,8 @@ export type SessionResponse = {
   user?: AuthUser | null;
   mode?: "authenticated" | "demo";
   read_only?: boolean;
+  platform_role?: "admin" | "user";
+  active_workspace_id?: number;
 };
 
 export type AuthMessageResponse = {
@@ -22,6 +24,115 @@ export type AuthMessageResponse = {
   authenticated?: boolean;
   user?: AuthUser | null;
   email?: string;
+};
+
+export type WorkspaceContext = {
+  id: number;
+  name: string;
+  plan: string;
+  billing_status: string;
+  role: string;
+  member_count: number;
+  created_at: string;
+};
+
+export type WorkspaceContextResponse = {
+  workspace?: WorkspaceContext | null;
+};
+
+export type WorkspaceMember = {
+  user_id: number;
+  name: string;
+  email: string;
+  role: string;
+  joined_at: string;
+  is_current: boolean;
+};
+
+export type WorkspaceInvitation = {
+  id: number;
+  workspace_id: number;
+  workspace_name?: string;
+  email: string;
+  role: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  inviter_name: string;
+};
+
+export type WorkspaceTeamResponse = {
+  workspace?: WorkspaceContext | null;
+  members?: WorkspaceMember[];
+  invitations?: WorkspaceInvitation[];
+};
+
+export type WorkspaceInvitationsResponse = {
+  invitations?: WorkspaceInvitation[];
+};
+
+export type WorkspaceListResponse = {
+  active_workspace_id?: number;
+  workspaces?: WorkspaceContext[];
+};
+
+export type AdminOverviewResponse = {
+  user_count: number;
+  verified_user_count: number;
+  workspace_count: number;
+  invitation_count: number;
+  pending_invitation_count: number;
+  session_count: number;
+};
+
+export type AdminUserSummary = {
+  id: number;
+  name: string;
+  email: string;
+  email_verified_at?: string | null;
+  created_at: string;
+  owned_workspace_count: number;
+  workspace_count: number;
+  active_session_count: number;
+  platform_role: "admin" | "user";
+};
+
+export type AdminUsersResponse = {
+  users?: AdminUserSummary[];
+};
+
+export type AdminWorkspaceSummary = {
+  id: number;
+  name: string;
+  plan: string;
+  billing_status: string;
+  created_at: string;
+  owner_user_id: number;
+  owner_name: string;
+  owner_email: string;
+  member_count: number;
+  pending_invitation_count: number;
+  active_session_count: number;
+};
+
+export type AdminWorkspacesResponse = {
+  workspaces?: AdminWorkspaceSummary[];
+};
+
+export type AdminSystemResponse = {
+  overview: AdminOverviewResponse;
+  runtime: {
+    database_driver?: string;
+    redis_enabled: boolean;
+    object_storage_enabled: boolean;
+    email_delivery_enabled: boolean;
+  };
+  features: {
+    public_base_url?: string;
+    demo_enabled: boolean;
+    session_ttl_hours: number;
+    configured_admins: number;
+  };
 };
 
 export type ProbeResult = {
@@ -41,7 +152,10 @@ export type ProbeSummary = {
   min?: string;
   avg?: string;
   max?: string;
+  median?: string;
   stddev?: string;
+  jitter?: string;
+  loss_streak?: number;
   duration?: string;
   scanned?: number;
   open?: number;

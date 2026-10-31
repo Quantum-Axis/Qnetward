@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const backendBase = process.env.NETWATCHER_BACKEND_URL ?? "http://127.0.0.1:8080";
+const backendBase = process.env.QNETWARD_BACKEND_URL ?? process.env.NETWATCHER_BACKEND_URL ?? "http://127.0.0.1:8080";
 
 async function forward(request: NextRequest, path: string[]) {
   const target = new URL(`/api/${path.join("/")}`, backendBase);

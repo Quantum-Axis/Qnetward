@@ -17,6 +17,7 @@ export function AuthLayoutCard({
   headerAction,
   wide = false,
   contentClassName,
+  below,
   children,
 }: {
   title: string;
@@ -29,6 +30,8 @@ export function AuthLayoutCard({
   /** Wider form column, used by the multi-step sign-up. */
   wide?: boolean;
   contentClassName?: string;
+  /** Shown under the card, above the terms line (e.g. the demo entry). */
+  below?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -61,6 +64,7 @@ export function AuthLayoutCard({
         </div>
       </div>
 
+      {below ? <div className="mt-6">{below}</div> : null}
       <p className="mt-6 text-center text-[12px] text-[var(--lp-subtle)]">
         By continuing, you agree to our{" "}
         <Link href="/terms" className="auth-footer-link text-[var(--lp-muted)]">

@@ -601,3 +601,33 @@
   line-height: 16px;
   color: var(--lp-subtle);
 }
+
+/* Small demo entry under the auth card. */
+.lp-auth .auth-demo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-border-strong);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lp-muted);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.lp-auth .auth-demo-pill:hover {
+  color: var(--lp-text);
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lp-auth .auth-demo-pill:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

@@ -41,17 +41,6 @@ export function LoginForm() {
     },
   });
 
-  const demoLogin = useMutation({
-    mutationFn: () => apiRequest<SessionResponse>("/api/auth/demo-login", { method: "POST", body: JSON.stringify({}) }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["session"] });
-      router.replace("/overview");
-    },
-    onError: (error: ApiError) => {
-      form.setError("root", { message: error.message });
-    },
-  });
-
   return (
     <form className="grid gap-3.5" noValidate onSubmit={form.handleSubmit((values) => login.mutate(values))}>
       <AlternateSignIn mode="signin" />
@@ -91,12 +80,6 @@ export function LoginForm() {
         {login.isPending ? "Signing in…" : "Sign in"}
       </button>
 
-      <div className="auth-divider">Just looking?</div>
-
-      <button className="auth-muted-button" type="button" disabled={demoLogin.isPending} onClick={() => demoLogin.mutate()}>
-        {demoLogin.isPending ? "Opening demo…" : "Explore the demo workspace"}
-      </button>
-      <p className="-mt-1 text-center text-[12px] text-[var(--lp-subtle)]">Shared sandbox. Other visitors can see what you run.</p>
     </form>
   );
 }

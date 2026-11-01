@@ -2,432 +2,362 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Search, Send, Trash2, X } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
-import { AuthMessageResponse, SessionResponse, WorkspaceTeamResponse } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import type { AuthMessageResponse, SessionResponse, WorkspaceMember, WorkspaceTeamResponse } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { Avatar, formatDate, Notice, roleLabel, SettingsCard, SettingsPageTitle } from "@/components/settings/settings-ui";
 
-function buildInitials(name?: string | null, email?: string | null) {
-  const source = (name || email || "NW").trim();
-  const parts = source.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
-  }
-  return source.slice(0, 2).toUpperCase();
-}
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function workspaceRoleLabel(role: string) {
-  switch (role) {
-    case "owner":
-      return "Workspace Owner";
-    case "admin":
-      return "Workspace Admin";
-    case "viewer":
-      return "Workspace Viewer";
-    case "member":
-      return "Workspace Member";
-    default:
-      return role;
-  }
-}
+// Roles currently gate team management only (see internal/store/workspace.go); keep this in step with it.
+const ROLE_HELP: { role: string; summary: string }[] = [
+  { role: "owner", summary: "Invites anyone, changes or removes admins, members, and viewers." },
+  { role: "admin", summary: "Invites, changes, and removes members and viewers." },
+  { role: "member", summary: "Uses the workspace but can't manage the team." },
+  { role: "viewer", summary: "Same access as a member for now. Read-only limits come with role-based permissions." },
+];
 
-function invitationTone(status: string) {
-  switch (status) {
-    case "accepted":
-      return "dashboard-chip dashboard-chip-success";
-    case "expired":
-      return "dashboard-chip dashboard-chip-danger";
-    default:
-      return "dashboard-chip dashboard-chip-muted";
-  }
-}
-
-function canManageWorkspaceMember(actorRole: string, isDemo: boolean, isCurrent: boolean, targetRole: string) {
-  if (isDemo || isCurrent) {
-    return false;
-  }
-  if (actorRole === "owner") {
-    return targetRole !== "owner";
-  }
-  if (actorRole === "admin") {
-    return targetRole === "member" || targetRole === "viewer";
-  }
+function canManageMember(actorRole: string, isDemo: boolean, member: WorkspaceMember) {
+  if (isDemo || member.is_current) return false;
+  if (actorRole === "owner") return member.role !== "owner";
+  if (actorRole === "admin") return member.role === "member" || member.role === "viewer";
   return false;
 }
 
-function memberRoleOptions(actorRole: string) {
-  if (actorRole === "owner") {
-    return ["admin", "member", "viewer"];
-  }
-  if (actorRole === "admin") {
-    return ["member", "viewer"];
-  }
+function assignableRoles(actorRole: string) {
+  if (actorRole === "owner") return ["admin", "member", "viewer"];
+  if (actorRole === "admin") return ["member", "viewer"];
   return [];
 }
 
-function invitationRoleOptions(actorRole: string) {
-  if (actorRole === "owner") {
-    return ["owner", "admin", "member", "viewer"];
-  }
-  if (actorRole === "admin") {
-    return ["member", "viewer"];
-  }
+function invitableRoles(actorRole: string) {
+  if (actorRole === "owner") return ["owner", "admin", "member", "viewer"];
+  if (actorRole === "admin") return ["member", "viewer"];
   return [];
 }
 
-function canManageInvitations(actorRole: string, isDemo: boolean) {
-  return !isDemo && (actorRole === "owner" || actorRole === "admin");
+const STATUS_STYLE: Record<string, string> = {
+  pending: "border-[rgba(251,191,36,0.3)] bg-[rgba(251,191,36,0.08)] text-[#fcd34d]",
+  accepted: "border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] text-[#86efac]",
+  expired: "border-[var(--lp-border)] bg-white/[0.03] text-[var(--lp-subtle)]",
+  revoked: "border-[var(--lp-border)] bg-white/[0.03] text-[var(--lp-subtle)]",
+};
+
+function MemberRow({
+  member,
+  manageable,
+  roles,
+  busy,
+  onRole,
+  onRemove,
+}: {
+  member: WorkspaceMember;
+  manageable: boolean;
+  roles: string[];
+  busy: boolean;
+  onRole: (role: string) => void;
+  onRemove: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3">
+      <Avatar name={member.name} email={member.email} size={34} />
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 truncate text-[13px]">
+          <span className="truncate">{member.name || member.email}</span>
+          {member.is_current ? <span className="rounded border border-[var(--lp-border)] px-1.5 text-[11px] leading-4 text-[var(--lp-subtle)]">You</span> : null}
+        </p>
+        <p className="truncate text-[12px] text-[var(--lp-subtle)]">
+          {member.email} · joined {formatDate(member.joined_at)}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {manageable ? (
+          <select
+            aria-label={`Role for ${member.email}`}
+            className="h-8 px-2 text-[13px]"
+            disabled={busy}
+            value={member.role}
+            onChange={(e) => onRole(e.target.value)}
+          >
+            {/* An owner can't be demoted from here, so the current role is always listed. */}
+            {[...new Set([member.role, ...roles])].map((role) => (
+              <option key={role} value={role}>
+                {roleLabel(role)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="px-2 text-[13px] text-[var(--lp-muted)]">{roleLabel(member.role)}</span>
+        )}
+        {manageable ? (
+          confirming ? (
+            <>
+              <button
+                type="button"
+                className="console-btn h-8 bg-[rgba(255,61,127,0.15)] px-2.5 text-[#ff8fb3] hover:bg-[rgba(255,61,127,0.25)]"
+                disabled={busy}
+                onClick={onRemove}
+              >
+                Remove
+              </button>
+              <button type="button" aria-label="Keep member" className="console-btn console-btn-secondary h-8 w-8 px-0" onClick={() => setConfirming(false)}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Remove ${member.email}`}
+              className="console-btn h-8 w-8 px-0 text-[var(--lp-muted)] hover:bg-[rgba(255,61,127,0.1)] hover:text-[#ff8fb3]"
+              disabled={busy}
+              onClick={() => setConfirming(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )
+        ) : null}
+      </div>
+    </li>
+  );
 }
 
 export function TeamWorkspace() {
   const queryClient = useQueryClient();
-  const [inviteValues, setInviteValues] = useState({ email: "", role: "member" });
-  const [memberRoleDrafts, setMemberRoleDrafts] = useState<Record<number, string>>({});
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  const sessionQuery = useQuery({
-    queryKey: ["session"],
-    queryFn: () => apiRequest<SessionResponse>("/api/auth/session"),
-  });
-
-  const workspaceTeamQuery = useQuery({
+  const sessionQuery = useQuery({ queryKey: ["session"], queryFn: () => apiRequest<SessionResponse>("/api/auth/session") });
+  const teamQuery = useQuery({
     queryKey: ["workspace-team"],
     queryFn: () => apiRequest<WorkspaceTeamResponse>("/api/workspace/team"),
     enabled: sessionQuery.data?.authenticated === true,
   });
 
-  const inviteMember = useMutation({
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
+  const report = (fallback: string) => ({
+    onSuccess: async (data: AuthMessageResponse) => {
+      setNotice({ tone: "success", text: data.message || fallback });
+      await refresh();
+    },
+    onError: (error: Error) => setNotice({ tone: "error", text: (error as ApiError).message || "Something went wrong." }),
+  });
+
+  const invite = useMutation({
     mutationFn: (values: { email: string; role: string }) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "POST",
-        body: JSON.stringify(values),
-      }),
-    onSuccess: async () => {
-      setInviteValues({ email: "", role: "member" });
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
+      apiRequest<AuthMessageResponse>("/api/workspace/team", { method: "POST", body: JSON.stringify(values) }),
+    ...report("Invitation sent."),
+    onSuccess: async (data: AuthMessageResponse) => {
+      setInviteEmail("");
+      setNotice({ tone: "success", text: data.message || "Invitation sent." });
+      await refresh();
     },
   });
-
-  const updateMemberRole = useMutation({
+  const updateRole = useMutation({
     mutationFn: (values: { userID: number; role: string }) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "PATCH",
-        body: JSON.stringify({ user_id: values.userID, role: values.role }),
-      }),
-    onSuccess: async (_, variables) => {
-      setMemberRoleDrafts((current) => {
-        const next = { ...current };
-        delete next[variables.userID];
-        return next;
-      });
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
-    },
+      apiRequest<AuthMessageResponse>("/api/workspace/team", { method: "PATCH", body: JSON.stringify({ user_id: values.userID, role: values.role }) }),
+    ...report("Role updated."),
   });
-
   const removeMember = useMutation({
     mutationFn: (userID: number) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "DELETE",
-        body: JSON.stringify({ user_id: userID }),
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
-    },
+      apiRequest<AuthMessageResponse>("/api/workspace/team", { method: "DELETE", body: JSON.stringify({ user_id: userID }) }),
+    ...report("Member removed."),
   });
-
-  const revokeInvitation = useMutation({
+  const revoke = useMutation({
     mutationFn: (invitationID: number) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "DELETE",
-        body: JSON.stringify({ invitation_id: invitationID }),
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
-    },
+      apiRequest<AuthMessageResponse>("/api/workspace/team", { method: "DELETE", body: JSON.stringify({ invitation_id: invitationID }) }),
+    ...report("Invitation revoked."),
   });
 
   const isDemo = sessionQuery.data?.mode === "demo";
-  const workspace = workspaceTeamQuery.data?.workspace;
-  const members = workspaceTeamQuery.data?.members ?? [];
-  const invitations = workspaceTeamQuery.data?.invitations ?? [];
-  const workspaceRole = workspace?.role ?? "member";
-  const availableRoleOptions = memberRoleOptions(workspaceRole);
-  const availableInvitationRoles = invitationRoleOptions(workspaceRole);
-  const selectedInviteRole = availableInvitationRoles.includes(inviteValues.role) ? inviteValues.role : (availableInvitationRoles[0] ?? "member");
-  const canManageWorkspaceInvitations = canManageInvitations(workspaceRole, isDemo);
+  const workspace = teamQuery.data?.workspace;
+  const actorRole = workspace?.role ?? "member";
+  const members = teamQuery.data?.members ?? [];
+  const invitations = teamQuery.data?.invitations ?? [];
+  const pending = invitations.filter((i) => i.status === "pending");
+  const past = invitations.filter((i) => i.status !== "pending");
+  const roles = assignableRoles(actorRole);
+  const inviteRoles = invitableRoles(actorRole);
+  const selectedInviteRole = inviteRoles.includes(inviteRole) ? inviteRole : (inviteRoles[0] ?? "member");
+  const canInvite = !isDemo && inviteRoles.length > 0;
+  const trimmedEmail = inviteEmail.trim();
+  const emailInvalid = trimmedEmail !== "" && !EMAIL_PATTERN.test(trimmedEmail);
+  const busy = updateRole.isPending || removeMember.isPending;
+  const q = query.trim().toLowerCase();
+  const visibleMembers = q ? members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(q)) : members;
+  const owners = members.filter((m) => m.role === "owner").length;
 
   return (
-    <div className="grid gap-6">
-      <section className="dashboard-hero-panel rounded-[1.7rem] p-5 md:p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Workspace Panel</p>
-            <h2 className="mt-1.5 font-space text-[1.9rem] font-bold leading-tight text-white">Team Management</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-400">
-              Manage workspace members, issue invitations, and control team-level access inside the active company workspace.
-            </p>
+    <div className="grid gap-5">
+      <SettingsPageTitle title="Team" description={`People in ${workspace?.name ?? "this workspace"} and what each of them can do.`} />
+
+      {isDemo ? <Notice tone="info">This is the shared demo workspace, so inviting and changing members is turned off.</Notice> : null}
+      {teamQuery.isError ? <Notice tone="error">{(teamQuery.error as ApiError).message || "Couldn't load the team."}</Notice> : null}
+      {notice ? (
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <Notice tone={notice.tone}>{notice.text}</Notice>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Workspace</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspace?.name ?? "Loading"}</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Your Role</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspaceRoleLabel(workspaceRole)}</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Member Count</p>
-              <p className="mt-2 text-lg font-semibold text-white">{members.length}</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {isDemo ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Demo mode is active. Team mutation actions are disabled for the shared contributor account.
+          <button type="button" aria-label="Dismiss" className="mt-2 text-[var(--lp-subtle)] hover:text-[var(--lp-text)]" onClick={() => setNotice(null)}>
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       ) : null}
 
-      {inviteMember.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(inviteMember.error as ApiError).message || "Unable to send workspace invitation."}
+      <SettingsCard
+        id="invite"
+        title="Invite people"
+        description="They get an email with a link to join. Invitations expire after a few days if unused."
+        onSubmit={() => {
+          if (!canInvite || !trimmedEmail || emailInvalid) return;
+          setNotice(null);
+          invite.mutate({ email: trimmedEmail, role: selectedInviteRole });
+        }}
+        hint={
+          emailInvalid ? (
+            <span className="text-[#ff8fb3]">Enter a valid email address.</span>
+          ) : canInvite ? (
+            "Admins can invite members and viewers. Only owners can invite admins or owners."
+          ) : isDemo ? (
+            "Turned off in the demo workspace."
+          ) : (
+            "Only owners and admins can invite people."
+          )
+        }
+        action={
+          <button type="submit" className="console-btn console-btn-primary" disabled={!canInvite || !trimmedEmail || emailInvalid || invite.isPending}>
+            <Send className="h-3.5 w-3.5" /> {invite.isPending ? "Sending" : "Send invite"}
+          </button>
+        }
+      >
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            aria-label="Invite Email"
+            type="email"
+            placeholder="teammate@company.com"
+            className="h-9 min-w-0 flex-1 px-3"
+            disabled={!canInvite || invite.isPending}
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+          />
+          <select
+            aria-label="Invite Role"
+            className="h-9 px-2 sm:w-36"
+            disabled={!canInvite || invite.isPending}
+            value={selectedInviteRole}
+            onChange={(e) => setInviteRole(e.target.value)}
+          >
+            {(inviteRoles.length ? inviteRoles : ["member"]).map((role) => (
+              <option key={role} value={role}>
+                {roleLabel(role)}
+              </option>
+            ))}
+          </select>
         </div>
-      ) : null}
-      {inviteMember.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {inviteMember.data.message}
-        </div>
-      ) : null}
-      {updateMemberRole.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(updateMemberRole.error as ApiError).message || "Unable to update workspace member role."}
-        </div>
-      ) : null}
-      {updateMemberRole.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {updateMemberRole.data.message}
-        </div>
-      ) : null}
-      {removeMember.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(removeMember.error as ApiError).message || "Unable to remove workspace member."}
-        </div>
-      ) : null}
-      {removeMember.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {removeMember.data.message}
-        </div>
-      ) : null}
-      {revokeInvitation.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(revokeInvitation.error as ApiError).message || "Unable to revoke workspace invitation."}
-        </div>
-      ) : null}
-      {revokeInvitation.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {revokeInvitation.data.message}
-        </div>
-      ) : null}
+      </SettingsCard>
 
-      <section className="grid gap-6 2xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-        <Card className="rounded-[1.5rem]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Roster</p>
-              <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Active Team Members</h3>
-            </div>
-            {workspaceTeamQuery.isLoading ? <span className="dashboard-subtle-chip">Loading</span> : null}
-          </div>
+      <SettingsCard
+        id="members"
+        title={`Members${members.length ? ` (${members.length})` : ""}`}
+        description={owners === 1 ? "Every workspace keeps at least one owner." : undefined}
+      >
+        {members.length > 5 ? (
+          <label className="relative mb-3 block">
+            <span className="sr-only">Search members</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--lp-subtle)]" />
+            <input className="h-9 w-full pl-8 pr-3" placeholder="Search by name or email" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </label>
+        ) : null}
+        {teamQuery.isLoading ? (
+          <p className="text-[13px] text-[var(--lp-subtle)]">Loading members…</p>
+        ) : visibleMembers.length ? (
+          <ul className="divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
+            {visibleMembers.map((member) => (
+              <MemberRow
+                key={member.user_id}
+                member={member}
+                manageable={canManageMember(actorRole, isDemo, member)}
+                roles={roles}
+                busy={busy}
+                onRole={(role) => {
+                  setNotice(null);
+                  updateRole.mutate({ userID: member.user_id, role });
+                }}
+                onRemove={() => {
+                  setNotice(null);
+                  removeMember.mutate(member.user_id);
+                }}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[13px] text-[var(--lp-subtle)]">No members match “{query}”.</p>
+        )}
+      </SettingsCard>
 
-          <div className="mt-5 grid gap-3">
-            {members.length === 0 ? (
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-950/50 px-4 py-3 text-sm text-slate-400">
-                No workspace members found yet.
-              </div>
-            ) : (
-              members.map((member) => (
-                <div key={`${member.user_id}-${member.email}`} className="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-4">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900/90 text-sm font-semibold text-cyan-100 ring-1 ring-cyan-400/20">
-                        {buildInitials(member.name, member.email)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-white">{member.name}</p>
-                        <p className="truncate text-sm text-slate-400">{member.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {member.is_current ? <span className="dashboard-chip dashboard-chip-success">Current session</span> : null}
-                      <span className="dashboard-subtle-chip">{workspaceRoleLabel(member.role)}</span>
-                      <span className="dashboard-subtle-chip">Joined {formatDateTime(member.joined_at)}</span>
-                    </div>
-                    {canManageWorkspaceMember(workspaceRole, isDemo, member.is_current, member.role) ? (
-                      <div className="flex flex-col gap-3 border-t border-slate-800/80 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label className="field-label mb-0">Member Role</label>
-                          <select
-                            aria-label={`Role for ${member.email}`}
-                            className="field-input h-10 min-w-[180px] px-3 py-2"
-                            disabled={updateMemberRole.isPending || removeMember.isPending}
-                            value={memberRoleDrafts[member.user_id] ?? member.role}
-                            onChange={(event) =>
-                              setMemberRoleDrafts((current) => ({ ...current, [member.user_id]: event.target.value }))
-                            }
-                          >
-                            {availableRoleOptions.map((role) => (
-                              <option key={`${member.user_id}-${role}`} value={role}>
-                                {workspaceRoleLabel(role)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-10 rounded-2xl px-4"
-                            disabled={
-                              updateMemberRole.isPending ||
-                              removeMember.isPending ||
-                              (memberRoleDrafts[member.user_id] ?? member.role) === member.role
-                            }
-                            onClick={() =>
-                              updateMemberRole.mutate({
-                                userID: member.user_id,
-                                role: memberRoleDrafts[member.user_id] ?? member.role,
-                              })
-                            }
-                          >
-                            {updateMemberRole.isPending ? "Updating..." : "Update Role"}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-10 rounded-2xl border-rose-500/30 bg-rose-500/10 px-4 text-rose-200 hover:bg-rose-500/20"
-                            disabled={updateMemberRole.isPending || removeMember.isPending}
-                            onClick={() => removeMember.mutate(member.user_id)}
-                          >
-                            {removeMember.isPending ? "Removing..." : "Remove Member"}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
+      <SettingsCard id="pending" title={`Pending invitations${pending.length ? ` (${pending.length})` : ""}`} description="Invitations that haven't been accepted yet.">
+        {pending.length ? (
+          <ul className="divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
+            {pending.map((invitation) => (
+              <li key={invitation.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="lp-mono truncate text-[13px]">{invitation.email}</p>
+                  <p className="text-[12px] text-[var(--lp-subtle)]">
+                    {roleLabel(invitation.role)} · invited by {invitation.inviter_name} · expires {formatDate(invitation.expires_at)}
+                  </p>
                 </div>
-              ))
-            )}
-          </div>
-        </Card>
+                {canInvite ? (
+                  <button
+                    type="button"
+                    aria-label={`Revoke invite for ${invitation.email}`}
+                    className="console-btn console-btn-secondary shrink-0"
+                    disabled={revoke.isPending}
+                    onClick={() => {
+                      setNotice(null);
+                      revoke.mutate(invitation.id);
+                    }}
+                  >
+                    {revoke.isPending && revoke.variables === invitation.id ? "Revoking" : "Revoke"}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-lg border border-dashed border-[var(--lp-border)] px-4 py-5 text-center text-[13px] text-[var(--lp-subtle)]">No pending invitations.</p>
+        )}
+        {past.length ? (
+          <details className="mt-3 text-[13px]">
+            <summary className="cursor-pointer text-[var(--lp-muted)] hover:text-[var(--lp-text)]">Past invitations ({past.length})</summary>
+            <ul className="mt-2 divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
+              {past.map((invitation) => (
+                <li key={invitation.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="lp-mono min-w-0 flex-1 truncate text-[12px]">{invitation.email}</span>
+                  <span className="text-[12px] text-[var(--lp-subtle)]">{roleLabel(invitation.role)}</span>
+                  <span className={cn("rounded-md border px-1.5 py-px text-[11px]", STATUS_STYLE[invitation.status] ?? STATUS_STYLE.expired)}>{invitation.status}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </SettingsCard>
 
-        <div className="grid gap-6">
-          <Card className="rounded-[1.5rem]">
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Invitations</p>
-            <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Invite Teammate</h3>
-
-            <form
-              className="mt-5 grid gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!isDemo) {
-                  inviteMember.mutate({ email: inviteValues.email.trim(), role: selectedInviteRole });
-                }
-              }}
-            >
-              <label className="grid gap-2">
-                <span className="field-label mb-0">Invite Email</span>
-                <input
-                  aria-label="Invite Email"
-                  className="field-input"
-                  type="email"
-                  disabled={!canManageWorkspaceInvitations || inviteMember.isPending}
-                  value={inviteValues.email}
-                  onChange={(event) => setInviteValues((current) => ({ ...current, email: event.target.value }))}
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className="field-label mb-0">Role</span>
-                <select
-                  aria-label="Invite Role"
-                  className="field-input"
-                  disabled={!canManageWorkspaceInvitations || inviteMember.isPending || availableInvitationRoles.length === 0}
-                  value={selectedInviteRole}
-                  onChange={(event) => setInviteValues((current) => ({ ...current, role: event.target.value }))}
-                >
-                  {availableInvitationRoles.map((role) => (
-                    <option key={`invite-${role}`} value={role}>
-                      {workspaceRoleLabel(role)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex gap-3">
-                <Button
-                  type="submit"
-                  className="h-11 rounded-2xl px-5"
-                  disabled={!canManageWorkspaceInvitations || inviteMember.isPending || inviteValues.email.trim() === "" || availableInvitationRoles.length === 0}
-                >
-                  {inviteMember.isPending ? "Sending..." : "Send Invite"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-11 rounded-2xl px-5"
-                  disabled={inviteMember.isPending}
-                  onClick={() => setInviteValues({ email: "", role: "member" })}
-                >
-                  Clear
-                </Button>
-              </div>
-            </form>
-          </Card>
-
-          <Card className="rounded-[1.5rem]">
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Queue</p>
-            <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Pending Invitations</h3>
-            <div className="mt-5 grid gap-3">
-              {invitations.length === 0 ? (
-                <div className="rounded-2xl border border-slate-800/80 bg-slate-950/50 px-4 py-3 text-sm text-slate-400">
-                  No invitations have been issued for this workspace.
-                </div>
-              ) : (
-                invitations.map((invitation) => (
-                  <div key={invitation.id} className="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-4">
-                    <div className="flex flex-col gap-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="break-all text-sm font-semibold text-white">{invitation.email}</p>
-                        <span className={invitationTone(invitation.status)}>{invitation.status}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                        <span className="dashboard-subtle-chip">{workspaceRoleLabel(invitation.role)}</span>
-                        <span className="dashboard-subtle-chip">Expires {formatDateTime(invitation.expires_at)}</span>
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        Invited by {invitation.inviter_name} on {formatDateTime(invitation.created_at)}
-                      </p>
-                      {invitation.status === "pending" && canManageWorkspaceInvitations ? (
-                        <div className="border-t border-slate-800/80 pt-3">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-10 rounded-2xl border-rose-500/30 bg-rose-500/10 px-4 text-rose-200 hover:bg-rose-500/20"
-                            disabled={revokeInvitation.isPending}
-                            onClick={() => revokeInvitation.mutate(invitation.id)}
-                          >
-                            {revokeInvitation.isPending ? "Revoking..." : "Revoke Invite"}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ))
-              )}
+      <SettingsCard id="roles" title="Roles" description="What each role can do with the team today.">
+        <dl className="grid gap-px overflow-hidden rounded-lg border border-[var(--lp-border)] bg-[var(--lp-border)] sm:grid-cols-2">
+          {ROLE_HELP.map((item) => (
+            <div key={item.role} className={cn("bg-[#1b1b1f] px-4 py-3", item.role === actorRole && "bg-[#1f1d22]")}>
+              <dt className="flex items-center gap-2 text-[13px]">
+                {roleLabel(item.role)}
+                {item.role === actorRole ? <span className="rounded border border-[var(--lp-border)] px-1.5 text-[11px] leading-4 text-[var(--lp-subtle)]">Your role</span> : null}
+              </dt>
+              <dd className="mt-0.5 text-[12px] leading-relaxed text-[var(--lp-subtle)]">{item.summary}</dd>
             </div>
-          </Card>
-        </div>
-      </section>
+          ))}
+        </dl>
+      </SettingsCard>
     </div>
   );
 }

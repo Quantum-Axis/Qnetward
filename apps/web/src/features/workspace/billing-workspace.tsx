@@ -1,131 +1,199 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { Check } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
-import { AlertRule, RecentHistoryTarget, SessionResponse, WorkspaceTeamResponse } from "@/lib/types";
-import { Card } from "@/components/ui/card";
+import type { AlertRule, RecentHistoryTarget, SessionResponse, WorkspaceTeamResponse } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { Notice, SettingsCard, SettingsPageTitle } from "@/components/settings/settings-ui";
+
+type PlanId = "free" | "pro" | "enterprise";
+
+// Mirrors the public pricing on the landing page (features/landing/pricing.tsx).
+const PLANS: { id: PlanId; name: string; price: string; blurb: string; features: string[] }[] = [
+  {
+    id: "free",
+    name: "Free",
+    price: "$0 during beta",
+    blurb: "Everything that works today, for you and your team.",
+    features: ["All four diagnostic tools", "Live results and history", "Email alert rules", "Workspaces, roles, invitations", "CSV and JSON export"],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "Coming soon",
+    blurb: "Continuous monitoring from more places.",
+    features: ["Probe agents for private networks", "Multi-region probing", "Longer history", "Slack, Telegram, Discord, webhooks"],
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    price: "Custom",
+    blurb: "For ISPs, MSPs, and regulated teams.",
+    features: ["SSO and SCIM", "Dedicated or self-hosted", "Audit log export", "Priority support and SLA"],
+  },
+];
+
+// The workspace record still uses the pre-launch plan names.
+function planFor(stored?: string): PlanId {
+  if (stored === "pro") return "pro";
+  if (stored === "enterprise") return "enterprise";
+  return "free";
+}
+
+function statusLabel(status?: string) {
+  switch (status) {
+    case "active":
+      return { text: "Active", tone: "good" as const };
+    case "past_due":
+      return { text: "Payment due", tone: "bad" as const };
+    case "canceled":
+      return { text: "Canceled", tone: "muted" as const };
+    default:
+      return { text: "Beta", tone: "muted" as const };
+  }
+}
+
+function UsageRow({ label, value, detail, href }: { label: string; value: number | string; detail: string; href?: string }) {
+  const body = (
+    <>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px]">{label}</p>
+        <p className="text-[12px] text-[var(--lp-subtle)]">{detail}</p>
+      </div>
+      <span className="lp-mono text-[15px]">{value}</span>
+    </>
+  );
+  return (
+    <li>
+      {href ? (
+        <Link href={href} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/[0.02]">
+          {body}
+        </Link>
+      ) : (
+        <div className="flex items-center gap-3 px-4 py-3">{body}</div>
+      )}
+    </li>
+  );
+}
 
 export function BillingWorkspace() {
-  const sessionQuery = useQuery({
-    queryKey: ["session"],
-    queryFn: () => apiRequest<SessionResponse>("/api/auth/session"),
-  });
-
-  const workspaceTeamQuery = useQuery({
+  const sessionQuery = useQuery({ queryKey: ["session"], queryFn: () => apiRequest<SessionResponse>("/api/auth/session") });
+  const authenticated = sessionQuery.data?.authenticated === true;
+  const teamQuery = useQuery({
     queryKey: ["workspace-team"],
     queryFn: () => apiRequest<WorkspaceTeamResponse>("/api/workspace/team"),
-    enabled: sessionQuery.data?.authenticated === true,
+    enabled: authenticated,
   });
-
-  const recentTargetsQuery = useQuery({
-    queryKey: ["recent-history-targets", 12],
-    queryFn: () => apiRequest<RecentHistoryTarget[]>("/api/history/recent-targets?limit=12"),
-    enabled: sessionQuery.data?.authenticated === true,
+  const targetsQuery = useQuery({
+    queryKey: ["recent-history-targets", 50],
+    queryFn: () => apiRequest<RecentHistoryTarget[]>("/api/history/recent-targets?limit=50"),
+    enabled: authenticated,
   });
-
-  const alertRulesQuery = useQuery({
+  const rulesQuery = useQuery({
     queryKey: ["alert-rules"],
     queryFn: () => apiRequest<AlertRule[]>("/api/alerts/rules"),
-    enabled: sessionQuery.data?.authenticated === true,
+    enabled: authenticated,
   });
 
-  const workspace = workspaceTeamQuery.data?.workspace;
-  const members = workspaceTeamQuery.data?.members ?? [];
-  const invitations = workspaceTeamQuery.data?.invitations ?? [];
-  const targets = recentTargetsQuery.data ?? [];
-  const alertRules = alertRulesQuery.data ?? [];
-  const isDemo = sessionQuery.data?.mode === "demo";
-  const enabledRules = alertRules.filter((rule) => rule.enabled).length;
+  const workspace = teamQuery.data?.workspace;
+  const members = teamQuery.data?.members ?? [];
+  const pendingSeats = (teamQuery.data?.invitations ?? []).filter((i) => i.status === "pending").length;
+  const targets = targetsQuery.data ?? [];
+  const activeRules = (rulesQuery.data ?? []).filter((r) => r.enabled).length;
+  const current = planFor(workspace?.plan);
+  const status = statusLabel(workspace?.billing_status);
+  const plan = PLANS.find((p) => p.id === current) ?? PLANS[0];
+  const isOwner = workspace?.role === "owner";
 
   return (
-    <div className="grid gap-6">
-      <section className="dashboard-hero-panel rounded-[1.7rem] p-5 md:p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <div className="grid gap-5">
+      <SettingsPageTitle title="Billing and plan" description={`The plan and usage for ${workspace?.name ?? "this workspace"}.`} />
+
+      {teamQuery.isError ? <Notice tone="error">{(teamQuery.error as ApiError).message || "Couldn't load billing details."}</Notice> : null}
+
+      <SettingsCard
+        id="plan"
+        title="Current plan"
+        description="Qnetward is free while in beta. Paid plans and invoices arrive with Pro."
+        hint={isOwner ? "You'll be able to change plans here." : "Only workspace owners can change the plan."}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--lp-border)] bg-white/[0.02] p-4">
           <div>
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Workspace Panel</p>
-            <h2 className="mt-1.5 font-space text-[1.9rem] font-bold leading-tight text-white">Billing & Usage</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-400">
-              Track current plan posture, workspace usage signals, and billing readiness for the active SaaS tenant.
+            <p className="flex items-center gap-2 text-[18px] font-medium tracking-[-0.01em]">
+              {plan.name}
+              <span
+                className={cn(
+                  "rounded-md border px-1.5 py-px text-[11px] font-normal",
+                  status.tone === "good"
+                    ? "border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] text-[#86efac]"
+                    : status.tone === "bad"
+                      ? "border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] text-[#ff8fb3]"
+                      : "border-[var(--lp-border)] bg-white/[0.03] text-[var(--lp-muted)]",
+                )}
+              >
+                {status.text}
+              </span>
             </p>
+            <p className="mt-0.5 text-[13px] text-[var(--lp-muted)]">{plan.price}</p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Plan</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspace?.plan ?? "starter"}</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Billing State</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspace?.billing_status ?? "trial"}</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Workspace Seats</p>
-              <p className="mt-2 text-lg font-semibold text-white">{members.length}</p>
-            </div>
-          </div>
+          <p className="max-w-xs text-[12px] leading-relaxed text-[var(--lp-subtle)]">{plan.blurb}</p>
         </div>
-      </section>
+      </SettingsCard>
 
-      {workspaceTeamQuery.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(workspaceTeamQuery.error as ApiError).message || "Unable to load workspace billing context."}
+      <SettingsCard id="usage" title="Usage" description="What this workspace uses today. Plan limits will be measured against these.">
+        <ul className="divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
+          <UsageRow
+            label="Seats"
+            value={members.length}
+            detail={pendingSeats ? `${pendingSeats} more invited, not yet joined` : "Members of this workspace"}
+            href="/workspace/team"
+          />
+          <UsageRow
+            label="Monitored targets"
+            value={targetsQuery.isLoading ? "…" : targets.length >= 50 ? "50+" : targets.length}
+            detail="Targets with stored results"
+            href="/history"
+          />
+          <UsageRow label="Active alert rules" value={rulesQuery.isLoading ? "…" : activeRules} detail="Rules checked after every probe" href="/alerts" />
+        </ul>
+      </SettingsCard>
+
+      <SettingsCard id="plans" title="Plans" description="Pro and Enterprise aren't available to buy yet.">
+        <div className="grid gap-3 md:grid-cols-3">
+          {PLANS.map((p) => {
+            const isCurrent = p.id === current;
+            return (
+              <div
+                key={p.id}
+                className={cn(
+                  "flex flex-col rounded-lg border p-4",
+                  isCurrent ? "border-[rgba(255,61,127,0.45)] bg-[rgba(255,61,127,0.04)]" : "border-[var(--lp-border)]",
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[14px] font-medium">{p.name}</p>
+                  {isCurrent ? <span className="rounded border border-[rgba(255,61,127,0.4)] px-1.5 text-[11px] leading-4 text-[#ff8fb3]">Current</span> : null}
+                </div>
+                <p className="mt-0.5 text-[12px] text-[var(--lp-subtle)]">{p.price}</p>
+                <ul className="mt-3 grid gap-1.5 text-[12px] text-[var(--lp-muted)]">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-start gap-1.5">
+                      <Check className="mt-0.5 h-3 w-3 shrink-0 text-[var(--lp-subtle)]" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
-      ) : null}
+      </SettingsCard>
 
-      {isDemo ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Demo mode is active. Billing actions are visible for review, but purchase or plan mutation flows are intentionally disabled.
-        </div>
-      ) : null}
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Subscription</p>
-          <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Current Plan Posture</h3>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Workspace</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspace?.name ?? "Workspace loading"}</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Status</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspace?.billing_status ?? "trial"}</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Plan Tier</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspace?.plan ?? "starter"}</p>
-              <p className="mt-1.5 text-sm text-slate-400">Stripe-ready plan mapping can be layered on this record later.</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Pending Seats</p>
-              <p className="mt-2 text-lg font-semibold text-white">{invitations.filter((invite) => invite.status === "pending").length}</p>
-              <p className="mt-1.5 text-sm text-slate-400">Invited users that may turn into billable seats once accepted.</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Usage</p>
-          <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Workspace Usage Signals</h3>
-          <div className="mt-5 grid gap-3">
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Tracked Targets</p>
-              <p className="mt-2 text-lg font-semibold text-white">{targets.length}</p>
-              <p className="mt-1.5 text-sm text-slate-400">Recent telemetry targets visible from the workspace history feed.</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Configured Alerts</p>
-              <p className="mt-2 text-lg font-semibold text-white">{enabledRules}</p>
-              <p className="mt-1.5 text-sm text-slate-400">Enabled workspace alert rules currently counted against this tenant.</p>
-            </div>
-            <div className="dashboard-note-panel p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Next SaaS Billing Layer</p>
-              <p className="mt-2 text-sm text-slate-300">
-                Add Stripe-backed subscriptions, usage metering, invoice history, and seat-based limits on top of the current workspace plan model.
-              </p>
-            </div>
-          </div>
-        </Card>
-      </section>
+      <SettingsCard id="invoices" title="Invoices" description="Receipts for paid plans will be listed here.">
+        <p className="rounded-lg border border-dashed border-[var(--lp-border)] px-4 py-5 text-center text-[13px] text-[var(--lp-subtle)]">No invoices. This workspace is on the free beta.</p>
+      </SettingsCard>
     </div>
   );
 }

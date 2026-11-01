@@ -224,7 +224,7 @@ export function OverviewWorkspace() {
         <ResponseTimeChart targets={targetSnapshots} historyMap={chartHistoryMap} />
         <TargetHealthCard targets={targetSnapshots} />
       </div>
-      <TargetsSummary targets={targetSnapshots} />
+      <TargetsSummary targets={targetSnapshots} historyMap={chartHistoryMap} />
       {hasData ? null : <GettingStarted hasAlertRules={alertRuleCount > 0} />}
       <ComingNext />
     </div>

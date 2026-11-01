@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -9,6 +9,8 @@ import {
   Clock,
   Download,
   Gauge,
+  History,
+  Play,
   Plus,
   RefreshCw,
   Search,
@@ -130,9 +132,82 @@ export function WelcomeHeader({
   );
 }
 
+/* ------------------------------------------------------------- sparkline */
+
+/** Small trend line. Nulls are failures: they break the line and leave a tick on the floor. */
+function Sparkline({ values, color, height = 28, className }: { values: (number | null)[]; color: string; height?: number; className?: string }) {
+  const id = useId();
+  const W = 120;
+  const H = height;
+  const nums = values.filter((v): v is number => typeof v === "number");
+  const n = Math.max(1, values.length - 1);
+  const px = (i: number) => (i / n) * (W - 4) + 2;
+  if (nums.length < 2) {
+    if (!values.some((v) => v === null)) return <span className={cn("block", className)} style={{ height }} aria-hidden="true" />;
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} className={cn("block", className)} style={{ height }} preserveAspectRatio="none" aria-hidden="true">
+        <line x1="2" x2={W - 2} y1={H - 1} y2={H - 1} stroke="rgba(255,255,255,0.08)" vectorEffect="non-scaling-stroke" />
+        {values.map((v, i) => (v === null ? <line key={i} x1={px(i)} x2={px(i)} y1={H - 7} y2={H} stroke="#ff3d7f" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /> : null))}
+      </svg>
+    );
+  }
+  const lo = Math.min(...nums);
+  const hi = Math.max(...nums);
+  const span = Math.max(1e-6, hi - lo);
+  const py = (v: number) => H - 3 - ((v - lo) / span) * (H - 6);
+  const runs: { x: number; y: number }[][] = [];
+  let run: { x: number; y: number }[] = [];
+  values.forEach((v, i) => {
+    if (typeof v === "number") run.push({ x: px(i), y: py(v) });
+    else if (run.length) {
+      runs.push(run);
+      run = [];
+    }
+  });
+  if (run.length) runs.push(run);
+  const line = runs.map((r) => smoothPath(r)).join(" ");
+  const area = runs
+    .filter((r) => r.length > 1)
+    .map((r) => `${smoothPath(r)} L${r[r.length - 1].x.toFixed(1)},${H} L${r[0].x.toFixed(1)},${H} Z`)
+    .join(" ");
+  const lastIdx = values.length - 1 - [...values].reverse().findIndex((v) => typeof v === "number");
+  const lastVal = values[lastIdx] as number;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className={cn("block", className)} style={{ height }} preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      {values.map((v, i) => (v === null ? <line key={i} x1={px(i)} x2={px(i)} y1={H - 4} y2={H} stroke="#ff3d7f" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /> : null))}
+      <circle cx={px(lastIdx)} cy={py(lastVal)} r="2" fill={color} />
+    </svg>
+  );
+}
+
+/** Every stored sample across targets, oldest first. */
+function samplesInOrder(historyMap: Map<string, HistoryPoint[]>) {
+  return Array.from(historyMap.values())
+    .flat()
+    .sort((a, b) => a.ts - b.ts);
+}
+
 /* ----------------------------------------------------------------- stats */
 
-type Stat = { icon: LucideIcon; label: string; value: string; unit?: string; footer: string; tone?: "good" | "warn" | "bad" };
+type Stat = {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  unit?: string;
+  footer: string;
+  tone?: "good" | "warn" | "bad";
+  badge?: string;
+  spark?: { values: (number | null)[]; color: string };
+  split?: { value: number; color: string; label: string }[];
+};
 
 function StatCard({ stat }: { stat: Stat }) {
   const toneClass =
@@ -151,15 +226,30 @@ function StatCard({ stat }: { stat: Stat }) {
         </span>
         <span className="text-[13px] text-[var(--lp-text)]">{stat.label}</span>
       </div>
-      <div className="flex items-baseline gap-1.5 px-4 pb-4 pt-3">
-        <span className="text-[28px] font-medium tracking-[-0.02em]">{stat.value}</span>
-        {stat.unit ? <span className="text-[13px] text-[var(--lp-subtle)]">{stat.unit}</span> : null}
+      <div className="flex items-end justify-between gap-3 px-4 pb-4 pt-3">
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-[28px] font-medium tracking-[-0.02em]">{stat.value}</span>
+          {stat.unit ? <span className="text-[13px] text-[var(--lp-subtle)]">{stat.unit}</span> : null}
+        </span>
+        {stat.spark ? <Sparkline values={stat.spark.values} color={stat.spark.color} className="mb-1 w-[46%] max-w-[120px]" /> : null}
+        {stat.split && stat.split.some((part) => part.value > 0) ? (
+          <span
+            className="mb-2 flex h-1.5 w-[46%] max-w-[120px] gap-[2px] overflow-hidden rounded-full"
+            title={stat.split.map((part) => `${part.value} ${part.label}`).join(" · ")}
+          >
+            {stat.split
+              .filter((part) => part.value > 0)
+              .map((part) => (
+                <span key={part.label} className="h-full rounded-full" style={{ flex: part.value, background: part.color }} />
+              ))}
+          </span>
+        ) : null}
       </div>
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--lp-border)] px-4 py-2.5 text-[12px] text-[var(--lp-subtle)]">
         <span className="truncate">{stat.footer}</span>
         {stat.tone ? (
           <span className={cn("rounded border px-1.5 py-px text-[11px]", toneClass)}>
-            {stat.tone === "good" ? "OK" : stat.tone === "warn" ? "Watch" : "High"}
+            {stat.badge ?? (stat.tone === "good" ? "OK" : stat.tone === "warn" ? "Watch" : "High")}
           </span>
         ) : null}
       </div>
@@ -180,7 +270,13 @@ export function StatCards({
 }) {
   const now = useNow();
   const stats = useMemo<Stat[]>(() => {
-    const points = Array.from(historyMap.values()).flat();
+    const points = samplesInOrder(historyMap);
+    const recent = points.slice(-48);
+    // Loss over a sliding window of 6 samples, so the trend shows bursts rather than single blips.
+    const lossTrend = recent.map((_, i) => {
+      const win = recent.slice(Math.max(0, i - 5), i + 1);
+      return (win.filter((p) => p.error || typeof p.rtt_ms !== "number").length / win.length) * 100;
+    });
     const rtts = points.map((p) => p.rtt_ms).filter((v): v is number => typeof v === "number");
     const avg = rtts.length ? rtts.reduce((a, b) => a + b, 0) / rtts.length : null;
     const failures = points.filter((p) => p.error || typeof p.rtt_ms !== "number").length;
@@ -193,6 +289,11 @@ export function StatCards({
         value: String(targets.length),
         unit: targets.length === 1 ? "target" : "targets",
         footer: live ? `${live} streaming now` : "From recent probes and alert rules",
+        split: (["stable", "warning", "critical", "idle"] as const).map((state) => ({
+          value: targets.filter((t) => t.healthState === state).length,
+          color: stateMeta[state].color,
+          label: stateMeta[state].label.toLowerCase(),
+        })),
       },
       {
         icon: Gauge,
@@ -201,6 +302,7 @@ export function StatCards({
         unit: avg === null ? undefined : "ms",
         footer: rtts.length ? `Across ${rtts.length} recent replies` : "No replies yet",
         tone: avg === null ? undefined : avg < 100 ? "good" : avg < 250 ? "warn" : "bad",
+        spark: { values: recent.map((p) => (typeof p.rtt_ms === "number" ? p.rtt_ms : null)), color: "#ff3d7f" },
       },
       {
         icon: WifiOff,
@@ -209,6 +311,7 @@ export function StatCards({
         unit: loss === null ? undefined : "%",
         footer: points.length ? `${failures} of ${points.length} probes failed` : "No probes yet",
         tone: loss === null ? undefined : loss < 1 ? "good" : loss < 5 ? "warn" : "bad",
+        spark: lossTrend.some((v) => v > 0) ? { values: lossTrend, color: "#fbbf24" } : undefined,
       },
       {
         icon: Bell,
@@ -217,6 +320,7 @@ export function StatCards({
         unit: alertRuleCount === 1 ? "rule" : "rules",
         footer: firingCount ? `${firingCount} currently firing` : alertRuleCount ? "None firing" : "No rules yet",
         tone: alertRuleCount ? (firingCount ? "bad" : "good") : undefined,
+        badge: alertRuleCount ? (firingCount ? "Firing" : "Quiet") : undefined,
       },
     ];
   }, [alertRuleCount, firingCount, historyMap, now, targets]);
@@ -234,13 +338,31 @@ export function StatCards({
 
 type Series = { id: string; label: string; color: string; points: { ts: number; rtt: number }[] };
 
+/** Tracks an element's rendered size so charts can draw in real pixels instead of a stretched viewBox. */
+function useElementSize() {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = Math.round(entry.contentRect.width);
+      const height = Math.round(entry.contentRect.height);
+      setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size] as const;
+}
+
 export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTargetSnapshot[]; historyMap: Map<string, HistoryPoint[]> }) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const [boxRef, box] = useElementSize();
   const [hoverTs, setHoverTs] = useState<number | null>(null);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const now = useNow(2_000);
   const reducedMotion = usePrefersReducedMotion();
 
-  const series = useMemo<Series[]>(() => {
+  const allSeries = useMemo<Series[]>(() => {
     return targets
       .map((t) => ({
         id: t.id,
@@ -254,15 +376,16 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
       .slice(0, SERIES_COLORS.length)
       .map((s, i) => ({ ...s, color: SERIES_COLORS[i] }));
   }, [historyMap, targets]);
+  const series = useMemo(() => allSeries.filter((s) => !hidden.includes(s.id)), [allSeries, hidden]);
 
-  const W = 800;
-  const H = 240;
-  const PAD = { l: 44, r: 12, t: 12, b: 26 };
+  const W = Math.max(box.width, 1);
+  const H = Math.max(box.height, 1);
+  const PAD = { l: 44, r: 16, t: 10, b: 24 };
   const all = series.flatMap((s) => s.points);
 
   // Collapse long idle gaps on the time axis so bursts of probes stay readable.
   const axis = useMemo(() => {
-    const times = Array.from(new Set(all.map((p) => p.ts))).sort((a, b) => a - b);
+    const times = Array.from(new Set(series.flatMap((s) => s.points.map((p) => p.ts)))).sort((a, b) => a - b);
     const deltas = times.slice(1).map((t, idx) => t - times[idx]).sort((a, b) => a - b);
     const typical = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 1;
     const cap = Math.max(typical * 3, 1);
@@ -276,7 +399,6 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
       eff.push(eff[idx - 1] + Math.min(delta, delta > threshold ? cap : delta));
     });
     return { times, eff, breaks };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [series]);
 
   const toEff = (ts: number) => {
@@ -302,16 +424,17 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
   const span = Math.max(1, maxRtt - minRtt);
   const yMin = Math.max(0, minRtt - span * 0.15);
   const yMax = maxRtt + span * 0.15;
-  const x = (ts: number) => PAD.l + (toEff(ts) / maxEff) * (W - PAD.l - PAD.r);
-  const y = (rtt: number) => PAD.t + (1 - (rtt - yMin) / Math.max(1, yMax - yMin)) * (H - PAD.t - PAD.b);
+  const plotW = Math.max(1, W - PAD.l - PAD.r);
+  const x = (ts: number) => PAD.l + (toEff(ts) / maxEff) * plotW;
+  const y = (rtt: number) => PAD.t + (1 - (rtt - yMin) / Math.max(1, yMax - yMin)) * Math.max(1, H - PAD.t - PAD.b);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => yMin + (yMax - yMin) * f);
 
-  // Break a line where probes stopped for a while, instead of drawing a straight bridge across the gap.
+  // Break a line where a target stopped probing, instead of bridging the silence with a straight segment.
   const breakTimes = axis.breaks.map((k) => axis.times[k]);
   const linePath = (points: Series["points"]) => {
     const deltas = points.slice(1).map((p, idx) => p.ts - points[idx].ts).sort((a, b) => a - b);
     const typical = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
-    const gap = Math.max(60_000, typical * 10);
+    const gap = Math.max(15_000, typical * 5);
     const runs: Series["points"][] = [];
     points.forEach((p, idx) => {
       const prev = points[idx - 1];
@@ -322,6 +445,27 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
     return runs.map((run) => smoothPath(run.map((p) => ({ x: x(p.ts), y: y(p.rtt) })))).join(" ");
   };
 
+  // Time labels at the start of each burst of probes, skipped where they would collide.
+  const timeLabels = useMemo(() => {
+    const { times, breaks } = axis;
+    if (!times.length || box.width === 0) return [];
+    const rangeMs = times[times.length - 1] - times[0];
+    const fmt = (ts: number) =>
+      new Date(ts).toLocaleString([], rangeMs > 20 * 3_600_000 ? { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+    const candidates = [times[0], ...breaks.map((k) => times[k])];
+    const out: { ts: number; label: string }[] = [];
+    let lastX = -Infinity;
+    candidates.forEach((ts) => {
+      const px = x(ts);
+      if (px - lastX < 84) return;
+      out.push({ ts, label: fmt(ts) });
+      lastX = px;
+    });
+    return out;
+    // x depends on axis and width only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [axis, box.width]);
+
   // A series counts as live while samples keep arriving; its newest point gets a pulsing head.
   const LIVE_WINDOW = 20_000;
   const lastSampleAt = all.length ? Math.max(...all.map((p) => p.ts)) : null;
@@ -330,17 +474,17 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
   const nearest = (s: Series, ts: number) => s.points.reduce((best, p) => (Math.abs(p.ts - ts) < Math.abs(best.ts - ts) ? p : best), s.points[0]);
 
   const onMove = (event: React.PointerEvent<SVGSVGElement>) => {
-    const svg = svgRef.current;
-    if (!svg || !all.length) return;
-    const rect = svg.getBoundingClientRect();
-    const px = ((event.clientX - rect.left) / rect.width) * W;
-    const e = Math.min(maxEff, Math.max(0, ((px - PAD.l) / (W - PAD.l - PAD.r)) * maxEff));
+    if (!all.length) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const px = event.clientX - rect.left;
+    const e = Math.min(maxEff, Math.max(0, ((px - PAD.l) / plotW) * maxEff));
     setHoverTs(fromEff(e));
   };
 
-  const tooltipLeft = hoverTs !== null ? (x(hoverTs) / W) * 100 : 0;
+  const tooltipLeft = hoverTs !== null ? x(hoverTs) : 0;
   // Only series that actually have data around the hovered time, so the tooltip never borrows a far-away value.
   const covering = hoverTs === null ? [] : series.filter((s) => hoverTs >= s.points[0].ts && hoverTs <= s.points[s.points.length - 1].ts);
+  const dim = (id: string) => focusId !== null && focusId !== id;
 
   return (
     <section className="flex flex-col rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f]" aria-labelledby="rt-title">
@@ -355,84 +499,103 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
           {anyLive ? <LivePill live updatedAt={lastSampleAt} /> : <span className="text-[12px] text-[var(--lp-subtle)]">Last 24 samples per target</span>}
         </span>
       </div>
-      {series.length ? (
+      {allSeries.length ? (
         <>
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-3 text-[12px] text-[var(--lp-muted)]">
-            {series.map((s) => (
-              <li key={s.id} className="flex items-center gap-1.5">
-                <span className="h-2.5 w-[3px] rounded-full" style={{ background: s.color }} />
-                <span className="max-w-[180px] truncate">{s.label}</span>
-              </li>
-            ))}
+          <ul className="flex flex-wrap gap-1.5 px-4 pt-3 text-[12px]" aria-label="Series">
+            {allSeries.map((s) => {
+              const off = hidden.includes(s.id);
+              const last = s.points[s.points.length - 1];
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    aria-pressed={!off}
+                    title={off ? `Show ${s.label}` : `Hide ${s.label}`}
+                    onClick={() => setHidden((h) => (h.includes(s.id) ? h.filter((v) => v !== s.id) : [...h, s.id]))}
+                    onMouseEnter={() => !off && setFocusId(s.id)}
+                    onMouseLeave={() => setFocusId(null)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md border px-2 py-1 transition-colors",
+                      off ? "border-transparent text-[var(--lp-subtle)] line-through" : "border-[var(--lp-border)] text-[var(--lp-muted)] hover:border-[var(--lp-border-strong)] hover:text-[var(--lp-text)]",
+                    )}
+                  >
+                    <span className="h-2.5 w-[3px] rounded-full" style={{ background: off ? "rgba(255,255,255,0.15)" : s.color }} />
+                    <span className="max-w-[160px] truncate">{s.label}</span>
+                    {!off ? <span className="lp-mono text-[11px] text-[var(--lp-subtle)]">{formatMs(last.rtt)}ms</span> : null}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-          <div className="relative px-2 pb-3 pt-2">
-            <svg
-              ref={svgRef}
-              viewBox={`0 0 ${W} ${H}`}
-              className="h-[240px] w-full touch-none"
-              preserveAspectRatio="none"
-              onPointerMove={onMove}
-              onPointerLeave={() => setHoverTs(null)}
-              role="img"
-              aria-label="Response time per target"
-            >
-              {ticks.map((v) => (
-                <g key={v}>
-                  <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.05)" vectorEffect="non-scaling-stroke" />
-                  <text x={PAD.l - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="#6c6c75">
-                    {Math.round(v)}ms
-                  </text>
-                </g>
-              ))}
-              {axis.breaks.map((k) => {
-                const gx = (x(axis.times[k - 1]) + x(axis.times[k])) / 2;
-                return (
-                  <g key={k}>
-                    <line x1={gx} x2={gx} y1={PAD.t} y2={H - PAD.b} stroke="rgba(255,255,255,0.12)" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
-                    <text x={gx} y={H - 8} textAnchor="middle" fontSize="10" fill="#6c6c75">
-                      gap
+          <div ref={boxRef} className="relative mx-2 mb-2 mt-2 min-h-[240px] flex-1">
+            {box.width > 0 && series.length ? (
+              <svg width={W} height={H} className="absolute inset-0 touch-none" onPointerMove={onMove} onPointerLeave={() => setHoverTs(null)} role="img" aria-label="Response time per target">
+                {axis.breaks.map((k) => {
+                  const x0 = x(axis.times[k - 1]) + 5;
+                  const x1 = x(axis.times[k]) - 5;
+                  const idleMin = Math.round((axis.times[k] - axis.times[k - 1]) / 60_000);
+                  return x1 > x0 ? (
+                    <rect key={k} x={x0} y={PAD.t} width={x1 - x0} height={H - PAD.t - PAD.b} fill="rgba(255,255,255,0.025)" rx="2">
+                      <title>{idleMin >= 60 ? `${Math.round(idleMin / 60)}h` : `${idleMin}m`} without samples</title>
+                    </rect>
+                  ) : null;
+                })}
+                {ticks.map((v) => (
+                  <g key={v}>
+                    <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.05)" />
+                    <text x={PAD.l - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="#6c6c75">
+                      {Math.round(v)}ms
                     </text>
                   </g>
-                );
-              })}
-              {series.map((s) => (
-                <path
-                  key={s.id}
-                  d={linePath(s.points)}
-                  fill="none"
-                  stroke={s.color}
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                  opacity={hoverTs === null ? 1 : 0.9}
-                />
-              ))}
-              {series.map((s) => {
-                const head = s.points[s.points.length - 1];
-                const live = now - head.ts < LIVE_WINDOW;
-                const hx = x(head.ts);
-                const hy = y(head.rtt);
-                return (
-                  <g key={`head-${s.id}`} pointerEvents="none">
-                    {live && !reducedMotion ? <circle cx={hx} cy={hy} r="9" fill={s.color} opacity="0.35" className="lp-map-ping" /> : null}
-                    <circle cx={hx} cy={hy} r={live ? 3.5 : 2.5} fill={live ? s.color : "#1b1b1f"} stroke={s.color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-                  </g>
-                );
-              })}
-              {hoverTs !== null ? (
-                <>
-                  <line x1={x(hoverTs)} x2={x(hoverTs)} y1={PAD.t} y2={H - PAD.b} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-                  {covering.map((s) => {
-                    const p = nearest(s, hoverTs);
-                    return <circle key={s.id} cx={x(p.ts)} cy={y(p.rtt)} r="3.5" fill={s.color} stroke="#1b1b1f" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />;
-                  })}
-                </>
-              ) : null}
-            </svg>
+                ))}
+                {timeLabels.map((tl, i) => (
+                  <text key={tl.ts} x={x(tl.ts)} y={H - 6} textAnchor={i === 0 ? "start" : "middle"} fontSize="11" fill="#6c6c75">
+                    {tl.label}
+                  </text>
+                ))}
+                {series.map((s) => (
+                  <path
+                    key={s.id}
+                    d={linePath(s.points)}
+                    fill="none"
+                    stroke={s.color}
+                    strokeWidth={focusId === s.id ? 2.2 : 1.6}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    opacity={dim(s.id) ? 0.18 : 1}
+                    style={{ transition: "opacity 150ms ease" }}
+                  />
+                ))}
+                {series.map((s) => {
+                  const head = s.points[s.points.length - 1];
+                  const live = now - head.ts < LIVE_WINDOW;
+                  const hx = x(head.ts);
+                  const hy = y(head.rtt);
+                  return (
+                    <g key={`head-${s.id}`} pointerEvents="none" opacity={dim(s.id) ? 0.18 : 1}>
+                      {live && !reducedMotion ? <circle cx={hx} cy={hy} r="9" fill={s.color} opacity="0.35" className="lp-map-ping" /> : null}
+                      <circle cx={hx} cy={hy} r={live ? 3.5 : 2.75} fill={live ? s.color : "#1b1b1f"} stroke={s.color} strokeWidth="1.5" />
+                    </g>
+                  );
+                })}
+                {hoverTs !== null ? (
+                  <>
+                    <line x1={x(hoverTs)} x2={x(hoverTs)} y1={PAD.t} y2={H - PAD.b} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 3" />
+                    {covering.map((s) => {
+                      const p = nearest(s, hoverTs);
+                      return <circle key={s.id} cx={x(p.ts)} cy={y(p.rtt)} r="3.5" fill={s.color} stroke="#1b1b1f" strokeWidth="1.5" />;
+                    })}
+                  </>
+                ) : null}
+              </svg>
+            ) : null}
+            {box.width > 0 && !series.length ? (
+              <div className="absolute inset-0 flex items-center justify-center text-[13px] text-[var(--lp-subtle)]">All series are hidden. Pick one above.</div>
+            ) : null}
             {hoverTs !== null && covering.length ? (
               <div
-                className="console-popover pointer-events-none absolute top-6 z-10 w-56 p-3 text-[12px]"
-                style={{ left: `clamp(8px, calc(${tooltipLeft}% + 12px), calc(100% - 232px))` }}
+                className="console-popover pointer-events-none absolute top-4 z-10 w-56 p-3 text-[12px]"
+                style={{ left: Math.min(Math.max(8, tooltipLeft + 12), Math.max(8, W - 232)) }}
               >
                 <div className="mb-2 text-[var(--lp-subtle)]">{clockTime(hoverTs)}</div>
                 <ul className="space-y-1.5">
@@ -544,18 +707,13 @@ export function TargetHealthCard({ targets }: { targets: OverviewTargetSnapshot[
 type StatusFilter = "all" | "stable" | "warning" | "critical" | "idle";
 type TypeFilter = "all" | "ping" | "tcpping";
 
-function SampleBars({ count }: { count: number }) {
-  const level = count === 0 ? 0 : count < 8 ? 1 : count < 16 ? 2 : 3;
-  return (
-    <span className="inline-flex items-end gap-[2px]" aria-hidden="true">
-      {[6, 9, 12].map((h, i) => (
-        <span key={h} className="w-[3px] rounded-[1px]" style={{ height: h, background: i < level ? "#ff3d7f" : "rgba(255,255,255,0.12)" }} />
-      ))}
-    </span>
-  );
+function historyHref(t: OverviewTargetSnapshot) {
+  const params = new URLSearchParams({ type: t.protocol, host: t.host, limit: "120" });
+  if (t.protocol === "tcpping" && t.port) params.set("port", String(t.port));
+  return `/history?${params.toString()}`;
 }
 
-export function TargetsSummary({ targets }: { targets: OverviewTargetSnapshot[] }) {
+export function TargetsSummary({ targets, historyMap }: { targets: OverviewTargetSnapshot[]; historyMap: Map<string, HistoryPoint[]> }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [type, setType] = useState<TypeFilter>("all");
@@ -600,21 +758,24 @@ export function TargetsSummary({ targets }: { targets: OverviewTargetSnapshot[] 
         </Link>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-[13px]">
+        <table className="w-full min-w-[720px] text-[13px]">
           <thead>
             <tr className="border-y border-[var(--lp-border)] bg-white/[0.015] text-left text-[12px] text-[var(--lp-subtle)]">
               <th className="px-4 py-2.5 font-medium">Target</th>
               <th className="px-3 py-2.5 font-medium">Type</th>
               <th className="px-3 py-2.5 font-medium">Status</th>
-              <th className="px-3 py-2.5 font-medium">Samples</th>
+              <th className="px-3 py-2.5 font-medium">Trend</th>
               <th className="px-3 py-2.5 text-right font-medium">Last RTT</th>
-              <th className="px-4 py-2.5 text-right font-medium">Last seen</th>
+              <th className="px-3 py-2.5 text-right font-medium">Last seen</th>
+              <th className="w-[84px] px-4 py-2.5">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.length ? (
               rows.map((t) => (
-                <tr key={t.id} className="border-b border-[var(--lp-border)] last:border-b-0 hover:bg-white/[0.02]">
+                <tr key={t.id} className="group border-b border-[var(--lp-border)] last:border-b-0 hover:bg-white/[0.02]">
                   <td className="px-4 py-3">
                     <Link href={t.href} className="text-[var(--lp-text)] hover:text-[var(--lp-accent)]">
                       {t.name}
@@ -627,21 +788,38 @@ export function TargetsSummary({ targets }: { targets: OverviewTargetSnapshot[] 
                     </span>
                   </td>
                   <td className="px-3 py-3">
-                    <span className="flex items-center gap-2">
-                      <SampleBars count={t.pointCount} />
-                      <span className="lp-mono text-[12px] text-[var(--lp-muted)]">{t.pointCount}</span>
+                    <span className="flex items-center gap-2.5">
+                      <Sparkline
+                        values={[...(historyMap.get(t.id) ?? [])].sort((a, b) => a.ts - b.ts).slice(-24).map((p) => (typeof p.rtt_ms === "number" ? p.rtt_ms : null))}
+                        color={stateMeta[t.healthState].color}
+                        height={22}
+                        className="w-[96px]"
+                      />
+                      <span className="lp-mono text-[11px] text-[var(--lp-subtle)]" title={`${t.pointCount} samples`}>
+                        {t.pointCount}
+                      </span>
                     </span>
                   </td>
                   <td className="lp-mono px-3 py-3 text-right">
                     {formatMs(t.lastRttMs)}
                     {typeof t.lastRttMs === "number" ? <span className="text-[var(--lp-subtle)]"> ms</span> : null}
                   </td>
-                  <td className="px-4 py-3 text-right text-[var(--lp-subtle)]">{relativeTime(t.lastSampleAt)}</td>
+                  <td className="px-3 py-3 text-right text-[var(--lp-subtle)]">{relativeTime(t.lastSampleAt)}</td>
+                  <td className="px-4 py-3">
+                    <span className="flex justify-end gap-1 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <Link href={historyHref(t)} aria-label={`History for ${t.name}`} title="History" className="grid h-7 w-7 place-items-center rounded-md text-[var(--lp-muted)] hover:bg-white/[0.06] hover:text-[var(--lp-text)]">
+                        <History className="h-3.5 w-3.5" />
+                      </Link>
+                      <Link href={t.href} aria-label={`Probe ${t.name} again`} title="Probe again" className="grid h-7 w-7 place-items-center rounded-md text-[var(--lp-muted)] hover:bg-white/[0.06] hover:text-[var(--lp-text)]">
+                        <Play className="h-3.5 w-3.5" />
+                      </Link>
+                    </span>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-[13px] text-[var(--lp-subtle)]">
+                <td colSpan={7} className="px-4 py-10 text-center text-[13px] text-[var(--lp-subtle)]">
                   {targets.length ? "No targets match these filters." : "No targets yet. Run a probe and it will show up here."}
                 </td>
               </tr>

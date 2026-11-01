@@ -333,7 +333,7 @@ export function Sidebar({ session }: { session: SessionResponse }) {
           <WorkspaceSwitcher session={session} collapsed={collapsed} />
         </div>
 
-        <nav className={cn("flex-1 pb-4 pt-1", collapsed ? "overflow-visible px-2" : "overflow-y-auto px-3")} aria-label="Main">
+        <nav className={cn("flex-1 pb-4 pt-1", collapsed ? "overflow-visible px-2" : "lp-scroll-subtle overflow-y-auto px-3")} aria-label="Main">
           {sidebarSections(isAdmin).map((section) => {
             const hasActive = section.items.some((item) => item.href === pathname);
             const folded = !collapsed && !hasActive && foldedSections.includes(section.label);

@@ -439,3 +439,56 @@
     animation: none;
   }
 }
+
+/* ---------- scrollbars: thin and dark instead of the bright native bar ---------- */
+html:has(.lp-console) {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) #141417;
+}
+
+.lp-console,
+.lp-console * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+/* Safari and older Chromium ignore the standard properties above. */
+.lp-console ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.lp-console ::-webkit-scrollbar-track,
+.lp-console ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.lp-console ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14) padding-box;
+}
+
+.lp-console ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+
+/* Sidebar nav: the thumb shows only while the pointer or focus is in the list. */
+.lp-console .lp-scroll-subtle {
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+
+.lp-console .lp-scroll-subtle:hover,
+.lp-console .lp-scroll-subtle:focus-within {
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+.lp-console .lp-scroll-subtle::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.lp-console .lp-scroll-subtle:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.16);
+}

@@ -171,7 +171,7 @@ export function LandingPage() {
               <span className="lp-pulse h-1.5 w-1.5 rounded-full bg-[var(--lp-green)]" />
               Network · Infrastructure · Security
             </div>
-            <h1 className="mx-auto mt-5 max-w-4xl text-[44px] font-normal leading-[1.08] tracking-[-0.035em] sm:text-[72px]">
+            <h1 className="mx-auto mt-5 max-w-4xl text-[38px] font-normal leading-[1.08] tracking-[-0.035em] sm:text-[72px]">
               <span className="lp-hero-text">See every network, server, and threat</span>
               <span className="lp-cursor" />
             </h1>
@@ -212,7 +212,7 @@ export function LandingPage() {
         </section>
 
         {/* comparison */}
-        <section className="lp-divider py-28">
+        <section className="lp-divider py-20 sm:py-28">
           <div className="lp-container">
             <SectionHeader
               label="Why one tool"
@@ -226,7 +226,7 @@ export function LandingPage() {
         </section>
 
         {/* how it works */}
-        <section id="how" className="lp-divider scroll-mt-20 py-28">
+        <section id="how" className="lp-divider scroll-mt-20 py-20 sm:py-28">
           <div className="lp-container grid grid-cols-1 gap-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <div className="lg:sticky lg:top-28">
@@ -256,7 +256,7 @@ export function LandingPage() {
         </section>
 
         {/* products */}
-        <section id="products" className="lp-divider scroll-mt-20 py-28">
+        <section id="products" className="lp-divider scroll-mt-20 py-20 sm:py-28">
           <div className="lp-container">
             <SectionHeader
               label="Product"
@@ -274,7 +274,7 @@ export function LandingPage() {
         </section>
 
         {/* developers */}
-        <section id="developers" className="lp-divider scroll-mt-20 py-28">
+        <section id="developers" className="lp-divider scroll-mt-20 py-20 sm:py-28">
           <div className="lp-container grid grid-cols-1 items-start gap-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <SectionHeader label="Developers" title="The console is a client like any other" />
@@ -302,7 +302,7 @@ export function LandingPage() {
         </section>
 
         {/* security */}
-        <section id="security" className="lp-divider scroll-mt-20 py-28">
+        <section id="security" className="lp-divider scroll-mt-20 py-20 sm:py-28">
           <div className="lp-container grid grid-cols-1 gap-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <SectionHeader label="Security" title="A scanner should refuse to scan what isn't yours" />
@@ -394,7 +394,7 @@ export function LandingPage() {
         </section>
 
         {/* pricing */}
-        <section id="pricing" className="lp-divider scroll-mt-20 py-28">
+        <section id="pricing" className="lp-divider scroll-mt-20 py-20 sm:py-28">
           <div className="lp-container">
             <SectionHeader
               label="Pricing"
@@ -408,7 +408,7 @@ export function LandingPage() {
         </section>
 
         {/* faq */}
-        <section id="faq" className="lp-divider scroll-mt-20 py-28">
+        <section id="faq" className="lp-divider scroll-mt-20 py-20 sm:py-28">
           <div className="lp-container grid grid-cols-1 gap-14 lg:grid-cols-12">
             <div className="lg:col-span-4">
               <SectionHeader label="FAQ" title="Common questions" />
@@ -423,13 +423,13 @@ export function LandingPage() {
         </section>
 
         {/* closing CTA */}
-        <section className="lp-divider relative overflow-hidden py-28">
+        <section className="lp-divider relative overflow-hidden py-20 sm:py-28">
           <div
             className="pointer-events-none absolute inset-0"
             style={{ background: "radial-gradient(ellipse 40% 70% at 15% 100%, rgba(255,61,127,0.14), transparent 70%)" }}
           />
           <div className="lp-container relative grid grid-cols-1 items-end gap-10 lg:grid-cols-12">
-            <h2 className="lp-reveal text-[40px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[60px] lg:col-span-8">
+            <h2 className="lp-reveal text-[34px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[60px] lg:col-span-8">
               <span className="lp-hero-text">Start watching your network</span>
               <span className="lp-cursor" />
             </h2>
@@ -453,8 +453,8 @@ export function LandingPage() {
       {/* footer */}
       <footer className="lp-divider pb-10 pt-16">
         <div className="lp-container">
-          <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
-            <div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
+            <div className="col-span-2 md:col-span-1">
               <Link href="/" className="flex items-center gap-2.5">
                 <QnetwardMark size={24} />
                 <span className="font-semibold">Qnetward</span>

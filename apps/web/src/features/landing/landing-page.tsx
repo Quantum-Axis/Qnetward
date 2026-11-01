@@ -8,6 +8,7 @@ import { NetworkCanvas } from "./network-canvas";
 import { Pricing } from "./pricing";
 import { ProductShowcase } from "./product-showcase";
 import { RoadmapPreview } from "./roadmap-preview";
+import { MonitorStackVisual, MonitorVisual, ProbeVisual, WorkspaceVisual } from "./step-visuals";
 import { QnetwardMark } from "./qnetward-mark";
 import { TechLogos } from "./tech-logos";
 import { ToolComparison } from "./tool-comparison";
@@ -56,17 +57,17 @@ const steps = [
   {
     title: "Create a workspace",
     body: "Sign up with an email address. A workspace is created for you, and you can invite teammates now or later.",
-    hint: "~30 seconds",
+    visual: <WorkspaceVisual />,
   },
   {
     title: "Point it at something",
     body: "Ping a host, scan its ports, or pull its DNS records. Results stream in as they happen and are kept in history.",
-    hint: "tcpping db.internal:5432",
+    visual: <ProbeVisual />,
   },
   {
     title: "Keep watching what matters",
     body: "Turn a URL, port, or host into a monitor checked every minute, even with the tab closed. When it goes down, or a certificate is about to expire, you get an email.",
-    hint: "GET https://api.acme.dev/health · every 1m",
+    visual: <MonitorVisual />,
   },
 ];
 
@@ -75,7 +76,7 @@ const securityToday = [
   "Passwords hashed with bcrypt; sessions and reset tokens stored only as hashes",
   "Rate limits on sign-in, verification, and probe endpoints",
   "Strict origin checks on the API and live WebSocket",
-  "Workspace data visible only to its members, by role",
+  "Workspace data kept apart by row-level security in the database",
   "Probes to private and cloud-metadata addresses blocked by default",
 ];
 
@@ -125,6 +126,13 @@ function SectionHeader({
     </div>
   );
 }
+
+// Tier markers brighten as the access they grant grows.
+const tierTone = [
+  { border: "rgba(74,222,128,0.45)", text: "#86efac" },
+  { border: "rgba(251,191,36,0.45)", text: "#fcd34d" },
+  { border: "rgba(255,61,127,0.5)", text: "#ff8fb3" },
+];
 
 function Check({ muted = false }: { muted?: boolean }) {
   return (
@@ -242,12 +250,18 @@ export function LandingPage() {
             </div>
             <ol className="lg:col-span-7">
               {steps.map((step, i) => (
-                <li key={step.title} className="lp-reveal grid grid-cols-[48px_1fr] gap-x-4 border-t border-[var(--lp-border)] py-9 last:border-b">
-                  <span className="lp-mono pt-1 text-[13px] text-[var(--lp-subtle)]">{String(i + 1).padStart(2, "0")}</span>
-                  <div>
+                <li key={step.title} className="lp-reveal relative grid grid-cols-[40px_1fr] gap-x-4 pb-12 last:pb-0 sm:grid-cols-[48px_1fr]">
+                  {/* The rail joins the step numbers; it stops at the last one. */}
+                  {i < steps.length - 1 ? (
+                    <span aria-hidden="true" className="absolute bottom-0 left-[15px] top-9 w-px bg-gradient-to-b from-[var(--lp-border-strong)] to-transparent" />
+                  ) : null}
+                  <span className="lp-mono relative grid h-8 w-8 place-items-center rounded-full border border-[var(--lp-border-strong)] bg-[var(--lp-bg-raised)] text-[12px] text-[var(--lp-muted)]">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 pt-0.5">
                     <h3 className="text-[22px] font-normal tracking-[-0.01em]">{step.title}</h3>
                     <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-[var(--lp-muted)]">{step.body}</p>
-                    <span className="lp-mono mt-5 inline-block text-[12px] text-[var(--lp-subtle)]">{step.hint}</span>
+                    <div className="mt-6">{step.visual}</div>
                   </div>
                 </li>
               ))}
@@ -275,7 +289,7 @@ export function LandingPage() {
 
         {/* developers */}
         <section id="developers" className="lp-divider scroll-mt-20 py-20 sm:py-28">
-          <div className="lp-container grid grid-cols-1 items-start gap-14 lg:grid-cols-12">
+          <div className="lp-container grid grid-cols-1 gap-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <SectionHeader label="Developers" title="The console is a client like any other" />
               <p className="lp-reveal mt-6 text-[16px] leading-relaxed text-[var(--lp-muted)]">
@@ -295,7 +309,7 @@ export function LandingPage() {
                 ))}
               </dl>
             </div>
-            <div className="lp-reveal lg:col-span-7">
+            <div className="lp-reveal flex lg:col-span-7">
               <CodeTabs />
             </div>
           </div>
@@ -340,16 +354,29 @@ export function LandingPage() {
                 <h3 className="text-[15px] font-medium">How scanning will be gated</h3>
                 <span className="text-[13px] text-[var(--lp-subtle)]">Planned · each tier unlocks the next</span>
               </div>
-              <ol className="grid md:grid-cols-3">
+              <ol className="relative mt-8 grid gap-8 md:grid-cols-3 md:gap-6">
+                {/* One line runs through the tier markers: across on wide screens, down on phones. */}
+                <span aria-hidden="true" className="absolute left-[15px] top-4 bottom-4 w-px bg-[var(--lp-border-strong)] md:left-4 md:right-4 md:top-[15px] md:bottom-auto md:h-px md:w-auto" />
                 {scanTiers.map((t, i) => (
-                  <li key={t.tier} className={`border-b border-[var(--lp-border)] py-6 md:border-b-0 md:pr-8 ${i > 0 ? "md:border-l md:pl-8" : ""}`}>
-                    <div className="flex items-center gap-2 text-[13px]">
-                      <span className="lp-mono text-[var(--lp-subtle)]">{t.tier}</span>
-                      <span className="text-[var(--lp-subtle)]">·</span>
-                      <span className="text-[var(--lp-muted)]">{t.who}</span>
+                  <li key={t.tier} className="relative grid grid-cols-[32px_1fr] gap-x-4 md:block">
+                    <span
+                      className="lp-mono relative z-10 grid h-8 w-8 place-items-center rounded-full border text-[12px]"
+                      style={{
+                        borderColor: tierTone[i].border,
+                        color: tierTone[i].text,
+                        background: "var(--lp-bg)",
+                        boxShadow: `0 0 0 4px var(--lp-bg)`,
+                      }}
+                    >
+                      {i}
+                    </span>
+                    <div className="md:mt-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-[17px] font-normal">{t.name}</h4>
+                        <span className="rounded-md border border-[var(--lp-border)] px-1.5 py-px text-[11.5px] text-[var(--lp-muted)]">{t.who}</span>
+                      </div>
+                      <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-[var(--lp-muted)]">{t.body}</p>
                     </div>
-                    <h4 className="mt-2 text-[17px] font-normal">{t.name}</h4>
-                    <p className="mt-2 text-[14px] leading-relaxed text-[var(--lp-muted)]">{t.body}</p>
                   </li>
                 ))}
               </ol>
@@ -423,27 +450,37 @@ export function LandingPage() {
         </section>
 
         {/* closing CTA */}
-        <section className="lp-divider relative overflow-hidden py-20 sm:py-28">
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{ background: "radial-gradient(ellipse 40% 70% at 15% 100%, rgba(255,61,127,0.14), transparent 70%)" }}
-          />
-          <div className="lp-container relative grid grid-cols-1 items-end gap-10 lg:grid-cols-12">
-            <h2 className="lp-reveal text-[34px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[60px] lg:col-span-8">
-              <span className="lp-hero-text">Start watching your network</span>
-              <span className="lp-cursor" />
-            </h2>
-            <div className="lp-reveal lg:col-span-4">
-              <p className="text-[16px] leading-relaxed text-[var(--lp-muted)]">
-                Free to start, no card required. Your first probe runs in under a minute.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-6 text-[15px]">
-                  Create free account
-                </Link>
-                <Link href="/login" className="lp-btn lp-btn-secondary h-11 px-6 text-[15px]">
-                  Sign in
-                </Link>
+        <section className="lp-divider py-20 sm:py-28">
+          <div className="lp-container">
+            <div className="lp-reveal lp-cta-panel relative overflow-hidden rounded-3xl border border-[var(--lp-border-strong)] px-6 py-12 sm:px-12 sm:py-16">
+              <div aria-hidden="true" className="lp-cta-grid pointer-events-none absolute inset-0" />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0"
+                style={{ background: "radial-gradient(ellipse 45% 80% at 0% 100%, rgba(255,61,127,0.16), transparent 70%)" }}
+              />
+              <div className="relative grid grid-cols-1 items-center gap-12 lg:grid-cols-12">
+                <div className="lg:col-span-7">
+                  <h2 className="text-[34px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[56px]">
+                    <span className="lp-hero-text">Start watching your network</span>
+                    <span className="lp-cursor" />
+                  </h2>
+                  <p className="mt-5 max-w-md text-[16px] leading-relaxed text-[var(--lp-muted)]">
+                    Free to start, no card required. Your first probe runs in under a minute, and your monitors keep
+                    checking after you close the tab.
+                  </p>
+                  <div className="mt-8 flex flex-wrap gap-3">
+                    <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-6 text-[15px]">
+                      Create free account
+                    </Link>
+                    <Link href="/login" className="lp-btn lp-btn-secondary h-11 px-6 text-[15px]">
+                      Sign in
+                    </Link>
+                  </div>
+                </div>
+                <div className="lg:col-span-5">
+                  <MonitorStackVisual />
+                </div>
               </div>
             </div>
           </div>

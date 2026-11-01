@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { horizonMeta, itemsByHorizon, type Horizon } from "./roadmap-data";
 
 const dot: Record<Horizon, string> = {
@@ -28,10 +28,18 @@ export function RoadmapPreview() {
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot[horizon] }} aria-hidden="true" />
                 <h4 className="text-[14px] font-medium">{horizonMeta[horizon].label}</h4>
                 <span className="text-[13px] text-[var(--lp-subtle)]">· {horizonMeta[horizon].caption}</span>
+                <span className="lp-mono ml-auto rounded-md border border-[var(--lp-border)] px-1.5 text-[11.5px] text-[var(--lp-subtle)]">{items.length}</span>
               </div>
               <ul className="mt-4 space-y-2.5">
                 {items.map((item) => (
-                  <li key={item.name} className={`text-[14px] leading-snug ${horizon === "now" ? "text-[var(--lp-text)]" : "text-[var(--lp-muted)]"}`}>
+                  <li key={item.name} className={`flex items-center gap-2 text-[14px] leading-snug ${horizon === "now" ? "text-[var(--lp-text)]" : "text-[var(--lp-muted)]"}`}>
+                    {horizon === "now" ? (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-[var(--lp-green)]" aria-hidden="true" />
+                    ) : (
+                      <span className="h-3.5 w-3.5 shrink-0 text-center leading-[14px] text-[var(--lp-subtle)]" aria-hidden="true">
+                        ·
+                      </span>
+                    )}
                     {item.name}
                   </li>
                 ))}

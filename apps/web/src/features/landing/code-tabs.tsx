@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 
 type Line = { text: string; tone?: "cmd" | "muted" | "ok" | "warn" | "accent" };
 
@@ -64,30 +65,55 @@ const toneColor: Record<NonNullable<Line["tone"]>, string> = {
 
 export function CodeTabs() {
   const [active, setActive] = useState(tabs[0].id);
+  const [copied, setCopied] = useState(false);
   const tab = tabs.find((t) => t.id === active) ?? tabs[0];
 
+  // Copy only what a reader would type: commands for the CLI, the whole example otherwise.
+  const copyText = () => {
+    const commands = tab.lines.filter((l) => l.tone === "cmd").map((l) => l.text.replace(/^\$ /, ""));
+    const text = commands.length ? commands.join("\n") : tab.lines.map((l) => l.text).join("\n").trim();
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
   return (
-    <div className="overflow-hidden rounded-xl border border-[var(--lp-border)] bg-[#111114]">
-      <div role="tablist" aria-label="Usage examples" className="flex border-b border-[var(--lp-border)]">
-        {tabs.map((t) => {
-          const selected = t.id === active;
-          return (
-            <button
-              key={t.id}
-              role="tab"
-              type="button"
-              aria-selected={selected}
-              onClick={() => setActive(t.id)}
-              className="relative px-4 py-3 text-[13px] transition-colors"
-              style={{ color: selected ? "var(--lp-text)" : "var(--lp-subtle)" }}
-            >
-              {t.label}
-              {selected ? <span className="absolute inset-x-3 -bottom-px h-px bg-[var(--lp-accent)]" /> : null}
-            </button>
-          );
-        })}
+    <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--lp-border)] bg-[#111114]">
+      <div className="flex items-center border-b border-[var(--lp-border)]">
+        <div role="tablist" aria-label="Usage examples" className="flex">
+          {tabs.map((t) => {
+            const selected = t.id === active;
+            return (
+              <button
+                key={t.id}
+                role="tab"
+                type="button"
+                aria-selected={selected}
+                onClick={() => {
+                  setActive(t.id);
+                  setCopied(false);
+                }}
+                className="relative px-4 py-3 text-[13px] transition-colors"
+                style={{ color: selected ? "var(--lp-text)" : "var(--lp-subtle)" }}
+              >
+                {t.label}
+                {selected ? <span className="absolute inset-x-3 -bottom-px h-px bg-[var(--lp-accent)]" /> : null}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={copyText}
+          className="ml-auto mr-2 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--lp-subtle)] transition-colors hover:bg-white/[0.05] hover:text-[var(--lp-text)]"
+          aria-label={copied ? "Copied" : `Copy ${tab.label} example`}
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-[var(--lp-green)]" /> : <Copy className="h-3.5 w-3.5" />}
+          <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
+        </button>
       </div>
-      <pre role="tabpanel" className="lp-mono min-h-[300px] overflow-x-auto p-5 text-[12.5px] leading-6">
+      <pre role="tabpanel" className="lp-mono min-h-[300px] flex-1 overflow-x-auto p-5 text-[12.5px] leading-6">
         {tab.lines.map((line, i) => (
           <div key={i} style={{ color: line.tone ? toneColor[line.tone] : "#c9c9d1" }}>
             {line.text || " "}

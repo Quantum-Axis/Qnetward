@@ -173,8 +173,8 @@ export function LandingPage() {
             <div className="lp-aurora lp-aurora-a" />
             <div className="lp-aurora lp-aurora-b" />
           </div>
-          <NetworkCanvas className="absolute inset-x-0 top-0 h-[760px] w-full opacity-80 [mask-image:linear-gradient(to_bottom,black_55%,transparent)]" />
-          <div className="lp-container relative pb-16 pt-14 text-center sm:pt-20">
+          <NetworkCanvas className="absolute inset-x-0 top-0 h-[760px] w-full opacity-40 [mask-image:linear-gradient(to_bottom,black_55%,transparent)] sm:opacity-80" />
+          <div className="lp-container relative pb-16 pt-10 text-center sm:pt-20">
             <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--lp-border)] bg-white/[0.03] px-3 py-1 text-[12px] text-[var(--lp-muted)]">
               <span className="lp-pulse h-1.5 w-1.5 rounded-full bg-[var(--lp-green)]" />
               Network · Infrastructure · Security
@@ -183,7 +183,7 @@ export function LandingPage() {
               <span className="lp-hero-text">See every network, server, and threat</span>
               <span className="lp-cursor" />
             </h1>
-            <p className="mx-auto mt-5 max-w-3xl text-[18px] leading-relaxed text-[var(--lp-muted)]">
+            <p className="mx-auto mt-5 max-w-3xl text-[16px] leading-relaxed text-[var(--lp-muted)] sm:text-[18px]">
               Qnetward probes, monitors, and protects your infrastructure from one platform.{" "}
               <br className="hidden md:block" />
               Diagnostics and uptime monitors today. Agents and attack-surface scans next.

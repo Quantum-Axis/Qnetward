@@ -17,17 +17,17 @@ func TestHandleAdminOverviewRequiresAdmin(t *testing.T) {
 	st := installTestStore(t)
 	_, cookie := issueTestSession(t, st)
 
-	previous := appAdminEmails
-	appAdminEmails = map[string]struct{}{}
+	previous := testSrv.adminEmails
+	testSrv.adminEmails = map[string]struct{}{}
 	t.Cleanup(func() {
-		appAdminEmails = previous
+		testSrv.adminEmails = previous
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/overview", nil)
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleAdminOverview(rr, req)
+	testSrv.handleAdminOverview(rr, req)
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
@@ -38,17 +38,17 @@ func TestHandleAdminOverviewReturnsCountsForAdmin(t *testing.T) {
 	st := installTestStore(t)
 	user, cookie := issueTestSession(t, st)
 
-	previous := appAdminEmails
-	appAdminEmails = map[string]struct{}{strings.ToLower(user.Email): {}}
+	previous := testSrv.adminEmails
+	testSrv.adminEmails = map[string]struct{}{strings.ToLower(user.Email): {}}
 	t.Cleanup(func() {
-		appAdminEmails = previous
+		testSrv.adminEmails = previous
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/overview", nil)
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleAdminOverview(rr, req)
+	testSrv.handleAdminOverview(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -73,22 +73,22 @@ func TestHandleAdminUsersWorkspacesAndSystemReturnPayloads(t *testing.T) {
 		t.Fatalf("CreateSession returned error: %v", err)
 	}
 
-	previousAdmins := appAdminEmails
-	previousDemoEnabled := appDemoEnabled
-	previousPublicBaseURL := appPublicBaseURL
-	appAdminEmails = map[string]struct{}{strings.ToLower(user.Email): {}}
-	appDemoEnabled = true
-	appPublicBaseURL = "https://qnetward.gitzen.cloud"
+	previousAdmins := testSrv.adminEmails
+	previousDemoEnabled := testSrv.demoEnabled
+	previousPublicBaseURL := testSrv.publicBaseURL
+	testSrv.adminEmails = map[string]struct{}{strings.ToLower(user.Email): {}}
+	testSrv.demoEnabled = true
+	testSrv.publicBaseURL = "https://qnetward.gitzen.cloud"
 	t.Cleanup(func() {
-		appAdminEmails = previousAdmins
-		appDemoEnabled = previousDemoEnabled
-		appPublicBaseURL = previousPublicBaseURL
+		testSrv.adminEmails = previousAdmins
+		testSrv.demoEnabled = previousDemoEnabled
+		testSrv.publicBaseURL = previousPublicBaseURL
 	})
 
 	usersReq := httptest.NewRequest(http.MethodGet, "/api/admin/users?limit=10", nil)
 	usersReq.AddCookie(cookie)
 	usersRR := httptest.NewRecorder()
-	handleAdminUsers(usersRR, usersReq)
+	testSrv.handleAdminUsers(usersRR, usersReq)
 
 	if usersRR.Code != http.StatusOK {
 		t.Fatalf("expected 200 from admin users, got %d: %s", usersRR.Code, usersRR.Body.String())
@@ -108,7 +108,7 @@ func TestHandleAdminUsersWorkspacesAndSystemReturnPayloads(t *testing.T) {
 	workspacesReq := httptest.NewRequest(http.MethodGet, "/api/admin/workspaces?limit=10", nil)
 	workspacesReq.AddCookie(cookie)
 	workspacesRR := httptest.NewRecorder()
-	handleAdminWorkspaces(workspacesRR, workspacesReq)
+	testSrv.handleAdminWorkspaces(workspacesRR, workspacesReq)
 
 	if workspacesRR.Code != http.StatusOK {
 		t.Fatalf("expected 200 from admin workspaces, got %d: %s", workspacesRR.Code, workspacesRR.Body.String())
@@ -128,7 +128,7 @@ func TestHandleAdminUsersWorkspacesAndSystemReturnPayloads(t *testing.T) {
 	systemReq := httptest.NewRequest(http.MethodGet, "/api/admin/system", nil)
 	systemReq.AddCookie(cookie)
 	systemRR := httptest.NewRecorder()
-	handleAdminSystem(systemRR, systemReq)
+	testSrv.handleAdminSystem(systemRR, systemReq)
 
 	if systemRR.Code != http.StatusOK {
 		t.Fatalf("expected 200 from admin system, got %d: %s", systemRR.Code, systemRR.Body.String())

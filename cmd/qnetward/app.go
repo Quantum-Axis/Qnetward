@@ -1,0 +1,123 @@
+package main
+
+import (
+	"net/http"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"qnetward/internal/platform/cache"
+	"qnetward/internal/platform/mailer"
+	"qnetward/internal/platform/netguard"
+	"qnetward/internal/platform/objectstore"
+	"qnetward/internal/store"
+)
+
+// Deps are the infrastructure adapters the API needs. Cache, Objects, and
+// Mailer are optional: handlers degrade when they are nil.
+type Deps struct {
+	Store   *store.Store
+	Cache   *cache.Cache
+	Objects *objectstore.Client
+	Mailer  *mailer.Client
+}
+
+// Options are the request-handling settings read from flags or the environment.
+type Options struct {
+	PublicBaseURL  string
+	AllowedOrigins map[string]struct{}
+	AdminEmails    map[string]struct{}
+	DemoEnabled    bool
+	DemoName       string
+	DemoEmail      string
+	// TargetPolicy decides which addresses API-initiated probes may reach.
+	// The CLI does not use it: it runs on the operator's own machine.
+	TargetPolicy netguard.Policy
+}
+
+// Server holds everything the HTTP handlers need. It replaces the package-level
+// globals the handlers used to read, so each test can build its own instance.
+type Server struct {
+	store   *store.Store
+	cache   *cache.Cache
+	objects *objectstore.Client
+	mailer  *mailer.Client
+
+	publicBaseURL  string
+	allowedOrigins map[string]struct{}
+	adminEmails    map[string]struct{}
+	demoEnabled    bool
+	demoName       string
+	demoEmail      string
+	demoCreatedAt  time.Time
+	targetPolicy   netguard.Policy
+
+	probeLimiter   chan struct{}
+	rejectedProbes atomic.Uint64
+	authLimiter    *rateLimiter
+}
+
+// NewServer wires a Server from its dependencies and options.
+func NewServer(deps Deps, opts Options) *Server {
+	srv := &Server{
+		store:          deps.Store,
+		cache:          deps.Cache,
+		objects:        deps.Objects,
+		mailer:         deps.Mailer,
+		publicBaseURL:  strings.TrimRight(strings.TrimSpace(opts.PublicBaseURL), "/"),
+		allowedOrigins: opts.AllowedOrigins,
+		adminEmails:    opts.AdminEmails,
+		demoEnabled:    opts.DemoEnabled,
+		demoName:       strings.TrimSpace(opts.DemoName),
+		demoEmail:      strings.TrimSpace(opts.DemoEmail),
+		demoCreatedAt:  time.Now().UTC(),
+		targetPolicy:   opts.TargetPolicy,
+		probeLimiter:   make(chan struct{}, maxConcurrentProbes),
+		authLimiter:    newRateLimiter(),
+	}
+	if srv.demoEnabled {
+		if srv.demoName == "" {
+			srv.demoName = "Contributor Demo"
+		}
+		if srv.demoEmail == "" {
+			srv.demoEmail = "demo@qnetward.local"
+		}
+	}
+	return srv
+}
+
+// Handler returns the API's routes wrapped in the security headers middleware.
+func (srv *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", srv.handleHealthz)
+	mux.HandleFunc("/api/healthz", srv.handleHealthz)
+	mux.HandleFunc("/api/auth/session", srv.handleAuthSession)
+	mux.HandleFunc("/api/auth/account-context", srv.handleAuthAccountContext)
+	mux.HandleFunc("/api/auth/demo-login", srv.handleAuthDemoLogin)
+	mux.HandleFunc("/api/auth/signup", srv.handleAuthSignup)
+	mux.HandleFunc("/api/auth/login", srv.handleAuthLogin)
+	mux.HandleFunc("/api/auth/logout", srv.handleAuthLogout)
+	mux.HandleFunc("/api/auth/profile", srv.handleAuthProfile)
+	mux.HandleFunc("/api/auth/verify-email", srv.handleAuthVerifyEmail)
+	mux.HandleFunc("/api/auth/resend-verification", srv.handleAuthResendVerification)
+	mux.HandleFunc("/api/auth/forgot-password", srv.handleAuthForgotPassword)
+	mux.HandleFunc("/api/auth/reset-password", srv.handleAuthResetPassword)
+	mux.HandleFunc("/api/workspaces", srv.handleWorkspaces)
+	mux.HandleFunc("/api/workspace/team", srv.handleWorkspaceTeam)
+	mux.HandleFunc("/api/workspace/invitations", srv.handleWorkspaceInvitations)
+	mux.HandleFunc("/api/admin/overview", srv.handleAdminOverview)
+	mux.HandleFunc("/api/admin/users", srv.handleAdminUsers)
+	mux.HandleFunc("/api/admin/workspaces", srv.handleAdminWorkspaces)
+	mux.HandleFunc("/api/admin/system", srv.handleAdminSystem)
+	mux.HandleFunc("/api/ping", srv.handlePing)
+	mux.HandleFunc("/api/tcpping", srv.handleTCPPing)
+	mux.HandleFunc("/api/portscan", srv.handlePortScan)
+	mux.HandleFunc("/api/dnslookup", srv.handleDNSLookup)
+	mux.HandleFunc("/api/history", srv.handleHistory)
+	mux.HandleFunc("/api/history/recent-targets", srv.handleRecentHistoryTargets)
+	mux.HandleFunc("/api/export/history", srv.handleHistoryExport)
+	mux.HandleFunc("/api/alerts/rules", srv.handleAlertRules)
+	mux.HandleFunc("/ws", srv.handleWS)
+	mux.Handle("/", newBackendFallbackHandler())
+	return withSecurityHeaders(mux)
+}

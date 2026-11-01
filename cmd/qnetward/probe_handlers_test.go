@@ -20,7 +20,7 @@ func TestHandlePingRejectsInvalidPayload(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handlePing(rr, req)
+	testSrv.handlePing(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
@@ -42,7 +42,7 @@ func TestHandlePingRejectsContinuousOverHTTP(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handlePing(rr, req)
+	testSrv.handlePing(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
@@ -61,7 +61,7 @@ func TestHandlePingRejectsForbiddenOrigin(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handlePing(rr, req)
+	testSrv.handlePing(rr, req)
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", rr.Code)
@@ -76,7 +76,7 @@ func TestHandlePingRejectsOversizedBody(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handlePing(rr, req)
+	testSrv.handlePing(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
@@ -93,7 +93,7 @@ func TestHandlePingRejectsTrailingJSON(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handlePing(rr, req)
+	testSrv.handlePing(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
@@ -110,7 +110,7 @@ func TestHandlePortScanRejectsInvalidPayload(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handlePortScan(rr, req)
+	testSrv.handlePortScan(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
@@ -127,7 +127,7 @@ func TestHandleDNSLookupRejectsEmptyTarget(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handleDNSLookup(rr, req)
+	testSrv.handleDNSLookup(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
@@ -166,7 +166,7 @@ func TestHandleTCPPingStoresPerProbeTimestamps(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleTCPPing(rr, req)
+	testSrv.handleTCPPing(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -194,7 +194,7 @@ func TestHandleTCPPingRejectsContinuousOverHTTP(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handleTCPPing(rr, req)
+	testSrv.handleTCPPing(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)

@@ -19,7 +19,7 @@ func TestHandleAuthAccountContextReturnsWorkspace(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleAuthAccountContext(rr, req)
+	testSrv.handleAuthAccountContext(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -57,7 +57,7 @@ func TestHandleWorkspaceTeamReturnsMembersAndInvitations(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleWorkspaceTeam(rr, req)
+	testSrv.handleWorkspaceTeam(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -87,7 +87,7 @@ func TestHandleWorkspaceTeamCreatesInvitation(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleWorkspaceTeam(rr, req)
+	testSrv.handleWorkspaceTeam(rr, req)
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
@@ -131,7 +131,7 @@ func TestHandleWorkspaceTeamUpdatesMemberRole(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleWorkspaceTeam(rr, req)
+	testSrv.handleWorkspaceTeam(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -170,7 +170,7 @@ func TestHandleWorkspaceTeamRemovesMember(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleWorkspaceTeam(rr, req)
+	testSrv.handleWorkspaceTeam(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -204,7 +204,7 @@ func TestHandleWorkspaceInvitationsReturnsIncomingInvites(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleWorkspaceInvitations(rr, req)
+	testSrv.handleWorkspaceInvitations(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -243,7 +243,7 @@ func TestHandleWorkspaceInvitationsAcceptsInvite(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleWorkspaceInvitations(rr, req)
+	testSrv.handleWorkspaceInvitations(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -280,7 +280,7 @@ func TestHandleWorkspacesListsAndSwitchesActiveWorkspace(t *testing.T) {
 	getReq := httptest.NewRequest(http.MethodGet, "/api/workspaces", nil)
 	getReq.AddCookie(cookie)
 	getRR := httptest.NewRecorder()
-	handleWorkspaces(getRR, getReq)
+	testSrv.handleWorkspaces(getRR, getReq)
 
 	if getRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", getRR.Code, getRR.Body.String())
@@ -299,7 +299,7 @@ func TestHandleWorkspacesListsAndSwitchesActiveWorkspace(t *testing.T) {
 	switchReq.Header.Set("Content-Type", "application/json")
 	switchReq.AddCookie(cookie)
 	switchRR := httptest.NewRecorder()
-	handleWorkspaces(switchRR, switchReq)
+	testSrv.handleWorkspaces(switchRR, switchReq)
 
 	if switchRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", switchRR.Code, switchRR.Body.String())
@@ -308,7 +308,7 @@ func TestHandleWorkspacesListsAndSwitchesActiveWorkspace(t *testing.T) {
 	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
 	sessionReq.AddCookie(cookie)
 	sessionRR := httptest.NewRecorder()
-	handleAuthSession(sessionRR, sessionReq)
+	testSrv.handleAuthSession(sessionRR, sessionReq)
 
 	var sessionResp authSessionResponse
 	if err := json.Unmarshal(sessionRR.Body.Bytes(), &sessionResp); err != nil {
@@ -335,7 +335,7 @@ func TestHandleWorkspaceTeamRevokesInvitation(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleWorkspaceTeam(rr, req)
+	testSrv.handleWorkspaceTeam(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())

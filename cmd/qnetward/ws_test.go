@@ -15,10 +15,10 @@ func TestIsAllowedWSOriginAcceptsSameHostAndRejectsDifferentHost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/ws", nil)
 	req.Host = "127.0.0.1:8080"
 
-	if !isAllowedWSOrigin(req, "http://127.0.0.1:8080") {
+	if !testSrv.isAllowedWSOrigin(req, "http://127.0.0.1:8080") {
 		t.Fatal("expected same host origin to be allowed")
 	}
-	if isAllowedWSOrigin(req, "http://example.com:8080") {
+	if testSrv.isAllowedWSOrigin(req, "http://example.com:8080") {
 		t.Fatal("expected different host origin to be rejected")
 	}
 }
@@ -27,7 +27,7 @@ func TestHandleWSRejectsInvalidPingRequest(t *testing.T) {
 	st := installTestStore(t)
 	cookie := issueTestSessionCookie(t, st)
 
-	server := httptest.NewServer(http.HandlerFunc(handleWS))
+	server := httptest.NewServer(http.HandlerFunc(testSrv.handleWS))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
@@ -61,7 +61,7 @@ func TestHandleWSRejectsInvalidPortScanRequest(t *testing.T) {
 	st := installTestStore(t)
 	cookie := issueTestSessionCookie(t, st)
 
-	server := httptest.NewServer(http.HandlerFunc(handleWS))
+	server := httptest.NewServer(http.HandlerFunc(testSrv.handleWS))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
@@ -97,7 +97,7 @@ func TestHandleWSRejectsWhenProbeLimiterFull(t *testing.T) {
 	st := installTestStore(t)
 	cookie := issueTestSessionCookie(t, st)
 
-	server := httptest.NewServer(http.HandlerFunc(handleWS))
+	server := httptest.NewServer(http.HandlerFunc(testSrv.handleWS))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
@@ -146,7 +146,7 @@ func TestHandleWSStopCancelsActiveRun(t *testing.T) {
 		}
 	}()
 
-	server := httptest.NewServer(http.HandlerFunc(handleWS))
+	server := httptest.NewServer(http.HandlerFunc(testSrv.handleWS))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"

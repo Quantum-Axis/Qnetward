@@ -74,23 +74,23 @@ type authMessageResponse struct {
 	ReadOnly             bool      `json:"read_only,omitempty"`
 }
 
-func handleAuthSession(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if appStore != nil {
-		user, _, activeWorkspaceID, err := currentSessionState(r)
+	if srv.store != nil {
+		user, _, activeWorkspaceID, err := srv.currentSessionState(r)
 		if err == nil {
 			mode := "authenticated"
-			if isDemoUser(user) {
+			if srv.isDemoUser(user) {
 				mode = "demo"
 			}
 			writeJSON(w, http.StatusOK, authSessionResponse{
 				Authenticated:     true,
 				User:              toAuthUser(user),
 				Mode:              mode,
-				PlatformRole:      platformRoleForUser(user),
+				PlatformRole:      srv.platformRoleForUser(user),
 				ActiveWorkspaceID: activeWorkspaceID,
 			})
 			return
@@ -103,26 +103,26 @@ func handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, authSessionResponse{Authenticated: false})
 }
 
-func handleAuthAccountContext(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthAccountContext(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
 
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	_, _, activeWorkspaceID, _ := currentSessionState(r)
+	_, _, activeWorkspaceID, _ := srv.currentSessionState(r)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+	workspace, err := srv.resolveActiveWorkspace(ctx, user, activeWorkspaceID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -133,21 +133,21 @@ func handleAuthAccountContext(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleAuthDemoLogin(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthDemoLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !appDemoEnabled {
+	if !srv.demoEnabled {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "demo access is disabled"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
 
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -155,12 +155,12 @@ func handleAuthDemoLogin(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	user, err := getOrCreateDemoUser(ctx)
+	user, err := srv.getOrCreateDemoUser(ctx)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
-	if err := issueSession(w, r, ctx, user); err != nil {
+	if err := srv.issueSession(w, r, ctx, user); err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
@@ -175,16 +175,16 @@ func handleAuthDemoLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleAuthSignup(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthSignup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -205,7 +205,7 @@ func handleAuthSignup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	if !enforceRateLimit(w, r, "auth-signup", email, rateLimitConfig{Limit: 5, Window: 15 * time.Minute}) {
+	if !srv.enforceRateLimit(w, r, "auth-signup", email, rateLimitConfig{Limit: 5, Window: 15 * time.Minute}) {
 		return
 	}
 	if err := validatePassword(req.Password); err != nil {
@@ -226,9 +226,9 @@ func handleAuthSignup(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = appStore.DeleteExpiredSessions(ctx)
-	_ = appStore.DeleteExpiredEmailVerificationCodes(ctx)
-	user, err := appStore.CreateUser(ctx, name, email, string(passwordHash), true)
+	_ = srv.store.DeleteExpiredSessions(ctx)
+	_ = srv.store.DeleteExpiredEmailVerificationCodes(ctx)
+	user, err := srv.store.CreateUser(ctx, name, email, string(passwordHash), true)
 	if err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserExists):
@@ -239,7 +239,7 @@ func handleAuthSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := prepareVerificationChallenge(ctx, r, user)
+	resp, err := srv.prepareVerificationChallenge(ctx, r, user)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, apiError{Error: err.Error()})
 		return
@@ -247,16 +247,16 @@ func handleAuthSignup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, resp)
 }
 
-func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -272,7 +272,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	if !enforceRateLimit(w, r, "auth-login", email, rateLimitConfig{Limit: 8, Window: 15 * time.Minute}) {
+	if !srv.enforceRateLimit(w, r, "auth-login", email, rateLimitConfig{Limit: 8, Window: 15 * time.Minute}) {
 		return
 	}
 	if strings.TrimSpace(req.Password) == "" {
@@ -283,8 +283,8 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = appStore.DeleteExpiredSessions(ctx)
-	user, passwordHash, err := appStore.AuthenticateUser(ctx, email)
+	_ = srv.store.DeleteExpiredSessions(ctx)
+	user, passwordHash, err := srv.store.AuthenticateUser(ctx, email)
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidCredentials) {
 			writeJSON(w, http.StatusUnauthorized, apiError{Error: "invalid email or password"})
@@ -307,7 +307,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := issueSession(w, r, ctx, user); err != nil {
+	if err := srv.issueSession(w, r, ctx, user); err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
@@ -318,22 +318,22 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
 	if tokenHash, err := sessionTokenHashFromRequest(r); err == nil && tokenHash != "" {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		_ = appStore.DeleteSession(ctx, tokenHash)
+		_ = srv.store.DeleteSession(ctx, tokenHash)
 		cancel()
 	}
 	clearSessionCookie(w, r)
@@ -342,25 +342,25 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-func handleAuthProfile(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
 
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	if isDemoUser(user) {
+	if srv.isDemoUser(user) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot modify the shared profile"})
 		return
 	}
@@ -385,7 +385,7 @@ func handleAuthProfile(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	updatedUser, emailChanged, err := appStore.UpdateUserProfile(ctx, user.ID, name, email)
+	updatedUser, emailChanged, err := srv.store.UpdateUserProfile(ctx, user.ID, name, email)
 	if err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserExists):
@@ -399,7 +399,7 @@ func handleAuthProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailChanged {
-		resp, challengeErr := prepareVerificationChallenge(ctx, r, updatedUser)
+		resp, challengeErr := srv.prepareVerificationChallenge(ctx, r, updatedUser)
 		if challengeErr != nil {
 			log.Printf("profile verification challenge failed for %s: %v", updatedUser.Email, challengeErr)
 			writeJSON(w, http.StatusOK, authMessageResponse{
@@ -429,16 +429,16 @@ func handleAuthProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleAuthVerifyEmail(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -454,7 +454,7 @@ func handleAuthVerifyEmail(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	if !enforceRateLimit(w, r, "auth-verify-email", email, rateLimitConfig{Limit: 6, Window: 10 * time.Minute}) {
+	if !srv.enforceRateLimit(w, r, "auth-verify-email", email, rateLimitConfig{Limit: 6, Window: 10 * time.Minute}) {
 		return
 	}
 	code := normalizeVerificationCode(req.Code)
@@ -466,8 +466,8 @@ func handleAuthVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = appStore.DeleteExpiredEmailVerificationCodes(ctx)
-	user, err := appStore.VerifyUserEmailCode(ctx, email, hashOpaqueToken(code))
+	_ = srv.store.DeleteExpiredEmailVerificationCodes(ctx)
+	user, err := srv.store.VerifyUserEmailCode(ctx, email, hashOpaqueToken(code))
 	if err != nil {
 		if errors.Is(err, store.ErrVerificationCode) {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: "verification code is invalid or expired"})
@@ -477,17 +477,17 @@ func handleAuthVerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := issueSession(w, r, ctx, user); err != nil {
+	if err := srv.issueSession(w, r, ctx, user); err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
 
-	if appMailer != nil {
+	if srv.mailer != nil {
 		welcomeCtx, welcomeCancel := context.WithTimeout(context.Background(), 8*time.Second)
-		if err := appMailer.SendWelcome(welcomeCtx, mailer.WelcomeEmailInput{
+		if err := srv.mailer.SendWelcome(welcomeCtx, mailer.WelcomeEmailInput{
 			To:           user.Email,
 			Name:         user.Name,
-			DashboardURL: buildDashboardURL(r, "alerts"),
+			DashboardURL: srv.buildDashboardURL(r, "alerts"),
 		}); err != nil {
 			log.Printf("welcome email failed for %s: %v", user.Email, err)
 		}
@@ -503,16 +503,16 @@ func handleAuthVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleAuthResendVerification(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthResendVerification(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -528,14 +528,14 @@ func handleAuthResendVerification(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	if !enforceRateLimit(w, r, "auth-resend-verification", email, rateLimitConfig{Limit: 3, Window: 10 * time.Minute}) {
+	if !srv.enforceRateLimit(w, r, "auth-resend-verification", email, rateLimitConfig{Limit: 3, Window: 10 * time.Minute}) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	user, err := appStore.GetUserByEmail(ctx, email)
+	user, err := srv.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, store.ErrUserNotFound) {
 			writeJSON(w, http.StatusOK, authMessageResponse{
@@ -555,7 +555,7 @@ func handleAuthResendVerification(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	recent, err := appStore.HasRecentEmailVerificationCode(ctx, user.ID, time.Now().Add(-verifyResendCooldown))
+	recent, err := srv.store.HasRecentEmailVerificationCode(ctx, user.ID, time.Now().Add(-verifyResendCooldown))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -569,7 +569,7 @@ func handleAuthResendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := prepareVerificationChallenge(ctx, r, user)
+	resp, err := srv.prepareVerificationChallenge(ctx, r, user)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, apiError{Error: err.Error()})
 		return
@@ -578,16 +578,16 @@ func handleAuthResendVerification(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func handleAuthForgotPassword(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -603,21 +603,21 @@ func handleAuthForgotPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	if !enforceRateLimit(w, r, "auth-forgot-password", email, rateLimitConfig{Limit: 3, Window: 15 * time.Minute}) {
+	if !srv.enforceRateLimit(w, r, "auth-forgot-password", email, rateLimitConfig{Limit: 3, Window: 15 * time.Minute}) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = appStore.DeleteExpiredPasswordResetTokens(ctx)
+	_ = srv.store.DeleteExpiredPasswordResetTokens(ctx)
 
 	resp := authMessageResponse{
 		OK:      true,
 		Message: "If an account exists, a reset link has been issued.",
 	}
 
-	user, err := appStore.GetUserByEmail(ctx, email)
+	user, err := srv.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, store.ErrUserNotFound) {
 			writeJSON(w, http.StatusOK, resp)
@@ -626,7 +626,7 @@ func handleAuthForgotPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
-	recent, err := appStore.HasRecentPasswordResetToken(ctx, user.ID, time.Now().Add(-resetIssueCooldown))
+	recent, err := srv.store.HasRecentPasswordResetToken(ctx, user.ID, time.Now().Add(-resetIssueCooldown))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -642,20 +642,20 @@ func handleAuthForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expiresAt := time.Now().Add(defaultResetTTL)
-	if err := appStore.CreatePasswordResetToken(ctx, user.ID, tokenHash, expiresAt); err != nil {
+	if err := srv.store.CreatePasswordResetToken(ctx, user.ID, tokenHash, expiresAt); err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
 
-	resetURL := buildPasswordResetURL(r, token)
-	if appMailer != nil {
-		if err := appMailer.SendPasswordReset(ctx, mailer.PasswordResetInput{
+	resetURL := srv.buildPasswordResetURL(r, token)
+	if srv.mailer != nil {
+		if err := srv.mailer.SendPasswordReset(ctx, mailer.PasswordResetInput{
 			To:        user.Email,
 			Name:      user.Name,
 			ResetURL:  resetURL,
 			ExpiresIn: defaultResetTTL,
 		}); err != nil {
-			if cleanupErr := appStore.DeletePasswordResetToken(ctx, user.ID); cleanupErr != nil {
+			if cleanupErr := srv.store.DeletePasswordResetToken(ctx, user.ID); cleanupErr != nil {
 				log.Printf("password reset token cleanup failed for %s: %v", user.Email, cleanupErr)
 			}
 			log.Printf("password reset email failed for %s: %v", user.Email, err)
@@ -667,22 +667,22 @@ func handleAuthForgotPassword(w http.ResponseWriter, r *http.Request) {
 		log.Printf("password reset requested for %s: %s (expires %s)", user.Email, resetURL, expiresAt.UTC().Format(time.RFC3339))
 		resp.Message = "If an account exists, a reset link has been issued locally."
 	}
-	if appMailer == nil && isLocalRequestHost(r.Host) {
+	if srv.mailer == nil && isLocalRequestHost(r.Host) {
 		resp.PreviewURL = resetURL
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func handleAuthResetPassword(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAuthResetPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -716,11 +716,11 @@ func handleAuthResetPassword(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	if err := appStore.DeleteExpiredPasswordResetTokens(ctx); err != nil {
+	if err := srv.store.DeleteExpiredPasswordResetTokens(ctx); err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
-	if err := appStore.ResetPasswordWithToken(ctx, hashOpaqueToken(token), string(passwordHash)); err != nil {
+	if err := srv.store.ResetPasswordWithToken(ctx, hashOpaqueToken(token), string(passwordHash)); err != nil {
 		if errors.Is(err, store.ErrResetTokenNotFound) {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: "reset link is invalid or expired"})
 			return
@@ -736,8 +736,8 @@ func handleAuthResetPassword(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func getOrCreateDemoUser(ctx context.Context) (store.User, error) {
-	user, err := appStore.GetUserByEmail(ctx, appDemoEmail)
+func (srv *Server) getOrCreateDemoUser(ctx context.Context) (store.User, error) {
+	user, err := srv.store.GetUserByEmail(ctx, srv.demoEmail)
 	if err == nil {
 		return user, nil
 	}
@@ -753,19 +753,19 @@ func getOrCreateDemoUser(ctx context.Context) (store.User, error) {
 	if hashErr != nil {
 		return store.User{}, fmt.Errorf("failed to prepare demo account")
 	}
-	return appStore.CreateUser(ctx, appDemoName, appDemoEmail, string(passwordHash), false)
+	return srv.store.CreateUser(ctx, srv.demoName, srv.demoEmail, string(passwordHash), false)
 }
 
-func isDemoUser(user store.User) bool {
-	if !appDemoEnabled || appDemoEmail == "" {
+func (srv *Server) isDemoUser(user store.User) bool {
+	if !srv.demoEnabled || srv.demoEmail == "" {
 		return false
 	}
-	return strings.EqualFold(user.Email, appDemoEmail)
+	return strings.EqualFold(user.Email, srv.demoEmail)
 }
 
-func buildPasswordResetURL(r *http.Request, token string) string {
-	if appPublicBaseURL != "" {
-		return fmt.Sprintf("%s/reset-password?token=%s", appPublicBaseURL, url.QueryEscape(token))
+func (srv *Server) buildPasswordResetURL(r *http.Request, token string) string {
+	if srv.publicBaseURL != "" {
+		return fmt.Sprintf("%s/reset-password?token=%s", srv.publicBaseURL, url.QueryEscape(token))
 	}
 	return fmt.Sprintf("%s://%s/reset-password?token=%s", requestScheme(r), requestHost(r), url.QueryEscape(token))
 }
@@ -776,13 +776,13 @@ func normalizeVerificationCode(value string) string {
 	return value
 }
 
-func prepareVerificationChallenge(ctx context.Context, r *http.Request, user store.User) (authMessageResponse, error) {
+func (srv *Server) prepareVerificationChallenge(ctx context.Context, r *http.Request, user store.User) (authMessageResponse, error) {
 	code, codeHash, err := generateVerificationCode()
 	if err != nil {
 		return authMessageResponse{}, fmt.Errorf("failed to generate verification code")
 	}
 	expiresAt := time.Now().Add(defaultVerifyCodeTTL)
-	if err := appStore.CreateEmailVerificationCode(ctx, user.ID, codeHash, expiresAt); err != nil {
+	if err := srv.store.CreateEmailVerificationCode(ctx, user.ID, codeHash, expiresAt); err != nil {
 		return authMessageResponse{}, err
 	}
 
@@ -793,14 +793,14 @@ func prepareVerificationChallenge(ctx context.Context, r *http.Request, user sto
 		Email:                user.Email,
 	}
 
-	if appMailer != nil {
-		if err := appMailer.SendVerificationOTP(ctx, mailer.VerificationOTPInput{
+	if srv.mailer != nil {
+		if err := srv.mailer.SendVerificationOTP(ctx, mailer.VerificationOTPInput{
 			To:        user.Email,
 			Name:      user.Name,
 			Code:      code,
 			ExpiresIn: defaultVerifyCodeTTL,
 		}); err != nil {
-			if cleanupErr := appStore.DeleteEmailVerificationCode(ctx, user.ID); cleanupErr != nil {
+			if cleanupErr := srv.store.DeleteEmailVerificationCode(ctx, user.ID); cleanupErr != nil {
 				log.Printf("verification code cleanup failed for %s: %v", user.Email, cleanupErr)
 			}
 			log.Printf("verification email failed for %s: %v", user.Email, err)

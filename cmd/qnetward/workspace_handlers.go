@@ -62,13 +62,13 @@ type authWorkspaceInvitation struct {
 	InviterName   string    `json:"inviter_name"`
 }
 
-func handleWorkspaces(w http.ResponseWriter, r *http.Request) {
-	if appStore == nil {
+func (srv *Server) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
 
-	user, tokenHash, activeWorkspaceID, err := currentSessionState(r)
+	user, tokenHash, activeWorkspaceID, err := srv.currentSessionState(r)
 	if err != nil {
 		if errors.Is(err, store.ErrSessionNotFound) || errors.Is(err, http.ErrNoCookie) {
 			writeJSON(w, http.StatusUnauthorized, apiError{Error: "authentication required"})
@@ -83,10 +83,10 @@ func handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		workspaces, err := appStore.ListWorkspaceContextsByUserID(ctx, user.ID)
+		workspaces, err := srv.store.ListWorkspaceContextsByUserID(ctx, user.ID)
 		if err != nil {
 			if errors.Is(err, store.ErrUserNotFound) {
-				workspace, ensureErr := appStore.EnsureDefaultWorkspaceForUser(ctx, user)
+				workspace, ensureErr := srv.store.EnsureDefaultWorkspaceForUser(ctx, user)
 				if ensureErr != nil {
 					writeJSON(w, http.StatusInternalServerError, apiError{Error: ensureErr.Error()})
 					return
@@ -107,7 +107,7 @@ func handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, resp)
 	case http.MethodPost:
-		if !isAllowedRequestOrigin(r) {
+		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 			return
 		}
@@ -125,7 +125,7 @@ func handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
-		if err := appStore.SetSessionActiveWorkspace(ctx, tokenHash, user.ID, req.WorkspaceID); err != nil {
+		if err := srv.store.SetSessionActiveWorkspace(ctx, tokenHash, user.ID, req.WorkspaceID); err != nil {
 			if errors.Is(err, store.ErrWorkspaceMemberNotFound) {
 				writeJSON(w, http.StatusNotFound, apiError{Error: "workspace not available for this user"})
 				return
@@ -142,35 +142,35 @@ func handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
-	if appStore == nil {
+func (srv *Server) handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
 
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	_, _, activeWorkspaceID, _ := currentSessionState(r)
+	_, _, activeWorkspaceID, _ := srv.currentSessionState(r)
 
 	switch r.Method {
 	case http.MethodGet:
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		workspace, err := srv.resolveActiveWorkspace(ctx, user, activeWorkspaceID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
 		}
 
-		members, err := appStore.ListWorkspaceMembersByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID)
+		members, err := srv.store.ListWorkspaceMembersByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
 		}
-		invitations, err := appStore.ListWorkspaceInvitationsByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID)
+		invitations, err := srv.store.ListWorkspaceInvitationsByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
@@ -182,11 +182,11 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 			Invitations: toAuthWorkspaceInvitations(invitations),
 		})
 	case http.MethodPost:
-		if !isAllowedRequestOrigin(r) {
+		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 			return
 		}
-		if isDemoUser(user) {
+		if srv.isDemoUser(user) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot issue workspace invitations"})
 			return
 		}
@@ -200,13 +200,13 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		workspace, err := srv.resolveActiveWorkspace(ctx, user, activeWorkspaceID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
 		}
 
-		invitation, err := appStore.CreateWorkspaceInvitationByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.Email, req.Role, time.Now().Add(7*24*time.Hour))
+		invitation, err := srv.store.CreateWorkspaceInvitationByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.Email, req.Role, time.Now().Add(7*24*time.Hour))
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrWorkspaceInviteConflict):
@@ -227,11 +227,11 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 			Email:   invitation.Email,
 		})
 	case http.MethodPatch:
-		if !isAllowedRequestOrigin(r) {
+		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 			return
 		}
-		if isDemoUser(user) {
+		if srv.isDemoUser(user) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot modify workspace members"})
 			return
 		}
@@ -249,13 +249,13 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		workspace, err := srv.resolveActiveWorkspace(ctx, user, activeWorkspaceID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
 		}
 
-		member, err := appStore.UpdateWorkspaceMemberRoleByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.UserID, req.Role)
+		member, err := srv.store.UpdateWorkspaceMemberRoleByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.UserID, req.Role)
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrWorkspaceMemberNotFound):
@@ -276,11 +276,11 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 			Email:   member.Email,
 		})
 	case http.MethodDelete:
-		if !isAllowedRequestOrigin(r) {
+		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 			return
 		}
-		if isDemoUser(user) {
+		if srv.isDemoUser(user) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "demo access cannot modify workspace members"})
 			return
 		}
@@ -298,14 +298,14 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		workspace, err := resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+		workspace, err := srv.resolveActiveWorkspace(ctx, user, activeWorkspaceID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
 		}
 
 		if req.InvitationID > 0 {
-			invitation, err := appStore.CancelWorkspaceInvitationByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.InvitationID)
+			invitation, err := srv.store.CancelWorkspaceInvitationByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.InvitationID)
 			if err != nil {
 				switch {
 				case errors.Is(err, store.ErrWorkspaceInvitationNotFound):
@@ -326,7 +326,7 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := appStore.RemoveWorkspaceMemberByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.UserID); err != nil {
+		if err := srv.store.RemoveWorkspaceMemberByWorkspaceIDAndUserID(ctx, workspace.ID, user.ID, req.UserID); err != nil {
 			switch {
 			case errors.Is(err, store.ErrWorkspaceMemberNotFound):
 				writeJSON(w, http.StatusNotFound, apiError{Error: "workspace member not found"})
@@ -347,13 +347,13 @@ func handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleWorkspaceInvitations(w http.ResponseWriter, r *http.Request) {
-	if appStore == nil {
+func (srv *Server) handleWorkspaceInvitations(w http.ResponseWriter, r *http.Request) {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
 
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
@@ -363,7 +363,7 @@ func handleWorkspaceInvitations(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		invitations, err := appStore.ListIncomingWorkspaceInvitationsByEmail(ctx, user.Email)
+		invitations, err := srv.store.ListIncomingWorkspaceInvitationsByEmail(ctx, user.Email)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
@@ -372,7 +372,7 @@ func handleWorkspaceInvitations(w http.ResponseWriter, r *http.Request) {
 			Invitations: toAuthWorkspaceInvitations(invitations),
 		})
 	case http.MethodPost:
-		if !isAllowedRequestOrigin(r) {
+		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 			return
 		}
@@ -394,7 +394,7 @@ func handleWorkspaceInvitations(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		invitation, err := appStore.AcceptWorkspaceInvitationByUserID(ctx, user.ID, req.InvitationID)
+		invitation, err := srv.store.AcceptWorkspaceInvitationByUserID(ctx, user.ID, req.InvitationID)
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrWorkspaceInvitationNotFound):

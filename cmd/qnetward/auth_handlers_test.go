@@ -22,7 +22,7 @@ func TestHandleAuthSessionReturnsUnauthenticatedWithoutCookie(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
 	rr := httptest.NewRecorder()
 
-	handleAuthSession(rr, req)
+	testSrv.handleAuthSession(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
@@ -39,27 +39,27 @@ func TestHandleAuthSessionReturnsUnauthenticatedWithoutCookie(t *testing.T) {
 
 func TestAuthDemoLoginFlow(t *testing.T) {
 	installTestStore(t)
-	originalEnabled := appDemoEnabled
-	originalName := appDemoName
-	originalEmail := appDemoEmail
-	originalCreatedAt := appDemoCreatedAt
+	originalEnabled := testSrv.demoEnabled
+	originalName := testSrv.demoName
+	originalEmail := testSrv.demoEmail
+	originalCreatedAt := testSrv.demoCreatedAt
 	t.Cleanup(func() {
-		appDemoEnabled = originalEnabled
-		appDemoName = originalName
-		appDemoEmail = originalEmail
-		appDemoCreatedAt = originalCreatedAt
+		testSrv.demoEnabled = originalEnabled
+		testSrv.demoName = originalName
+		testSrv.demoEmail = originalEmail
+		testSrv.demoCreatedAt = originalCreatedAt
 	})
 
-	appDemoEnabled = true
-	appDemoName = "Contributor Demo"
-	appDemoEmail = "demo@qnetward.local"
-	appDemoCreatedAt = time.Now().UTC()
+	testSrv.demoEnabled = true
+	testSrv.demoName = "Contributor Demo"
+	testSrv.demoEmail = "demo@qnetward.local"
+	testSrv.demoCreatedAt = time.Now().UTC()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/demo-login", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	handleAuthDemoLogin(rr, req)
+	testSrv.handleAuthDemoLogin(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -80,7 +80,7 @@ func TestAuthDemoLoginFlow(t *testing.T) {
 	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
 	sessionReq.AddCookie(sessionCookie)
 	sessionRR := httptest.NewRecorder()
-	handleAuthSession(sessionRR, sessionReq)
+	testSrv.handleAuthSession(sessionRR, sessionReq)
 
 	if sessionRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", sessionRR.Code)
@@ -97,21 +97,21 @@ func TestAuthDemoLoginFlow(t *testing.T) {
 
 func TestAuthLogoutClearsDemoCookie(t *testing.T) {
 	installTestStore(t)
-	originalEnabled := appDemoEnabled
-	originalName := appDemoName
-	originalEmail := appDemoEmail
+	originalEnabled := testSrv.demoEnabled
+	originalName := testSrv.demoName
+	originalEmail := testSrv.demoEmail
 	t.Cleanup(func() {
-		appDemoEnabled = originalEnabled
-		appDemoName = originalName
-		appDemoEmail = originalEmail
+		testSrv.demoEnabled = originalEnabled
+		testSrv.demoName = originalName
+		testSrv.demoEmail = originalEmail
 	})
 
-	appDemoEnabled = true
-	appDemoName = "Contributor Demo"
-	appDemoEmail = "demo-logout@qnetward.local"
+	testSrv.demoEnabled = true
+	testSrv.demoName = "Contributor Demo"
+	testSrv.demoEmail = "demo-logout@qnetward.local"
 
 	ctx := context.Background()
-	user, err := appStore.GetUserByEmail(ctx, appDemoEmail)
+	user, err := testSrv.store.GetUserByEmail(ctx, testSrv.demoEmail)
 	if err != nil {
 		if !errors.Is(err, store.ErrUserNotFound) {
 			t.Fatalf("load demo user: %v", err)
@@ -120,7 +120,7 @@ func TestAuthLogoutClearsDemoCookie(t *testing.T) {
 		if hashErr != nil {
 			t.Fatalf("hash demo password: %v", hashErr)
 		}
-		user, err = appStore.CreateUser(ctx, appDemoName, appDemoEmail, string(passwordHash), false)
+		user, err = testSrv.store.CreateUser(ctx, testSrv.demoName, testSrv.demoEmail, string(passwordHash), false)
 		if err != nil {
 			t.Fatalf("create demo user: %v", err)
 		}
@@ -129,7 +129,7 @@ func TestAuthLogoutClearsDemoCookie(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate demo session token: %v", err)
 	}
-	if err := appStore.CreateSession(ctx, user.ID, tokenHash, time.Now().Add(time.Hour)); err != nil {
+	if err := testSrv.store.CreateSession(ctx, user.ID, tokenHash, time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("create demo session: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func TestAuthLogoutClearsDemoCookie(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: authCookieName, Value: token})
 	rr := httptest.NewRecorder()
 
-	handleAuthLogout(rr, req)
+	testSrv.handleAuthLogout(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -166,7 +166,7 @@ func TestAuthProfileUpdateChangesName(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleAuthProfile(rr, req)
+	testSrv.handleAuthProfile(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -202,7 +202,7 @@ func TestAuthProfileUpdateEmailChangeIssuesVerification(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleAuthProfile(rr, req)
+	testSrv.handleAuthProfile(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -225,26 +225,26 @@ func TestAuthProfileUpdateEmailChangeIssuesVerification(t *testing.T) {
 
 func TestAuthProfileUpdateRejectsDemoSession(t *testing.T) {
 	installTestStore(t)
-	originalEnabled := appDemoEnabled
-	originalName := appDemoName
-	originalEmail := appDemoEmail
-	originalCreatedAt := appDemoCreatedAt
+	originalEnabled := testSrv.demoEnabled
+	originalName := testSrv.demoName
+	originalEmail := testSrv.demoEmail
+	originalCreatedAt := testSrv.demoCreatedAt
 	t.Cleanup(func() {
-		appDemoEnabled = originalEnabled
-		appDemoName = originalName
-		appDemoEmail = originalEmail
-		appDemoCreatedAt = originalCreatedAt
+		testSrv.demoEnabled = originalEnabled
+		testSrv.demoName = originalName
+		testSrv.demoEmail = originalEmail
+		testSrv.demoCreatedAt = originalCreatedAt
 	})
 
-	appDemoEnabled = true
-	appDemoName = "Contributor Demo"
-	appDemoEmail = "demo-profile@qnetward.local"
-	appDemoCreatedAt = time.Now().UTC()
+	testSrv.demoEnabled = true
+	testSrv.demoName = "Contributor Demo"
+	testSrv.demoEmail = "demo-profile@qnetward.local"
+	testSrv.demoCreatedAt = time.Now().UTC()
 
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/demo-login", strings.NewReader(`{}`))
 	loginReq.Header.Set("Content-Type", "application/json")
 	loginRR := httptest.NewRecorder()
-	handleAuthDemoLogin(loginRR, loginReq)
+	testSrv.handleAuthDemoLogin(loginRR, loginReq)
 	if loginRR.Code != http.StatusOK {
 		t.Fatalf("expected demo login 200, got %d: %s", loginRR.Code, loginRR.Body.String())
 	}
@@ -255,7 +255,7 @@ func TestAuthProfileUpdateRejectsDemoSession(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleAuthProfile(rr, req)
+	testSrv.handleAuthProfile(rr, req)
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
@@ -276,7 +276,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	signupReq.Header.Set("Content-Type", "application/json")
 	signupRR := httptest.NewRecorder()
 
-	handleAuthSignup(signupRR, signupReq)
+	testSrv.handleAuthSignup(signupRR, signupReq)
 
 	if signupRR.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d: %s", signupRR.Code, signupRR.Body.String())
@@ -292,7 +292,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	loginBeforeVerifyReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(fmt.Sprintf(`{"email":"%s","password":"%s"}`, email, password)))
 	loginBeforeVerifyReq.Header.Set("Content-Type", "application/json")
 	loginBeforeVerifyRR := httptest.NewRecorder()
-	handleAuthLogin(loginBeforeVerifyRR, loginBeforeVerifyReq)
+	testSrv.handleAuthLogin(loginBeforeVerifyRR, loginBeforeVerifyReq)
 	if loginBeforeVerifyRR.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 before email verification, got %d: %s", loginBeforeVerifyRR.Code, loginBeforeVerifyRR.Body.String())
 	}
@@ -307,7 +307,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	resendReq := httptest.NewRequest(http.MethodPost, "/api/auth/resend-verification", strings.NewReader(fmt.Sprintf(`{"email":"%s"}`, email)))
 	resendReq.Header.Set("Content-Type", "application/json")
 	resendRR := httptest.NewRecorder()
-	handleAuthResendVerification(resendRR, resendReq)
+	testSrv.handleAuthResendVerification(resendRR, resendReq)
 	if resendRR.Code != http.StatusOK {
 		t.Fatalf("expected 200 from resend verification, got %d: %s", resendRR.Code, resendRR.Body.String())
 	}
@@ -323,7 +323,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	verifyReq := httptest.NewRequest(http.MethodPost, "/api/auth/verify-email", strings.NewReader(verifyBody))
 	verifyReq.Header.Set("Content-Type", "application/json")
 	verifyRR := httptest.NewRecorder()
-	handleAuthVerifyEmail(verifyRR, verifyReq)
+	testSrv.handleAuthVerifyEmail(verifyRR, verifyReq)
 	if verifyRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", verifyRR.Code, verifyRR.Body.String())
 	}
@@ -333,7 +333,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(loginBody))
 	loginReq.Header.Set("Content-Type", "application/json")
 	loginRR := httptest.NewRecorder()
-	handleAuthLogin(loginRR, loginReq)
+	testSrv.handleAuthLogin(loginRR, loginReq)
 	if loginRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", loginRR.Code, loginRR.Body.String())
 	}
@@ -342,7 +342,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
 	sessionReq.AddCookie(verifyCookie)
 	sessionRR := httptest.NewRecorder()
-	handleAuthSession(sessionRR, sessionReq)
+	testSrv.handleAuthSession(sessionRR, sessionReq)
 	if sessionRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", sessionRR.Code)
 	}
@@ -351,7 +351,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	protectedReq.Header.Set("Content-Type", "application/json")
 	protectedReq.AddCookie(loginCookie)
 	protectedRR := httptest.NewRecorder()
-	handlePing(protectedRR, protectedReq)
+	testSrv.handlePing(protectedRR, protectedReq)
 	if protectedRR.Code == http.StatusUnauthorized {
 		t.Fatal("expected authenticated request to pass auth gate")
 	}
@@ -359,7 +359,7 @@ func TestAuthSignupLoginLogoutFlow(t *testing.T) {
 	unauthReq := httptest.NewRequest(http.MethodPost, "/api/ping", strings.NewReader(`{"host":"example.com"}`))
 	unauthReq.Header.Set("Content-Type", "application/json")
 	unauthRR := httptest.NewRecorder()
-	handlePing(unauthRR, unauthReq)
+	testSrv.handlePing(unauthRR, unauthReq)
 	if unauthRR.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", unauthRR.Code)
 	}
@@ -375,7 +375,7 @@ func TestAuthSignupAcceptsFirstAndLastName(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	handleAuthSignup(rr, req)
+	testSrv.handleAuthSignup(rr, req)
 
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d: %s", rr.Code, rr.Body.String())
@@ -390,7 +390,7 @@ func TestAuthRejectsMismatchedConfirmPassword(t *testing.T) {
 	signupReq := httptest.NewRequest(http.MethodPost, "/api/auth/signup", strings.NewReader(fmt.Sprintf(`{"name":"Mismatch User","email":"%s","password":"S3curePass!","confirm_password":"DifferentPass!"}`, email)))
 	signupReq.Header.Set("Content-Type", "application/json")
 	signupRR := httptest.NewRecorder()
-	handleAuthSignup(signupRR, signupReq)
+	testSrv.handleAuthSignup(signupRR, signupReq)
 	if signupRR.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for signup mismatch, got %d: %s", signupRR.Code, signupRR.Body.String())
 	}
@@ -398,7 +398,7 @@ func TestAuthRejectsMismatchedConfirmPassword(t *testing.T) {
 	resetReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(`{"token":"abc","password":"S3curePass!","confirm_password":"DifferentPass!"}`))
 	resetReq.Header.Set("Content-Type", "application/json")
 	resetRR := httptest.NewRecorder()
-	handleAuthResetPassword(resetRR, resetReq)
+	testSrv.handleAuthResetPassword(resetRR, resetReq)
 	if resetRR.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for reset mismatch, got %d: %s", resetRR.Code, resetRR.Body.String())
 	}
@@ -425,7 +425,7 @@ func TestAuthForgotAndResetPasswordFlow(t *testing.T) {
 	forgotReq.Host = "127.0.0.1:8080"
 	forgotReq.Header.Set("Content-Type", "application/json")
 	forgotRR := httptest.NewRecorder()
-	handleAuthForgotPassword(forgotRR, forgotReq)
+	testSrv.handleAuthForgotPassword(forgotRR, forgotReq)
 	if forgotRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", forgotRR.Code, forgotRR.Body.String())
 	}
@@ -449,7 +449,7 @@ func TestAuthForgotAndResetPasswordFlow(t *testing.T) {
 	resetReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(fmt.Sprintf(`{"token":"%s","password":"%s"}`, token, newPassword)))
 	resetReq.Header.Set("Content-Type", "application/json")
 	resetRR := httptest.NewRecorder()
-	handleAuthResetPassword(resetRR, resetReq)
+	testSrv.handleAuthResetPassword(resetRR, resetReq)
 	if resetRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", resetRR.Code, resetRR.Body.String())
 	}
@@ -457,7 +457,7 @@ func TestAuthForgotAndResetPasswordFlow(t *testing.T) {
 	oldLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(fmt.Sprintf(`{"email":"%s","password":"%s"}`, email, password)))
 	oldLoginReq.Header.Set("Content-Type", "application/json")
 	oldLoginRR := httptest.NewRecorder()
-	handleAuthLogin(oldLoginRR, oldLoginReq)
+	testSrv.handleAuthLogin(oldLoginRR, oldLoginReq)
 	if oldLoginRR.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for old password, got %d", oldLoginRR.Code)
 	}
@@ -465,7 +465,7 @@ func TestAuthForgotAndResetPasswordFlow(t *testing.T) {
 	newLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(fmt.Sprintf(`{"email":"%s","password":"%s"}`, email, newPassword)))
 	newLoginReq.Header.Set("Content-Type", "application/json")
 	newLoginRR := httptest.NewRecorder()
-	handleAuthLogin(newLoginRR, newLoginReq)
+	testSrv.handleAuthLogin(newLoginRR, newLoginReq)
 	if newLoginRR.Code != http.StatusOK {
 		t.Fatalf("expected 200 for new password, got %d: %s", newLoginRR.Code, newLoginRR.Body.String())
 	}
@@ -491,7 +491,7 @@ func TestHandleAuthLoginRateLimited(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
-		handleAuthLogin(rr, req)
+		testSrv.handleAuthLogin(rr, req)
 		if rr.Code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected 401, got %d: %s", attempt, rr.Code, rr.Body.String())
 		}
@@ -500,7 +500,7 @@ func TestHandleAuthLoginRateLimited(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	handleAuthLogin(rr, req)
+	testSrv.handleAuthLogin(rr, req)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -524,7 +524,7 @@ func TestHandleAuthResendVerificationUsesCooldown(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/resend-verification", strings.NewReader(fmt.Sprintf(`{"email":"%s"}`, email)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	handleAuthResendVerification(rr, req)
+	testSrv.handleAuthResendVerification(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -551,7 +551,7 @@ func TestPrepareVerificationChallengeCleansUpCodeWhenEmailSendFails(t *testing.T
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/signup", nil)
-	resp, err := prepareVerificationChallenge(ctx, req, user)
+	resp, err := testSrv.prepareVerificationChallenge(ctx, req, user)
 	if err != nil {
 		t.Fatalf("prepareVerificationChallenge returned error: %v", err)
 	}
@@ -589,7 +589,7 @@ func TestHandleAuthForgotPasswordCleansUpTokenWhenEmailSendFails(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(fmt.Sprintf(`{"email":"%s"}`, email)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	handleAuthForgotPassword(rr, req)
+	testSrv.handleAuthForgotPassword(rr, req)
 
 	if rr.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d: %s", rr.Code, rr.Body.String())

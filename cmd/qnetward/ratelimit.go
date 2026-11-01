@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-var authRateLimiter = newRateLimiter()
-
 type rateLimitConfig struct {
 	Limit  int
 	Window time.Duration
@@ -91,9 +89,9 @@ func (rl *rateLimiter) sweep(now time.Time) {
 	rl.lastSweep = now
 }
 
-func enforceRateLimit(w http.ResponseWriter, r *http.Request, action, subject string, cfg rateLimitConfig) bool {
+func (srv *Server) enforceRateLimit(w http.ResponseWriter, r *http.Request, action, subject string, cfg rateLimitConfig) bool {
 	key := buildRateLimitKey(r, action, subject)
-	allowed, retryAfter := authRateLimiter.Allow(key, cfg)
+	allowed, retryAfter := srv.authLimiter.Allow(key, cfg)
 	if allowed {
 		return true
 	}

@@ -16,12 +16,12 @@ import (
 	"qnetward/internal/store"
 )
 
-func requireAuthenticatedUser(w http.ResponseWriter, r *http.Request) (store.User, bool) {
-	if appStore == nil {
+func (srv *Server) requireAuthenticatedUser(w http.ResponseWriter, r *http.Request) (store.User, bool) {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return store.User{}, false
 	}
-	user, _, err := currentSessionUser(r)
+	user, _, err := srv.currentSessionUser(r)
 	if err != nil {
 		if errors.Is(err, store.ErrSessionNotFound) || errors.Is(err, http.ErrNoCookie) {
 			writeJSON(w, http.StatusUnauthorized, apiError{Error: "authentication required"})
@@ -33,19 +33,19 @@ func requireAuthenticatedUser(w http.ResponseWriter, r *http.Request) (store.Use
 	return user, true
 }
 
-func requirePlatformAdmin(w http.ResponseWriter, r *http.Request) (store.User, bool) {
-	user, ok := requireAuthenticatedUser(w, r)
+func (srv *Server) requirePlatformAdmin(w http.ResponseWriter, r *http.Request) (store.User, bool) {
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return store.User{}, false
 	}
-	if !isPlatformAdmin(user) {
+	if !srv.isPlatformAdmin(user) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "platform admin access required"})
 		return store.User{}, false
 	}
 	return user, true
 }
 
-func currentSessionState(r *http.Request) (store.User, string, int64, error) {
+func (srv *Server) currentSessionState(r *http.Request) (store.User, string, int64, error) {
 	tokenHash, err := sessionTokenHashFromRequest(r)
 	if err != nil {
 		return store.User{}, "", 0, err
@@ -53,15 +53,15 @@ func currentSessionState(r *http.Request) (store.User, string, int64, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	session, err := appStore.GetSessionDetailsByToken(ctx, tokenHash)
+	session, err := srv.store.GetSessionDetailsByToken(ctx, tokenHash)
 	if err != nil {
 		return store.User{}, "", 0, err
 	}
 	return session.User, tokenHash, session.ActiveWorkspaceID, nil
 }
 
-func currentSessionUser(r *http.Request) (store.User, string, error) {
-	user, tokenHash, _, err := currentSessionState(r)
+func (srv *Server) currentSessionUser(r *http.Request) (store.User, string, error) {
+	user, tokenHash, _, err := srv.currentSessionState(r)
 	if err != nil {
 		return store.User{}, "", err
 	}
@@ -80,37 +80,37 @@ func sessionTokenHashFromRequest(r *http.Request) (string, error) {
 	return hashSessionToken(token), nil
 }
 
-func issueSession(w http.ResponseWriter, r *http.Request, ctx context.Context, user store.User) error {
+func (srv *Server) issueSession(w http.ResponseWriter, r *http.Request, ctx context.Context, user store.User) error {
 	token, tokenHash, err := generateSessionToken()
 	if err != nil {
 		return fmt.Errorf("failed to create session token")
 	}
 	expiresAt := time.Now().Add(defaultSessionTTL)
-	if err := appStore.CreateSession(ctx, user.ID, tokenHash, expiresAt); err != nil {
+	if err := srv.store.CreateSession(ctx, user.ID, tokenHash, expiresAt); err != nil {
 		return err
 	}
 	setSessionCookie(w, r, token, expiresAt)
 	return nil
 }
 
-func isPlatformAdmin(user store.User) bool {
-	if len(appAdminEmails) == 0 {
+func (srv *Server) isPlatformAdmin(user store.User) bool {
+	if len(srv.adminEmails) == 0 {
 		return false
 	}
-	_, ok := appAdminEmails[strings.ToLower(strings.TrimSpace(user.Email))]
+	_, ok := srv.adminEmails[strings.ToLower(strings.TrimSpace(user.Email))]
 	return ok
 }
 
-func platformRoleForUser(user store.User) string {
-	if isPlatformAdmin(user) {
+func (srv *Server) platformRoleForUser(user store.User) string {
+	if srv.isPlatformAdmin(user) {
 		return "admin"
 	}
 	return "user"
 }
 
-func resolveActiveWorkspace(ctx context.Context, user store.User, activeWorkspaceID int64) (store.WorkspaceContext, error) {
+func (srv *Server) resolveActiveWorkspace(ctx context.Context, user store.User, activeWorkspaceID int64) (store.WorkspaceContext, error) {
 	if activeWorkspaceID > 0 {
-		workspace, err := appStore.GetWorkspaceContextByWorkspaceIDAndUserID(ctx, activeWorkspaceID, user.ID)
+		workspace, err := srv.store.GetWorkspaceContextByWorkspaceIDAndUserID(ctx, activeWorkspaceID, user.ID)
 		if err == nil {
 			return workspace, nil
 		}
@@ -119,10 +119,10 @@ func resolveActiveWorkspace(ctx context.Context, user store.User, activeWorkspac
 		}
 	}
 
-	workspace, err := appStore.GetWorkspaceContextByUserID(ctx, user.ID)
+	workspace, err := srv.store.GetWorkspaceContextByUserID(ctx, user.ID)
 	if err != nil {
 		if errors.Is(err, store.ErrUserNotFound) {
-			return appStore.EnsureDefaultWorkspaceForUser(ctx, user)
+			return srv.store.EnsureDefaultWorkspaceForUser(ctx, user)
 		}
 		return store.WorkspaceContext{}, err
 	}

@@ -27,15 +27,15 @@ func isLocalRequestHost(host string) bool {
 	}
 }
 
-func isAllowedRequestOrigin(r *http.Request) bool {
+func (srv *Server) isAllowedRequestOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return true
 	}
-	return isAllowedWSOrigin(r, origin)
+	return srv.isAllowedWSOrigin(r, origin)
 }
 
-func isAllowedWSOrigin(r *http.Request, origin string) bool {
+func (srv *Server) isAllowedWSOrigin(r *http.Request, origin string) bool {
 	if origin == "" {
 		return true
 	}
@@ -64,7 +64,7 @@ func isAllowedWSOrigin(r *http.Request, origin string) bool {
 		return true
 	}
 
-	if len(appAllowedOrigins) == 0 {
+	if len(srv.allowedOrigins) == 0 {
 		return false
 	}
 
@@ -72,7 +72,7 @@ func isAllowedWSOrigin(r *http.Request, origin string) bool {
 	if err != nil {
 		return false
 	}
-	_, ok := appAllowedOrigins[normalized]
+	_, ok := srv.allowedOrigins[normalized]
 	return ok
 }
 

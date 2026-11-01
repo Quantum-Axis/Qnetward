@@ -35,7 +35,7 @@ func TestHandleHistoryReturnsStoredPoints(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleHistory(rr, req)
+	testSrv.handleHistory(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
@@ -76,7 +76,7 @@ func TestHandleHistoryIsUserScoped(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/history?type=ping&host=example.com&limit=10", nil)
 	req.AddCookie(cookieB)
 	rr := httptest.NewRecorder()
-	handleHistory(rr, req)
+	testSrv.handleHistory(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -122,7 +122,7 @@ func TestHandleRecentHistoryTargetsReturnsStoredTargets(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleRecentHistoryTargets(rr, req)
+	testSrv.handleRecentHistoryTargets(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -165,7 +165,7 @@ func TestHandleHistoryNormalizesTCPHostPort(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 
-	handleHistory(rr, req)
+	testSrv.handleHistory(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -187,7 +187,7 @@ func TestHandleHistoryRejectsInvalidLimit(t *testing.T) {
 	req.AddCookie(issueTestSessionCookie(t, st))
 	rr := httptest.NewRecorder()
 
-	handleHistory(rr, req)
+	testSrv.handleHistory(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
@@ -220,7 +220,7 @@ func TestHandleHistoryExportRequiresPostAndIsUserScoped(t *testing.T) {
 	getReq := httptest.NewRequest(http.MethodGet, "/api/export/history", nil)
 	getReq.AddCookie(cookieA)
 	getRR := httptest.NewRecorder()
-	handleHistoryExport(getRR, getReq)
+	testSrv.handleHistoryExport(getRR, getReq)
 	if getRR.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", getRR.Code)
 	}
@@ -229,7 +229,7 @@ func TestHandleHistoryExportRequiresPostAndIsUserScoped(t *testing.T) {
 	postReq.Header.Set("Content-Type", "application/json")
 	postReq.AddCookie(cookieB)
 	postRR := httptest.NewRecorder()
-	handleHistoryExport(postRR, postReq)
+	testSrv.handleHistoryExport(postRR, postReq)
 
 	if postRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", postRR.Code, postRR.Body.String())

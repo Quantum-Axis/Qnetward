@@ -51,6 +51,7 @@ type wsWriter struct {
 }
 
 type wsSession struct {
+	srv    *Server
 	writer *wsWriter
 
 	mu     sync.Mutex
@@ -82,7 +83,7 @@ func (s *wsSession) start(user store.User, req wsRequest) bool {
 
 	go func() {
 		defer close(done)
-		err := runWSRequest(ctx, s.writer, user, req)
+		err := s.srv.runWSRequest(ctx, s.writer, user, req)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			_ = s.writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 		}
@@ -116,28 +117,29 @@ func (s *wsSession) close() {
 	s.stop()
 }
 
-var wsUpgrader = websocket.Upgrader{
-	ReadBufferSize:  4096,
-	WriteBufferSize: 4096,
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		return isAllowedWSOrigin(r, origin)
-	},
+func (srv *Server) wsUpgrader() *websocket.Upgrader {
+	return &websocket.Upgrader{
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			return srv.isAllowedWSOrigin(r, r.Header.Get("Origin"))
+		},
+	}
 }
 
-func handleWS(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireAuthenticatedUser(w, r)
+func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	conn, err := srv.wsUpgrader().Upgrade(w, r, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "WebSocket upgrade error: %v\n", err)
 		return
 	}
 	defer conn.Close()
 
-	session := &wsSession{writer: &wsWriter{conn: conn}}
+	session := &wsSession{srv: srv, writer: &wsWriter{conn: conn}}
 	defer session.close()
 
 	conn.SetReadLimit(maxWSMessageBytes)
@@ -187,21 +189,21 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func runWSRequest(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
+func (srv *Server) runWSRequest(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
 	switch req.Type {
 	case "ping":
-		return streamPingWS(ctx, writer, user, req)
+		return srv.streamPingWS(ctx, writer, user, req)
 	case "tcpping":
-		return streamTCPPingWS(ctx, writer, user, req)
+		return srv.streamTCPPingWS(ctx, writer, user, req)
 	case "portscan":
-		return streamPortScanWS(ctx, writer, req)
+		return srv.streamPortScanWS(ctx, writer, req)
 	default:
 		return fmt.Errorf("unknown type")
 	}
 }
 
-func streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
-	release, ok := tryAcquireProbeSlot()
+func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
+	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: "server busy, try again"})
 	}
@@ -226,10 +228,10 @@ func streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req ws
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
-	cfg.AddrCheck = appTargetPolicy.CheckIP
+	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := ping.RunStreamContext(ctx, req.Host, cfg, func(res report.Result) error {
 		ts := time.Now()
-		storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, ts)
+		srv.storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, ts)
 		jr := toJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",
@@ -254,7 +256,7 @@ func streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req ws
 	}
 
 	summary := toJSONSummary(rep.Summary)
-	enqueueAlertEvaluation(user, "ping", req.Host, 0, rep.Summary, buildConfiguredDashboardURL("alerts"))
+	srv.enqueueAlertEvaluation(user, "ping", req.Host, 0, rep.Summary, srv.buildConfiguredDashboardURL("alerts"))
 	return writer.WriteEvent(wsEvent{
 		Type:     "summary",
 		Protocol: rep.Protocol,
@@ -264,8 +266,8 @@ func streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req ws
 	})
 }
 
-func streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
-	release, ok := tryAcquireProbeSlot()
+func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
+	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: "server busy, try again"})
 	}
@@ -297,10 +299,10 @@ func streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
-	cfg.AddrCheck = appTargetPolicy.CheckIP
+	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := tcpping.RunStreamContext(ctx, host, port, cfg, func(res report.Result) error {
 		ts := time.Now()
-		storeResult(user.ID, "tcpping", host, res.Addr, port, res, ts)
+		srv.storeResult(user.ID, "tcpping", host, res.Addr, port, res, ts)
 		jr := toJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",
@@ -327,7 +329,7 @@ func streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req
 	}
 
 	summary := toJSONSummary(rep.Summary)
-	enqueueAlertEvaluation(user, "tcpping", host, port, rep.Summary, buildConfiguredDashboardURL("alerts"))
+	srv.enqueueAlertEvaluation(user, "tcpping", host, port, rep.Summary, srv.buildConfiguredDashboardURL("alerts"))
 	return writer.WriteEvent(wsEvent{
 		Type:     "summary",
 		Protocol: rep.Protocol,
@@ -338,8 +340,8 @@ func streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req
 	})
 }
 
-func streamPortScanWS(ctx context.Context, writer *wsWriter, req wsRequest) error {
-	release, ok := tryAcquireProbeSlot()
+func (srv *Server) streamPortScanWS(ctx context.Context, writer *wsWriter, req wsRequest) error {
+	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: "server busy, try again"})
 	}
@@ -355,7 +357,7 @@ func streamPortScanWS(ctx context.Context, writer *wsWriter, req wsRequest) erro
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
-	cfg.AddrCheck = appTargetPolicy.CheckIP
+	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := portscan.RunStreamContext(ctx, host, cfg, func(res portscan.Result) error {
 		ts := time.Now()
 		jr := toJSONPortScanResult(res)

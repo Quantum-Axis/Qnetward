@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"qnetward/internal/engine/dnslookup"
@@ -51,20 +50,16 @@ type dnsLookupRequest struct {
 	Resolver   string `json:"resolver,omitempty"`
 }
 
-var probeLimiter = make(chan struct{}, maxConcurrentProbes)
-
-var rejectedProbeRequests atomic.Uint64
-
-func handlePing(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
@@ -101,16 +96,16 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	release, ok := tryAcquireProbeSlot()
+	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		writeJSON(w, http.StatusTooManyRequests, apiError{Error: "server busy, try again"})
 		return
 	}
 	defer release()
 
-	cfg.AddrCheck = appTargetPolicy.CheckIP
+	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := ping.RunStreamContext(r.Context(), req.Host, cfg, func(res report.Result) error {
-		storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
+		srv.storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -118,21 +113,21 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enqueueAlertEvaluation(user, "ping", req.Host, 0, rep.Summary, buildDashboardURL(r, "alerts"))
+	srv.enqueueAlertEvaluation(user, "ping", req.Host, 0, rep.Summary, srv.buildDashboardURL(r, "alerts"))
 
 	writeJSON(w, http.StatusOK, toJSONReport(rep))
 }
 
-func handleTCPPing(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleTCPPing(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
@@ -174,16 +169,16 @@ func handleTCPPing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	release, ok := tryAcquireProbeSlot()
+	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		writeJSON(w, http.StatusTooManyRequests, apiError{Error: "server busy, try again"})
 		return
 	}
 	defer release()
 
-	cfg.AddrCheck = appTargetPolicy.CheckIP
+	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := tcpping.RunStreamContext(r.Context(), host, port, cfg, func(res report.Result) error {
-		storeResult(user.ID, "tcpping", host, res.Addr, port, res, time.Now())
+		srv.storeResult(user.ID, "tcpping", host, res.Addr, port, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -191,20 +186,20 @@ func handleTCPPing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enqueueAlertEvaluation(user, "tcpping", host, port, rep.Summary, buildDashboardURL(r, "alerts"))
+	srv.enqueueAlertEvaluation(user, "tcpping", host, port, rep.Summary, srv.buildDashboardURL(r, "alerts"))
 
 	writeJSON(w, http.StatusOK, toJSONReport(rep))
 }
 
-func handlePortScan(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handlePortScan(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if _, ok := requireAuthenticatedUser(w, r); !ok {
+	if _, ok := srv.requireAuthenticatedUser(w, r); !ok {
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
@@ -225,14 +220,14 @@ func handlePortScan(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	release, ok := tryAcquireProbeSlot()
+	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		writeJSON(w, http.StatusTooManyRequests, apiError{Error: "server busy, try again"})
 		return
 	}
 	defer release()
 
-	cfg.AddrCheck = appTargetPolicy.CheckIP
+	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := portscan.RunContext(r.Context(), host, cfg)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
@@ -242,15 +237,15 @@ func handlePortScan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toJSONPortScanReport(rep))
 }
 
-func handleDNSLookup(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if _, ok := requireAuthenticatedUser(w, r); !ok {
+	if _, ok := srv.requireAuthenticatedUser(w, r); !ok {
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
@@ -276,7 +271,7 @@ func handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	release, ok := tryAcquireProbeSlot()
+	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		writeJSON(w, http.StatusTooManyRequests, apiError{Error: "server busy, try again"})
 		return
@@ -285,7 +280,7 @@ func handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	if err := checkCustomResolver(ctx, req.Resolver); err != nil {
+	if err := srv.checkCustomResolver(ctx, req.Resolver); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
@@ -301,12 +296,12 @@ func handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rep)
 }
 
-func tryAcquireProbeSlot() (func(), bool) {
+func (srv *Server) tryAcquireProbeSlot() (func(), bool) {
 	select {
-	case probeLimiter <- struct{}{}:
-		return func() { <-probeLimiter }, true
+	case srv.probeLimiter <- struct{}{}:
+		return func() { <-srv.probeLimiter }, true
 	default:
-		rejected := rejectedProbeRequests.Add(1)
+		rejected := srv.rejectedProbes.Add(1)
 		if rejected == 1 || rejected%100 == 0 {
 			fmt.Fprintf(os.Stderr, "probe limiter rejected %d request(s)\n", rejected)
 		}
@@ -314,8 +309,8 @@ func tryAcquireProbeSlot() (func(), bool) {
 	}
 }
 
-func storeResult(userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
-	if appStore == nil {
+func (srv *Server) storeResult(userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
+	if srv.store == nil {
 		return
 	}
 	rec := store.ResultRecord{
@@ -332,12 +327,12 @@ func storeResult(userID int64, protocol, target, addr string, port int, res repo
 		ms := float64(res.RTT) / float64(time.Millisecond)
 		rec.RttMs = &ms
 	}
-	appStore.InsertAsync(rec)
+	srv.store.InsertAsync(rec)
 }
 
 // checkCustomResolver applies the target policy to a user-supplied DNS
 // resolver. Named presets and the system resolver are always allowed.
-func checkCustomResolver(ctx context.Context, resolver string) error {
+func (srv *Server) checkCustomResolver(ctx context.Context, resolver string) error {
 	value := strings.ToLower(strings.TrimSpace(resolver))
 	switch value {
 	case "", "auto", "default", "system", "cloudflare", "google", "quad9":
@@ -348,7 +343,7 @@ func checkCustomResolver(ctx context.Context, resolver string) error {
 		host = h
 	}
 	host = strings.Trim(host, "[]")
-	if err := appTargetPolicy.CheckHost(ctx, host); err != nil {
+	if err := srv.targetPolicy.CheckHost(ctx, host); err != nil {
 		return fmt.Errorf("resolver: %w", err)
 	}
 	return nil

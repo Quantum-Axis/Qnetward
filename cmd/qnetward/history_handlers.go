@@ -152,16 +152,16 @@ type historyExportRequest struct {
 	Destination string `json:"destination,omitempty"`
 }
 
-func handleHistory(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -173,10 +173,10 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cacheKey := historyCacheKey(user.ID, reqType, host, port, limit)
-	if appCache != nil {
+	if srv.cache != nil {
 		var cached []store.HistoryPoint
 		ctx, cancel := context.WithTimeout(r.Context(), 250*time.Millisecond)
-		hit, cacheErr := appCache.GetJSON(ctx, cacheKey, &cached)
+		hit, cacheErr := srv.cache.GetJSON(ctx, cacheKey, &cached)
 		cancel()
 		if cacheErr == nil && hit {
 			writeJSON(w, http.StatusOK, cached)
@@ -184,25 +184,25 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	points, err := appStore.QueryHistory(user.ID, reqType, host, port, limit)
+	points, err := srv.store.QueryHistory(user.ID, reqType, host, port, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
-	if appCache != nil && len(points) > 0 {
+	if srv.cache != nil && len(points) > 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), 250*time.Millisecond)
-		_ = appCache.SetJSON(ctx, cacheKey, points)
+		_ = srv.cache.SetJSON(ctx, cacheKey, points)
 		cancel()
 	}
 	writeJSON(w, http.StatusOK, points)
 }
 
-func handleRecentHistoryTargets(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleRecentHistoryTargets(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
@@ -213,7 +213,7 @@ func handleRecentHistoryTargets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targets, err := appStore.QueryRecentHistoryTargets(user.ID, limit)
+	targets, err := srv.store.QueryRecentHistoryTargets(user.ID, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -222,20 +222,20 @@ func handleRecentHistoryTargets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, targets)
 }
 
-func handleHistoryExport(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleHistoryExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := requireAuthenticatedUser(w, r)
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	if !isAllowedRequestOrigin(r) {
+	if !srv.isAllowedRequestOrigin(r) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -252,14 +252,14 @@ func handleHistoryExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	points, err := appStore.QueryHistory(user.ID, reqType, host, port, limit)
+	points, err := srv.store.QueryHistory(user.ID, reqType, host, port, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
 
 	if destination == "s3" {
-		if appObjectStore == nil {
+		if srv.objects == nil {
 			writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "object storage not configured"})
 			return
 		}
@@ -269,15 +269,15 @@ func handleHistoryExport(w http.ResponseWriter, r *http.Request) {
 
 		var objectKey string
 		if format == "csv" {
-			objectKey, err = appObjectStore.UploadCSV(ctx, key, historyCSVRows(points))
+			objectKey, err = srv.objects.UploadCSV(ctx, key, historyCSVRows(points))
 		} else {
-			objectKey, err = appObjectStore.UploadJSON(ctx, key, points)
+			objectKey, err = srv.objects.UploadJSON(ctx, key, points)
 		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
 		}
-		presignedURL, err := appObjectStore.PresignedGetURL(ctx, objectKey, 15*time.Minute)
+		presignedURL, err := srv.objects.PresignedGetURL(ctx, objectKey, 15*time.Minute)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return

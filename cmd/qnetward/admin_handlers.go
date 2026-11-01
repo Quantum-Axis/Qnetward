@@ -56,23 +56,23 @@ type authAdminSystemResponse struct {
 	Features authAdminSystemFeatures `json:"features"`
 }
 
-func handleAdminOverview(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
-	if _, ok := requirePlatformAdmin(w, r); !ok {
+	if _, ok := srv.requirePlatformAdmin(w, r); !ok {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	overview, err := appStore.GetAdminOverview(ctx)
+	overview, err := srv.store.GetAdminOverview(ctx)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -80,16 +80,16 @@ func handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, overview)
 }
 
-func handleAdminUsers(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
-	if _, ok := requirePlatformAdmin(w, r); !ok {
+	if _, ok := srv.requirePlatformAdmin(w, r); !ok {
 		return
 	}
 
@@ -97,26 +97,26 @@ func handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	users, err := appStore.ListAdminUsers(ctx, limit)
+	users, err := srv.store.ListAdminUsers(ctx, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, adminUsersResponse{
-		Users: toAuthAdminUsers(users),
+		Users: srv.toAuthAdminUsers(users),
 	})
 }
 
-func handleAdminWorkspaces(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAdminWorkspaces(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
-	if _, ok := requirePlatformAdmin(w, r); !ok {
+	if _, ok := srv.requirePlatformAdmin(w, r); !ok {
 		return
 	}
 
@@ -124,7 +124,7 @@ func handleAdminWorkspaces(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	workspaces, err := appStore.ListAdminWorkspaces(ctx, limit)
+	workspaces, err := srv.store.ListAdminWorkspaces(ctx, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -134,23 +134,23 @@ func handleAdminWorkspaces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleAdminSystem(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleAdminSystem(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
-	if _, ok := requirePlatformAdmin(w, r); !ok {
+	if _, ok := srv.requirePlatformAdmin(w, r); !ok {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	overview, err := appStore.GetAdminOverview(ctx)
+	overview, err := srv.store.GetAdminOverview(ctx)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -159,16 +159,16 @@ func handleAdminSystem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, authAdminSystemResponse{
 		Overview: overview,
 		Runtime: authAdminSystemRuntime{
-			DatabaseDriver: appStore.Driver(),
-			RedisEnabled:   appCache != nil,
-			ObjectStorage:  appObjectStore != nil,
-			EmailDelivery:  appMailer != nil,
+			DatabaseDriver: srv.store.Driver(),
+			RedisEnabled:   srv.cache != nil,
+			ObjectStorage:  srv.objects != nil,
+			EmailDelivery:  srv.mailer != nil,
 		},
 		Features: authAdminSystemFeatures{
-			PublicBaseURL:    appPublicBaseURL,
-			DemoEnabled:      appDemoEnabled,
+			PublicBaseURL:    srv.publicBaseURL,
+			DemoEnabled:      srv.demoEnabled,
 			SessionTTLHours:  int(defaultSessionTTL / time.Hour),
-			ConfiguredAdmins: len(appAdminEmails),
+			ConfiguredAdmins: len(srv.adminEmails),
 		},
 	})
 }
@@ -196,7 +196,7 @@ type adminWorkspacesResponse struct {
 	Workspaces []authAdminWorkspace `json:"workspaces,omitempty"`
 }
 
-func toAuthAdminUsers(users []store.AdminUserSummary) []authAdminUser {
+func (srv *Server) toAuthAdminUsers(users []store.AdminUserSummary) []authAdminUser {
 	resp := make([]authAdminUser, 0, len(users))
 	for _, user := range users {
 		resp = append(resp, authAdminUser{
@@ -208,7 +208,7 @@ func toAuthAdminUsers(users []store.AdminUserSummary) []authAdminUser {
 			OwnedWorkspaceCount: user.OwnedWorkspaceCount,
 			WorkspaceCount:      user.WorkspaceCount,
 			ActiveSessionCount:  user.ActiveSessionCount,
-			PlatformRole:        platformRoleForUser(store.User{Email: user.Email}),
+			PlatformRole:        srv.platformRoleForUser(store.User{Email: user.Email}),
 		})
 	}
 	return resp

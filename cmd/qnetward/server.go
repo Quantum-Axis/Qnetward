@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -64,28 +63,16 @@ func runServe(args []string) {
 		os.Exit(2)
 	}
 
-	defer func() {
-		appStore = nil
-		appCache = nil
-		appObjectStore = nil
-		appMailer = nil
-		appPublicBaseURL = ""
-		appAllowedOrigins = nil
-		appAdminEmails = nil
-	}()
-
 	allowedOrigins, err := parseAllowedOrigins(*allowedOriginsRaw)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	appAllowedOrigins = allowedOrigins
 	adminEmails, err := parseAdminEmails(*adminEmailsRaw)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	appAdminEmails = adminEmails
 
 	st, err := store.OpenConfigured(store.Config{
 		DSN:              *dbDSN,
@@ -102,7 +89,6 @@ func runServe(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	appStore = st
 	defer func() {
 		_ = st.Close()
 	}()
@@ -118,7 +104,6 @@ func runServe(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	appCache = rc
 	if rc != nil {
 		defer func() {
 			_ = rc.Close()
@@ -138,7 +123,6 @@ func runServe(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	appObjectStore = objStore
 	if objStore != nil {
 		defer func() {
 			_ = objStore.Close()
@@ -154,57 +138,22 @@ func runServe(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	appMailer = emailClient
-	appPublicBaseURL = strings.TrimRight(strings.TrimSpace(*publicBaseURL), "/")
-	appDemoEnabled = *demoEnabled
-	appDemoName = strings.TrimSpace(*demoName)
-	appTargetPolicy = netguard.Policy{AllowPrivate: *allowPrivateTargets}
-	appDemoEmail = strings.TrimSpace(*demoEmail)
-	appDemoCreatedAt = time.Now().UTC()
-	if appDemoEnabled {
-		if appDemoName == "" {
-			appDemoName = "Contributor Demo"
-		}
-		if appDemoEmail == "" {
-			appDemoEmail = "demo@qnetward.local"
-		}
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", handleHealthz)
-	mux.HandleFunc("/api/healthz", handleHealthz)
-	mux.HandleFunc("/api/auth/session", handleAuthSession)
-	mux.HandleFunc("/api/auth/account-context", handleAuthAccountContext)
-	mux.HandleFunc("/api/auth/demo-login", handleAuthDemoLogin)
-	mux.HandleFunc("/api/auth/signup", handleAuthSignup)
-	mux.HandleFunc("/api/auth/login", handleAuthLogin)
-	mux.HandleFunc("/api/auth/logout", handleAuthLogout)
-	mux.HandleFunc("/api/auth/profile", handleAuthProfile)
-	mux.HandleFunc("/api/auth/verify-email", handleAuthVerifyEmail)
-	mux.HandleFunc("/api/auth/resend-verification", handleAuthResendVerification)
-	mux.HandleFunc("/api/auth/forgot-password", handleAuthForgotPassword)
-	mux.HandleFunc("/api/auth/reset-password", handleAuthResetPassword)
-	mux.HandleFunc("/api/workspaces", handleWorkspaces)
-	mux.HandleFunc("/api/workspace/team", handleWorkspaceTeam)
-	mux.HandleFunc("/api/workspace/invitations", handleWorkspaceInvitations)
-	mux.HandleFunc("/api/admin/overview", handleAdminOverview)
-	mux.HandleFunc("/api/admin/users", handleAdminUsers)
-	mux.HandleFunc("/api/admin/workspaces", handleAdminWorkspaces)
-	mux.HandleFunc("/api/admin/system", handleAdminSystem)
-	mux.HandleFunc("/api/ping", handlePing)
-	mux.HandleFunc("/api/tcpping", handleTCPPing)
-	mux.HandleFunc("/api/portscan", handlePortScan)
-	mux.HandleFunc("/api/dnslookup", handleDNSLookup)
-	mux.HandleFunc("/api/history", handleHistory)
-	mux.HandleFunc("/api/history/recent-targets", handleRecentHistoryTargets)
-	mux.HandleFunc("/api/export/history", handleHistoryExport)
-	mux.HandleFunc("/api/alerts/rules", handleAlertRules)
-	mux.HandleFunc("/ws", handleWS)
-	mux.Handle("/", newBackendFallbackHandler())
+	api := NewServer(
+		Deps{Store: st, Cache: rc, Objects: objStore, Mailer: emailClient},
+		Options{
+			PublicBaseURL:  *publicBaseURL,
+			AllowedOrigins: allowedOrigins,
+			AdminEmails:    adminEmails,
+			DemoEnabled:    *demoEnabled,
+			DemoName:       *demoName,
+			DemoEmail:      *demoEmail,
+			TargetPolicy:   netguard.Policy{AllowPrivate: *allowPrivateTargets},
+		},
+	)
 
 	srv := &http.Server{
 		Addr:              *listen,
-		Handler:           withSecurityHeaders(mux),
+		Handler:           api.Handler(),
 		ReadTimeout:       15 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -258,33 +207,7 @@ func newBackendFallbackHandler() http.Handler {
 	})
 }
 
-var appStore *store.Store
-
-var appCache *cache.Cache
-
-var appObjectStore *objectstore.Client
-
-var appMailer *mailer.Client
-
-var appPublicBaseURL string
-
-var appAllowedOrigins map[string]struct{}
-
-var appAdminEmails map[string]struct{}
-
-var appDemoEnabled bool
-
-var appDemoName string
-
-var appDemoEmail string
-
-var appDemoCreatedAt time.Time
-
-// appTargetPolicy decides which addresses API-initiated probes may reach.
-// The CLI does not use it: it runs on the operator's own machine.
-var appTargetPolicy netguard.Policy
-
-func handleHealthz(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
@@ -308,20 +231,20 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 		OK:   true,
 		Time: time.Now().UTC(),
 		Database: healthDep{
-			Enabled: appStore != nil,
+			Enabled: srv.store != nil,
 		},
 		Redis: healthDep{
-			Enabled: appCache != nil,
+			Enabled: srv.cache != nil,
 		},
 		ObjectStore: healthDep{
-			Enabled: appObjectStore != nil,
+			Enabled: srv.objects != nil,
 		},
 	}
 
-	if appStore != nil {
-		resp.Database.Driver = appStore.Driver()
+	if srv.store != nil {
+		resp.Database.Driver = srv.store.Driver()
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-		err := appStore.Ping(ctx)
+		err := srv.store.Ping(ctx)
 		cancel()
 		resp.Database.Healthy = err == nil
 		if err != nil {
@@ -329,9 +252,9 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 			resp.OK = false
 		}
 	}
-	if appCache != nil {
+	if srv.cache != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-		err := appCache.Ping(ctx)
+		err := srv.cache.Ping(ctx)
 		cancel()
 		resp.Redis.Healthy = err == nil
 		if err != nil {
@@ -339,9 +262,9 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 			resp.OK = false
 		}
 	}
-	if appObjectStore != nil {
+	if srv.objects != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		err := appObjectStore.Ping(ctx)
+		err := srv.objects.Ping(ctx)
 		cancel()
 		resp.ObjectStore.Healthy = err == nil
 		if err != nil {

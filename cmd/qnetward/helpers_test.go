@@ -56,16 +56,16 @@ func installTestStore(t *testing.T) *store.Store {
 	t.Helper()
 
 	st := openTestStore(t)
-	oldStore := appStore
-	oldCache := appCache
-	oldObjectStore := appObjectStore
-	appStore = st
-	appCache = nil
-	appObjectStore = nil
+	oldStore := testSrv.store
+	oldCache := testSrv.cache
+	oldObjectStore := testSrv.objects
+	testSrv.store = st
+	testSrv.cache = nil
+	testSrv.objects = nil
 	t.Cleanup(func() {
-		appStore = oldStore
-		appCache = oldCache
-		appObjectStore = oldObjectStore
+		testSrv.store = oldStore
+		testSrv.cache = oldCache
+		testSrv.objects = oldObjectStore
 	})
 	return st
 }
@@ -91,10 +91,10 @@ func installFailingTestMailer(t *testing.T) {
 		t.Fatalf("open test mailer: %v", err)
 	}
 
-	previous := appMailer
-	appMailer = client
+	previous := testSrv.mailer
+	testSrv.mailer = client
 	t.Cleanup(func() {
-		appMailer = previous
+		testSrv.mailer = previous
 	})
 }
 
@@ -118,7 +118,7 @@ func issueTestSession(t *testing.T, st *store.Store) (store.User, *http.Cookie) 
 
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1", nil)
 	rr := httptest.NewRecorder()
-	if err := issueSession(rr, req, ctx, user); err != nil {
+	if err := testSrv.issueSession(rr, req, ctx, user); err != nil {
 		t.Fatalf("issue session: %v", err)
 	}
 
@@ -128,10 +128,10 @@ func issueTestSession(t *testing.T, st *store.Store) (store.User, *http.Cookie) 
 func resetAuthRateLimiterForTest(t *testing.T) {
 	t.Helper()
 
-	previous := authRateLimiter
-	authRateLimiter = newRateLimiter()
+	previous := testSrv.authLimiter
+	testSrv.authLimiter = newRateLimiter()
 	t.Cleanup(func() {
-		authRateLimiter = previous
+		testSrv.authLimiter = previous
 	})
 }
 
@@ -154,14 +154,14 @@ func float64Ptr(v float64) *float64 {
 
 func fillProbeLimiter() {
 	for i := 0; i < maxConcurrentProbes; i++ {
-		probeLimiter <- struct{}{}
+		testSrv.probeLimiter <- struct{}{}
 	}
 }
 
 func drainProbeLimiter() {
 	for {
 		select {
-		case <-probeLimiter:
+		case <-testSrv.probeLimiter:
 		default:
 			return
 		}
@@ -196,7 +196,11 @@ func testTableName(name string) string {
 	return b.String()
 }
 
-func init() {
+// testSrv is the server the handler tests exercise. A test that changes one of
+// its fields restores the old value in t.Cleanup.
+var testSrv = newTestServer()
+
+func newTestServer() *Server {
 	// Handler tests probe listeners on 127.0.0.1; the hosted default blocks that.
-	appTargetPolicy = netguard.Policy{AllowPrivate: true}
+	return NewServer(Deps{}, Options{TargetPolicy: netguard.Policy{AllowPrivate: true}})
 }

@@ -26,7 +26,7 @@ func TestAlertRulesCRUDFlow(t *testing.T) {
 	createReq.Header.Set("Content-Type", "application/json")
 	createReq.AddCookie(cookie)
 	createRR := httptest.NewRecorder()
-	handleAlertRules(createRR, createReq)
+	testSrv.handleAlertRules(createRR, createReq)
 	if createRR.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", createRR.Code, createRR.Body.String())
 	}
@@ -42,7 +42,7 @@ func TestAlertRulesCRUDFlow(t *testing.T) {
 	listReq := httptest.NewRequest(http.MethodGet, "/api/alerts/rules", nil)
 	listReq.AddCookie(cookie)
 	listRR := httptest.NewRecorder()
-	handleAlertRules(listRR, listReq)
+	testSrv.handleAlertRules(listRR, listReq)
 	if listRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", listRR.Code, listRR.Body.String())
 	}
@@ -58,21 +58,21 @@ func TestAlertRulesCRUDFlow(t *testing.T) {
 	deleteReq := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/alerts/rules?id=%d", created.ID), nil)
 	deleteReq.AddCookie(cookie)
 	deleteRR := httptest.NewRecorder()
-	handleAlertRules(deleteRR, deleteReq)
+	testSrv.handleAlertRules(deleteRR, deleteReq)
 	if deleteRR.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", deleteRR.Code, deleteRR.Body.String())
 	}
 }
 
 func TestBuildDashboardURLUsesPanel(t *testing.T) {
-	oldBase := appPublicBaseURL
-	appPublicBaseURL = "https://qnetward.example.com"
+	oldBase := testSrv.publicBaseURL
+	testSrv.publicBaseURL = "https://qnetward.example.com"
 	t.Cleanup(func() {
-		appPublicBaseURL = oldBase
+		testSrv.publicBaseURL = oldBase
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/", nil)
-	got := buildDashboardURL(req, "alerts")
+	got := testSrv.buildDashboardURL(req, "alerts")
 	want := "https://qnetward.example.com/alerts"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)

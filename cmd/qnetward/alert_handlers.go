@@ -30,12 +30,12 @@ type alertRuleRequest struct {
 	Enabled              *bool   `json:"enabled,omitempty"`
 }
 
-func handleAlertRules(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireAuthenticatedUser(w, r)
+func (srv *Server) handleAlertRules(w http.ResponseWriter, r *http.Request) {
+	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
-	if appStore == nil {
+	if srv.store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
 		return
 	}
@@ -45,14 +45,14 @@ func handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		rules, err := appStore.ListAlertRules(ctx, user.ID)
+		rules, err := srv.store.ListAlertRules(ctx, user.ID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, rules)
 	case http.MethodPost:
-		if !isAllowedRequestOrigin(r) {
+		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 			return
 		}
@@ -69,7 +69,7 @@ func handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		saved, err := appStore.SaveAlertRule(ctx, rule)
+		saved, err := srv.store.SaveAlertRule(ctx, rule)
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrAlertRuleNotFound):
@@ -85,7 +85,7 @@ func handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, status, saved)
 	case http.MethodDelete:
-		if !isAllowedRequestOrigin(r) {
+		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
 			return
 		}
@@ -96,7 +96,7 @@ func handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
-		if err := appStore.DeleteAlertRule(ctx, user.ID, ruleID); err != nil {
+		if err := srv.store.DeleteAlertRule(ctx, user.ID, ruleID); err != nil {
 			switch {
 			case errors.Is(err, store.ErrAlertRuleNotFound):
 				writeJSON(w, http.StatusNotFound, apiError{Error: "alert rule not found"})
@@ -186,16 +186,16 @@ func normalizeAlertRuleRequest(user store.User, req alertRuleRequest) (store.Ale
 	return rule, nil
 }
 
-func buildDashboardURL(r *http.Request, panel string) string {
-	base := buildConfiguredDashboardURL(panel)
+func (srv *Server) buildDashboardURL(r *http.Request, panel string) string {
+	base := srv.buildConfiguredDashboardURL(panel)
 	if base != "" {
 		return base
 	}
 	return fmt.Sprintf("%s://%s%s", requestScheme(r), requestHost(r), dashboardRoutePath(panel))
 }
 
-func buildConfiguredDashboardURL(panel string) string {
-	base := strings.TrimRight(strings.TrimSpace(appPublicBaseURL), "/")
+func (srv *Server) buildConfiguredDashboardURL(panel string) string {
+	base := strings.TrimRight(strings.TrimSpace(srv.publicBaseURL), "/")
 	if base == "" {
 		return ""
 	}
@@ -227,8 +227,8 @@ func dashboardRoutePath(panel string) string {
 	}
 }
 
-func enqueueAlertEvaluation(user store.User, protocol, target string, port int, summary report.Summary, dashboardURL string) {
-	if appStore == nil {
+func (srv *Server) enqueueAlertEvaluation(user store.User, protocol, target string, port int, summary report.Summary, dashboardURL string) {
+	if srv.store == nil {
 		return
 	}
 
@@ -246,12 +246,12 @@ func enqueueAlertEvaluation(user store.User, protocol, target string, port int, 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		decisions, err := appStore.EvaluateAlertRules(ctx, user.ID, protocol, target, port, sample)
+		decisions, err := srv.store.EvaluateAlertRules(ctx, user.ID, protocol, target, port, sample)
 		if err != nil {
 			log.Printf("alert evaluation failed for %s/%s: %v", protocol, target, err)
 			return
 		}
-		if appMailer == nil {
+		if srv.mailer == nil {
 			return
 		}
 		for _, decision := range decisions {
@@ -259,7 +259,7 @@ func enqueueAlertEvaluation(user store.User, protocol, target string, port int, 
 			if strings.TrimSpace(alertTitle) == "" {
 				alertTitle = "Monitoring Alert"
 			}
-			if err := appMailer.SendAlert(ctx, mailer.AlertEmailInput{
+			if err := srv.mailer.SendAlert(ctx, mailer.AlertEmailInput{
 				To:           decision.Rule.RecipientEmail,
 				Name:         user.Name,
 				Severity:     decision.Severity,

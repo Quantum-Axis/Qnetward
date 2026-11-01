@@ -26,6 +26,9 @@ var MonitorIntervals = []int{60, 300, 600, 1800, 3600}
 // monitorRecentChecks is how many checks the list returns per monitor.
 const monitorRecentChecks = 30
 
+// MonitorTLSWarnWithin is how close to expiry a certificate gets a warning.
+const MonitorTLSWarnWithin = 14 * 24 * time.Hour
+
 type Monitor struct {
 	ID                 int64          `json:"id"`
 	WorkspaceID        int64          `json:"-"`
@@ -42,6 +45,9 @@ type Monitor struct {
 	LastStatusChangeAt *time.Time     `json:"last_status_change_at,omitempty"`
 	LastRttMs          *float64       `json:"last_rtt_ms,omitempty"`
 	LastError          string         `json:"last_error,omitempty"`
+	ExpectedStatus     *int           `json:"expected_status,omitempty"`
+	LastStatusCode     *int           `json:"last_status_code,omitempty"`
+	TLSExpiresAt       *time.Time     `json:"tls_expires_at,omitempty"`
 	NextRunAt          time.Time      `json:"next_run_at"`
 	CreatedAt          time.Time      `json:"created_at"`
 	Uptime24h          *float64       `json:"uptime_24h,omitempty"`
@@ -53,12 +59,25 @@ type MonitorCheck struct {
 	OK          bool      `json:"ok"`
 	RttMs       *float64  `json:"rtt_ms,omitempty"`
 	LossPercent float64   `json:"loss_percent"`
+	StatusCode  *int      `json:"status_code,omitempty"`
 	Error       string    `json:"error,omitempty"`
+	// TLSExpiresAt is the certificate expiry seen by an HTTPS check.
+	TLSExpiresAt *time.Time `json:"-"`
+}
+
+// MonitorOutcome is what recording a check changed.
+type MonitorOutcome struct {
+	// Previous is the status before the check: pending, up, or down.
+	Previous string
+	// WarnTLS is set the first time a certificate is seen within
+	// MonitorTLSWarnWithin of expiring.
+	WarnTLS bool
 }
 
 const monitorColumns = `id, workspace_id, COALESCE(user_id, 0), name, protocol, target, port,
 	interval_seconds, notify_email, enabled, status, last_checked_at,
-	last_status_change_at, last_rtt_ms, last_error, next_run_at, created_at`
+	last_status_change_at, last_rtt_ms, last_error, next_run_at, created_at,
+	expected_status, last_status_code, tls_expires_at`
 
 // SaveMonitor creates a monitor, or updates one in the same workspace. A new
 // or re-pointed monitor is checked right away.
@@ -86,10 +105,10 @@ func (s *Store) SaveMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 			return Monitor{}, ErrMonitorLimit
 		}
 		err = scanMonitor(tx.QueryRowContext(ctx, `
-			INSERT INTO monitors (workspace_id, user_id, name, protocol, target, port, interval_seconds, notify_email, enabled)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			INSERT INTO monitors (workspace_id, user_id, name, protocol, target, port, interval_seconds, notify_email, enabled, expected_status)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			RETURNING `+monitorColumns,
-			m.WorkspaceID, nullableID(m.UserID), m.Name, m.Protocol, m.Target, m.Port, m.IntervalSeconds, m.NotifyEmail, m.Enabled,
+			m.WorkspaceID, nullableID(m.UserID), m.Name, m.Protocol, m.Target, m.Port, m.IntervalSeconds, m.NotifyEmail, m.Enabled, m.ExpectedStatus,
 		), &saved)
 	} else {
 		// Pointing a monitor somewhere else discards the old target's status.
@@ -100,6 +119,8 @@ func (s *Store) SaveMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 				last_status_change_at = CASE WHEN protocol = $3 AND target = $4 AND port IS NOT DISTINCT FROM $5 THEN last_status_change_at END,
 				last_rtt_ms = CASE WHEN protocol = $3 AND target = $4 AND port IS NOT DISTINCT FROM $5 THEN last_rtt_ms END,
 				last_error = CASE WHEN protocol = $3 AND target = $4 AND port IS NOT DISTINCT FROM $5 THEN last_error ELSE '' END,
+				last_status_code = CASE WHEN protocol = $3 AND target = $4 AND port IS NOT DISTINCT FROM $5 THEN last_status_code END,
+				tls_expires_at = CASE WHEN protocol = $3 AND target = $4 AND port IS NOT DISTINCT FROM $5 THEN tls_expires_at END,
 				next_run_at = CASE
 					WHEN protocol = $3 AND target = $4 AND port IS NOT DISTINCT FROM $5 AND (enabled OR NOT $9) THEN next_run_at
 					ELSE NOW()
@@ -110,10 +131,11 @@ func (s *Store) SaveMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 				port = $5,
 				interval_seconds = $7,
 				notify_email = $8,
-				enabled = $9
+				enabled = $9,
+				expected_status = $10
 			WHERE id = $1 AND workspace_id = $2
 			RETURNING `+monitorColumns,
-			m.ID, m.WorkspaceID, m.Protocol, m.Target, m.Port, m.Name, m.IntervalSeconds, m.NotifyEmail, m.Enabled,
+			m.ID, m.WorkspaceID, m.Protocol, m.Target, m.Port, m.Name, m.IntervalSeconds, m.NotifyEmail, m.Enabled, m.ExpectedStatus,
 		), &saved)
 	}
 	if errors.Is(err, sql.ErrNoRows) {
@@ -192,7 +214,7 @@ func (s *Store) ListMonitors(ctx context.Context, workspaceID int64) ([]Monitor,
 	uptime.Close()
 
 	checks, err := tx.QueryContext(ctx, `
-		SELECT monitor_id, checked_at, ok, rtt_ms, loss_percent, error
+		SELECT monitor_id, checked_at, ok, rtt_ms, loss_percent, status_code, error
 		FROM (
 			SELECT *, ROW_NUMBER() OVER (PARTITION BY monitor_id ORDER BY checked_at DESC) AS n
 			FROM monitor_checks
@@ -209,9 +231,11 @@ func (s *Store) ListMonitors(ctx context.Context, workspaceID int64) ([]Monitor,
 		var id int64
 		var c MonitorCheck
 		var rtt sql.NullFloat64
-		if err := checks.Scan(&id, &c.CheckedAt, &c.OK, &rtt, &c.LossPercent, &c.Error); err != nil {
+		var code sql.NullInt64
+		if err := checks.Scan(&id, &c.CheckedAt, &c.OK, &rtt, &c.LossPercent, &code, &c.Error); err != nil {
 			return nil, err
 		}
+		c.StatusCode = nullIntPtr(code)
 		if rtt.Valid {
 			v := rtt.Float64
 			c.RttMs = &v
@@ -277,31 +301,40 @@ func (s *Store) ClaimDueMonitors(ctx context.Context, limit int) ([]Monitor, err
 }
 
 // RecordMonitorCheck stores one check and moves the monitor to up or down.
-// It returns the status before the check, so the caller can tell a change.
-func (s *Store) RecordMonitorCheck(ctx context.Context, m Monitor, check MonitorCheck) (string, error) {
+func (s *Store) RecordMonitorCheck(ctx context.Context, m Monitor, check MonitorCheck) (MonitorOutcome, error) {
 	if s == nil {
-		return "", errors.New("store is not available")
+		return MonitorOutcome{}, errors.New("store is not available")
 	}
 	tx, err := s.beginWorkspaceTx(ctx, m.WorkspaceID)
 	if err != nil {
-		return "", err
+		return MonitorOutcome{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var previous string
-	err = tx.QueryRowContext(ctx, `SELECT status FROM monitors WHERE id = $1 FOR UPDATE`, m.ID).Scan(&previous)
+	var out MonitorOutcome
+	var warned sql.NullTime
+	err = tx.QueryRowContext(ctx, `SELECT status, tls_warned_expiry FROM monitors WHERE id = $1 FOR UPDATE`, m.ID).Scan(&out.Previous, &warned)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrMonitorNotFound
+		return MonitorOutcome{}, ErrMonitorNotFound
 	}
 	if err != nil {
-		return "", err
+		return MonitorOutcome{}, err
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO monitor_checks (monitor_id, workspace_id, checked_at, ok, rtt_ms, loss_percent, error)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, m.ID, m.WorkspaceID, check.CheckedAt.UTC(), check.OK, check.RttMs, check.LossPercent, check.Error); err != nil {
-		return "", err
+		INSERT INTO monitor_checks (monitor_id, workspace_id, checked_at, ok, rtt_ms, loss_percent, status_code, error)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, m.ID, m.WorkspaceID, check.CheckedAt.UTC(), check.OK, check.RttMs, check.LossPercent, check.StatusCode, check.Error); err != nil {
+		return MonitorOutcome{}, err
+	}
+
+	var warnedExpiry any
+	if warned.Valid {
+		warnedExpiry = warned.Time
+	}
+	if exp := check.TLSExpiresAt; exp != nil && time.Until(*exp) < MonitorTLSWarnWithin && (!warned.Valid || !warned.Time.Equal(*exp)) {
+		out.WarnTLS = true
+		warnedExpiry = exp.UTC()
 	}
 
 	next := "down"
@@ -314,12 +347,15 @@ func (s *Store) RecordMonitorCheck(ctx context.Context, m Monitor, check Monitor
 			last_checked_at = $3,
 			last_status_change_at = CASE WHEN status = $2 THEN last_status_change_at ELSE $3 END,
 			last_rtt_ms = $4,
-			last_error = $5
+			last_error = $5,
+			last_status_code = $6,
+			tls_expires_at = COALESCE($7, tls_expires_at),
+			tls_warned_expiry = $8
 		WHERE id = $1
-	`, m.ID, next, check.CheckedAt.UTC(), check.RttMs, check.Error); err != nil {
-		return "", err
+	`, m.ID, next, check.CheckedAt.UTC(), check.RttMs, check.Error, check.StatusCode, check.TLSExpiresAt, warnedExpiry); err != nil {
+		return MonitorOutcome{}, err
 	}
-	return previous, tx.Commit()
+	return out, tx.Commit()
 }
 
 // PruneMonitorChecks deletes checks older than the cutoff, across workspaces.
@@ -336,6 +372,7 @@ func validateMonitor(m *Monitor) error {
 		return errors.New("workspace is required")
 	}
 	m.Protocol = strings.ToLower(strings.TrimSpace(m.Protocol))
+	m.Target = strings.TrimSpace(m.Target)
 	switch m.Protocol {
 	case "ping":
 		m.Port = nil
@@ -343,10 +380,19 @@ func validateMonitor(m *Monitor) error {
 		if m.Port == nil || *m.Port < 1 || *m.Port > 65535 {
 			return errors.New("port must be between 1 and 65535")
 		}
+	case "http":
+		m.Port = nil
+		if !strings.HasPrefix(m.Target, "http://") && !strings.HasPrefix(m.Target, "https://") {
+			return errors.New("target must be an http:// or https:// URL")
+		}
 	default:
-		return errors.New("protocol must be ping or tcpping")
+		return errors.New("protocol must be ping, tcpping, or http")
 	}
-	m.Target = strings.TrimSpace(m.Target)
+	if m.Protocol != "http" {
+		m.ExpectedStatus = nil
+	} else if m.ExpectedStatus != nil && (*m.ExpectedStatus < 100 || *m.ExpectedStatus > 599) {
+		return errors.New("expected status must be between 100 and 599")
+	}
 	if m.Target == "" {
 		return errors.New("target is required")
 	}
@@ -389,12 +435,22 @@ func scanMonitor(scanner monitorScanner, m *Monitor) error {
 	var port sql.NullInt64
 	var lastChecked, lastChange sql.NullTime
 	var lastRtt sql.NullFloat64
+	var expected, lastCode sql.NullInt64
+	var tlsExpires sql.NullTime
 	if err := scanner.Scan(
 		&m.ID, &m.WorkspaceID, &m.UserID, &m.Name, &m.Protocol, &m.Target, &port,
 		&m.IntervalSeconds, &m.NotifyEmail, &m.Enabled, &m.Status, &lastChecked,
 		&lastChange, &lastRtt, &m.LastError, &m.NextRunAt, &m.CreatedAt,
+		&expected, &lastCode, &tlsExpires,
 	); err != nil {
 		return err
+	}
+	m.ExpectedStatus = nullIntPtr(expected)
+	m.LastStatusCode = nullIntPtr(lastCode)
+	m.TLSExpiresAt = nil
+	if tlsExpires.Valid {
+		t := tlsExpires.Time
+		m.TLSExpiresAt = &t
 	}
 	m.Port = nil
 	if port.Valid {
@@ -417,4 +473,12 @@ func scanMonitor(scanner monitorScanner, m *Monitor) error {
 		m.LastRttMs = &v
 	}
 	return nil
+}
+
+func nullIntPtr(v sql.NullInt64) *int {
+	if !v.Valid {
+		return nil
+	}
+	n := int(v.Int64)
+	return &n
 }

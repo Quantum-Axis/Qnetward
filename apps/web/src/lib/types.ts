@@ -390,16 +390,22 @@ export type MonitorCheck = {
   ok: boolean;
   rtt_ms?: number | null;
   loss_percent: number;
+  status_code?: number | null;
   error?: string;
 };
+
+export type MonitorProtocol = "http" | "tcpping" | "ping";
 
 export type Monitor = {
   id: number;
   name: string;
-  protocol: "ping" | "tcpping";
+  protocol: MonitorProtocol;
   target: string;
   port?: number | null;
   interval_seconds: number;
+  expected_status?: number | null;
+  last_status_code?: number | null;
+  tls_expires_at?: string | null;
   notify_email: string;
   enabled: boolean;
   status: "pending" | "up" | "down";
@@ -416,9 +422,10 @@ export type Monitor = {
 export type MonitorPayload = {
   id?: number;
   name: string;
-  protocol: "ping" | "tcpping";
+  protocol: MonitorProtocol;
   target: string;
   port?: number;
+  expected_status?: number;
   interval_seconds: number;
   notify_email: string;
   enabled: boolean;

@@ -25,6 +25,7 @@ const plans: Plan[] = [
     features: [
       { label: "ICMP ping, TCP ping, port scan, DNS lookup" },
       { label: "Live results and 7 days of history" },
+      { label: "Up to 20 uptime monitors, HTTP(S), TCP, or ping" },
       { label: "Alert rules with email delivery" },
       { label: "Workspaces, invitations, and roles" },
       { label: "CSV and JSON export" },

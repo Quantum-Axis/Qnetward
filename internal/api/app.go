@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/x509"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -51,6 +52,8 @@ type Server struct {
 	demoEmail      string
 	demoCreatedAt  time.Time
 	targetPolicy   netguard.Policy
+	// monitorRootCAs overrides the system roots for HTTPS monitors; tests only.
+	monitorRootCAs *x509.CertPool
 
 	probeLimiter   chan struct{}
 	rejectedProbes atomic.Uint64

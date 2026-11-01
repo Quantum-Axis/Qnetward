@@ -68,13 +68,13 @@ func TestMonitorLifecycle(t *testing.T) {
 	}
 
 	rtt := 21.5
-	previous, err := st.RecordMonitorCheck(ctx, claimed, MonitorCheck{CheckedAt: time.Now(), OK: true, RttMs: &rtt})
-	if err != nil || previous != "pending" {
-		t.Fatalf("first check: previous=%q err=%v", previous, err)
+	outcome, err := st.RecordMonitorCheck(ctx, claimed, MonitorCheck{CheckedAt: time.Now(), OK: true, RttMs: &rtt})
+	if err != nil || outcome.Previous != "pending" {
+		t.Fatalf("first check: previous=%q err=%v", outcome.Previous, err)
 	}
-	previous, err = st.RecordMonitorCheck(ctx, claimed, MonitorCheck{CheckedAt: time.Now(), LossPercent: 100, Error: "connection refused"})
-	if err != nil || previous != "up" {
-		t.Fatalf("second check: previous=%q err=%v", previous, err)
+	outcome, err = st.RecordMonitorCheck(ctx, claimed, MonitorCheck{CheckedAt: time.Now(), LossPercent: 100, Error: "connection refused"})
+	if err != nil || outcome.Previous != "up" {
+		t.Fatalf("second check: previous=%q err=%v", outcome.Previous, err)
 	}
 
 	monitors, err := st.ListMonitors(ctx, workspaceID)
@@ -148,4 +148,69 @@ func claimUntilFound(t *testing.T, st *Store, id int64) Monitor {
 	}
 	t.Fatalf("monitor %d was never claimed", id)
 	return Monitor{}
+}
+
+// An HTTPS monitor warns once per certificate as it nears expiry, and again
+// only after the certificate changes.
+func TestMonitorWarnsOncePerExpiringCertificate(t *testing.T) {
+	st := openTestStore(t, Config{BatchSize: 1, FlushInterval: 5 * time.Millisecond})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	user, err := st.CreateUser(ctx, "Cert Watcher", testEmail("monitor-cert"), "hash", false)
+	if err != nil {
+		t.Fatalf("CreateUser returned error: %v", err)
+	}
+	monitor, err := st.SaveMonitor(ctx, Monitor{
+		WorkspaceID:     mustOwnedWorkspaceID(t, st, user.ID),
+		Protocol:        "http",
+		Target:          "https://cert.example/health",
+		IntervalSeconds: 300,
+		Enabled:         true,
+	})
+	if err != nil {
+		t.Fatalf("SaveMonitor returned error: %v", err)
+	}
+	if monitor.Port != nil || monitor.Name != "https://cert.example/health" {
+		t.Fatalf("unexpected http monitor: %#v", monitor)
+	}
+
+	record := func(expires time.Time) MonitorOutcome {
+		t.Helper()
+		code := 200
+		out, err := st.RecordMonitorCheck(ctx, monitor, MonitorCheck{CheckedAt: time.Now(), OK: true, StatusCode: &code, TLSExpiresAt: &expires})
+		if err != nil {
+			t.Fatalf("RecordMonitorCheck returned error: %v", err)
+		}
+		return out
+	}
+
+	far := time.Now().Add(90 * 24 * time.Hour).UTC().Truncate(time.Second)
+	if record(far).WarnTLS {
+		t.Fatal("did not expect a warning 90 days out")
+	}
+	soon := time.Now().Add(5 * 24 * time.Hour).UTC().Truncate(time.Second)
+	if !record(soon).WarnTLS {
+		t.Fatal("expected a warning 5 days before expiry")
+	}
+	if record(soon).WarnTLS {
+		t.Fatal("expected only one warning for the same certificate")
+	}
+	renewedButShort := soon.Add(24 * time.Hour)
+	if !record(renewedButShort).WarnTLS {
+		t.Fatal("expected a new warning for a different certificate")
+	}
+
+	list, err := st.ListMonitors(ctx, monitor.WorkspaceID)
+	if err != nil {
+		t.Fatalf("ListMonitors returned error: %v", err)
+	}
+	got := list[0]
+	if got.LastStatusCode == nil || *got.LastStatusCode != 200 || got.TLSExpiresAt == nil || !got.TLSExpiresAt.Equal(renewedButShort) {
+		t.Fatalf("expected status code and certificate expiry on the monitor, got %#v", got)
+	}
+	if got.RecentChecks[0].StatusCode == nil {
+		t.Fatal("expected status codes on recent checks")
+	}
 }

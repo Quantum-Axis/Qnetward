@@ -7,7 +7,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus, Radio, Trash2, X } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
-import type { Monitor, MonitorCheck, MonitorPayload, SessionResponse } from "@/lib/types";
+import type { Monitor, MonitorCheck, MonitorPayload, MonitorProtocol, SessionResponse } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
 import { Field, PageHeader, Panel, RunStatus, StatStrip, Toggle } from "@/components/tools/probe-ui";
 
@@ -26,9 +26,13 @@ const monitorSchema = z
   .object({
     id: z.number().int().positive().optional(),
     name: z.string().trim().max(80, "80 characters at most").optional(),
-    protocol: z.enum(["ping", "tcpping"]),
+    protocol: z.enum(["http", "tcpping", "ping"]),
     target: z.string().trim().min(1, "Target is required"),
     port: z.preprocess((v) => (v === "" || v === null || Number.isNaN(v) ? undefined : Number(v)), z.number().int().optional()),
+    expected_status: z.preprocess(
+      (v) => (v === "" || v === null || Number.isNaN(v) ? undefined : Number(v)),
+      z.number().int().min(100, "100 to 599").max(599, "100 to 599").optional(),
+    ),
     interval_seconds: z.number().int(),
     notify_email: z.union([z.literal(""), z.string().trim().email("Enter a valid email or leave it empty")]),
     enabled: z.boolean(),
@@ -36,6 +40,9 @@ const monitorSchema = z
   .superRefine((value, ctx) => {
     if (value.protocol === "tcpping" && (!value.port || value.port < 1 || value.port > 65535)) {
       ctx.addIssue({ code: "custom", path: ["port"], message: "Port 1 to 65535" });
+    }
+    if (value.protocol === "http" && /^[a-z]+:\/\//i.test(value.target) && !/^https?:\/\//i.test(value.target)) {
+      ctx.addIssue({ code: "custom", path: ["target"], message: "Use an http:// or https:// URL" });
     }
   });
 
@@ -57,6 +64,20 @@ function monitorState(m: Monitor): MonitorState {
 
 function monitorTarget(m: Pick<Monitor, "protocol" | "target" | "port">) {
   return m.protocol === "tcpping" && m.port ? `${m.target}:${m.port}` : m.target;
+}
+
+const protocolMeta: Record<MonitorProtocol, { label: string; short: string }> = {
+  http: { label: "HTTP(S)", short: "HTTP" },
+  tcpping: { label: "TCP connect", short: "TCP" },
+  ping: { label: "ICMP ping", short: "ICMP" },
+};
+
+const TLS_WARN_DAYS = 14;
+
+function daysUntil(value?: string | null) {
+  if (!value) return null;
+  const ts = new Date(value).getTime();
+  return Number.isNaN(ts) ? null : Math.floor((ts - Date.now()) / 86_400_000);
 }
 
 function intervalLabel(seconds: number) {
@@ -94,7 +115,7 @@ function CheckStrip({ checks }: { checks: MonitorCheck[] }) {
           key={i}
           title={
             check
-              ? `${formatDateTime(check.checked_at)} · ${check.ok ? `${check.rtt_ms?.toFixed(1) ?? "—"} ms${check.loss_percent ? `, ${check.loss_percent.toFixed(0)}% loss` : ""}` : check.error || "No replies"}`
+              ? `${formatDateTime(check.checked_at)} · ${check.ok ? `${check.status_code ? `${check.status_code}, ` : ""}${check.rtt_ms?.toFixed(check.status_code ? 0 : 1) ?? "—"} ms${check.loss_percent ? `, ${check.loss_percent.toFixed(0)}% loss` : ""}` : check.error || "No replies"}`
               : undefined
           }
           className={cn(
@@ -115,12 +136,13 @@ function monitorDefaults(editing: Monitor | null, email: string): MonitorFormInp
       protocol: editing.protocol,
       target: editing.target,
       port: editing.port ?? 443,
+      expected_status: editing.expected_status ?? undefined,
       interval_seconds: editing.interval_seconds,
       notify_email: editing.notify_email,
       enabled: editing.enabled,
     };
   }
-  return { id: undefined, name: "", protocol: "tcpping", target: "", port: 443, interval_seconds: 300, notify_email: email, enabled: true };
+  return { id: undefined, name: "", protocol: "http", target: "", port: 443, expected_status: undefined, interval_seconds: 300, notify_email: email, enabled: true };
 }
 
 function monitorPayload(m: Monitor, overrides: Partial<MonitorPayload> = {}): MonitorPayload {
@@ -130,6 +152,7 @@ function monitorPayload(m: Monitor, overrides: Partial<MonitorPayload> = {}): Mo
     protocol: m.protocol,
     target: m.target,
     port: m.protocol === "tcpping" ? m.port ?? undefined : undefined,
+    expected_status: m.protocol === "http" ? m.expected_status ?? undefined : undefined,
     interval_seconds: m.interval_seconds,
     notify_email: m.notify_email,
     enabled: m.enabled,
@@ -156,7 +179,8 @@ function MonitorForm({
     resolver: zodResolver(monitorSchema),
     defaultValues: monitorDefaults(editing, defaultEmail),
   });
-  const protocol = useWatch({ control: form.control, name: "protocol" }) ?? "tcpping";
+  const protocol = useWatch({ control: form.control, name: "protocol" }) ?? "http";
+  const expectedStatus = useWatch({ control: form.control, name: "expected_status" });
   const interval = useWatch({ control: form.control, name: "interval_seconds" });
   const target = useWatch({ control: form.control, name: "target" });
   const port = useWatch({ control: form.control, name: "port" });
@@ -164,6 +188,7 @@ function MonitorForm({
   const errors = form.formState.errors;
 
   const where = target?.trim() ? (protocol === "tcpping" && port ? `${target.trim()}:${port}` : target.trim()) : null;
+  const expected = Number(expectedStatus) || null;
 
   return (
     <form
@@ -175,6 +200,7 @@ function MonitorForm({
           protocol: values.protocol,
           target: values.target,
           port: values.protocol === "tcpping" ? values.port : undefined,
+          expected_status: values.protocol === "http" ? values.expected_status : undefined,
           interval_seconds: values.interval_seconds,
           notify_email: values.notify_email.trim(),
           enabled: values.enabled,
@@ -183,8 +209,8 @@ function MonitorForm({
     >
       <div>
         <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">Check with</span>
-        <div className="grid h-9 grid-cols-2 rounded-lg border border-[var(--lp-border-strong)] bg-white/[0.03] p-1" role="radiogroup" aria-label="Check with">
-          {(["tcpping", "ping"] as const).map((value) => (
+        <div className="grid h-9 grid-cols-3 rounded-lg border border-[var(--lp-border-strong)] bg-white/[0.03] p-1" role="radiogroup" aria-label="Check with">
+          {(["http", "tcpping", "ping"] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -196,19 +222,30 @@ function MonitorForm({
                 protocol === value ? "bg-white/[0.08] text-[var(--lp-text)]" : "text-[var(--lp-muted)] hover:text-[var(--lp-text)]",
               )}
             >
-              {value === "ping" ? "ICMP ping" : "TCP connect"}
+              {protocolMeta[value].label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className={cn("grid gap-3", protocol === "tcpping" && "grid-cols-[minmax(0,1fr)_96px]")}>
-        <Field label="Target" error={fieldError(errors.target)}>
-          <input id="monitor-target" className="h-9 w-full px-3" placeholder="api.example.com" autoComplete="off" {...form.register("target")} />
+      <div className={cn("grid gap-3", protocol !== "ping" && "grid-cols-[minmax(0,1fr)_96px]")}>
+        <Field label={protocol === "http" ? "URL" : "Target"} error={fieldError(errors.target)}>
+          <input
+            id="monitor-target"
+            className="h-9 w-full px-3"
+            placeholder={protocol === "http" ? "https://api.example.com/health" : "api.example.com"}
+            autoComplete="off"
+            {...form.register("target")}
+          />
         </Field>
         {protocol === "tcpping" ? (
           <Field label="Port" error={fieldError(errors.port)}>
             <input id="monitor-port" type="number" className="h-9 w-full px-3" placeholder="443" {...form.register("port", { valueAsNumber: true })} />
+          </Field>
+        ) : null}
+        {protocol === "http" ? (
+          <Field label="Status" error={fieldError(errors.expected_status)}>
+            <input id="monitor-status" type="number" className="h-9 w-full px-3" placeholder="2xx/3xx" {...form.register("expected_status", { valueAsNumber: true })} />
           </Field>
         ) : null}
       </div>
@@ -247,8 +284,18 @@ function MonitorForm({
       <p className="rounded-lg border border-[var(--lp-border)] bg-white/[0.02] px-3 py-2.5 text-[12px] leading-relaxed text-[var(--lp-muted)]">
         {where ? (
           <>
-            Every <span className="text-[var(--lp-text)]">{intervalLabel(Number(interval) || 300)}</span>, send three {protocol === "tcpping" ? "TCP connects" : "pings"} to{" "}
-            <span className="lp-mono text-[var(--lp-text)]">{where}</span>. If none answer, mark it down
+            Every <span className="text-[var(--lp-text)]">{intervalLabel(Number(interval) || 300)}</span>,{" "}
+            {protocol === "http" ? (
+              <>
+                request <span className="lp-mono break-all text-[var(--lp-text)]">{where}</span>. Mark it down unless it answers with{" "}
+                <span className="text-[var(--lp-text)]">{expected ?? "a 2xx or 3xx status"}</span> within 10 seconds
+              </>
+            ) : (
+              <>
+                send three {protocol === "tcpping" ? "TCP connects" : "pings"} to <span className="lp-mono text-[var(--lp-text)]">{where}</span>. If none answer, mark
+                it down
+              </>
+            )}
             {email?.trim() ? (
               <>
                 {" "}and email <span className="text-[var(--lp-text)]">{email.trim()}</span>, then again when it recovers.
@@ -256,7 +303,9 @@ function MonitorForm({
             ) : (
               "."
             )}{" "}
-            Samples also land in History and your alert rules.
+            {protocol === "http"
+              ? `HTTPS certificates get a warning ${TLS_WARN_DAYS} days before they expire.`
+              : "Samples also land in History and your alert rules."}
           </>
         ) : (
           "Add a target to see what this monitor will do."
@@ -299,6 +348,7 @@ function MonitorRow({
   const meta = stateMeta[state];
   const checked = relativeTime(monitor.last_checked_at);
   const since = relativeTime(monitor.last_status_change_at);
+  const certDays = monitor.protocol === "http" ? daysUntil(monitor.tls_expires_at) : null;
 
   return (
     <li className={cn("px-4 py-4 transition-colors", editing ? "bg-[rgba(255,61,127,0.05)]" : "hover:bg-white/[0.015]")}>
@@ -314,11 +364,11 @@ function MonitorRow({
             {since && (state === "up" || state === "down") ? <span className="text-[12px] text-[var(--lp-subtle)]">for {since.replace(" ago", "")}</span> : null}
           </div>
           <p className="mt-1 text-[13px] text-[var(--lp-muted)]">
-            <span className="text-[var(--lp-subtle)]">{monitor.protocol === "tcpping" ? "TCP" : "ICMP"}</span>
+            <span className="text-[var(--lp-subtle)]">{protocolMeta[monitor.protocol].short}</span>
             {monitor.name !== monitorTarget(monitor) ? (
               <>
                 {" "}
-                <span className="lp-mono text-[var(--lp-text)]">{monitorTarget(monitor)}</span>
+                <span className="lp-mono break-all text-[var(--lp-text)]">{monitorTarget(monitor)}</span>
               </>
             ) : null}
             <span className="text-[var(--lp-subtle)]"> · every {intervalLabel(monitor.interval_seconds)}</span>
@@ -331,8 +381,19 @@ function MonitorRow({
           </div>
           <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-[var(--lp-subtle)]">
             {checked ? <span title={formatDateTime(monitor.last_checked_at)}>Checked {checked}</span> : <span>Not checked yet</span>}
-            {state === "up" && typeof monitor.last_rtt_ms === "number" ? <span>{monitor.last_rtt_ms.toFixed(1)} ms</span> : null}
-            {state === "down" && monitor.last_error ? <span className="max-w-full truncate text-[#ff8fb3]">{monitor.last_error}</span> : null}
+            {state === "up" && monitor.last_status_code ? <span>{monitor.last_status_code}</span> : null}
+            {state === "up" && typeof monitor.last_rtt_ms === "number" ? (
+              <span>{monitor.last_rtt_ms.toFixed(monitor.protocol === "http" ? 0 : 1)} ms</span>
+            ) : null}
+            {certDays !== null ? (
+              <span
+                title={formatDateTime(monitor.tls_expires_at)}
+                className={cn(certDays < 0 ? "text-[#ff8fb3]" : certDays <= TLS_WARN_DAYS && "text-[#fbbf24]")}
+              >
+                {certDays < 0 ? "Certificate expired" : certDays === 0 ? "Certificate expires today" : `Certificate expires in ${certDays}d`}
+              </span>
+            ) : null}
+            {state === "down" && monitor.last_error ? <span className="max-w-full truncate text-[#ff8fb3]" title={monitor.last_error}>{monitor.last_error}</span> : null}
             {monitor.enabled ? <span title={formatDateTime(monitor.next_run_at)}>Next {relativeTime(monitor.next_run_at, true) ?? "soon"}</span> : null}
             <span>{monitor.notify_email ? `Emails ${monitor.notify_email}` : "No emails"}</span>
           </p>
@@ -456,7 +517,7 @@ export function MonitorsWorkspace() {
     <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
       <PageHeader
         title="Monitors"
-        description="Targets Qnetward checks on a schedule, around the clock. Each check sends three probes from our server; if none answer, the monitor goes down and you get an email."
+        description="Websites, APIs, and servers Qnetward checks on a schedule, around the clock. When a check fails the monitor goes down and you get an email, and HTTPS certificates are watched for expiry."
         status={
           monitors.length ? (
             <RunStatus tone={counts.down ? "error" : "live"} label={counts.down ? `${counts.down} down` : "All monitors up"} />
@@ -529,7 +590,7 @@ export function MonitorsWorkspace() {
               <Radio className="h-5 w-5 text-[var(--lp-subtle)]" />
               <p className="mt-3 text-[13px] text-[var(--lp-muted)]">Nothing monitored yet</p>
               <p className="mt-1 max-w-sm text-[12px] text-[var(--lp-subtle)]">
-                Add a server, API, or router on the right. Checks keep running when this tab is closed.
+                Add a website, API, or server on the right. Checks keep running when this tab is closed.
               </p>
             </div>
           ) : visible.length === 0 ? (

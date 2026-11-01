@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"qnetward/internal/engine/httpcheck"
 	"qnetward/internal/engine/ping"
 	"qnetward/internal/engine/report"
 	"qnetward/internal/engine/tcpping"
@@ -27,6 +28,7 @@ const (
 	monitorProbeCount     = 3
 	monitorProbeInterval  = 500 * time.Millisecond
 	monitorProbeTimeout   = 2 * time.Second
+	monitorHTTPTimeout    = 10 * time.Second
 	monitorCheckRetention = 30 * 24 * time.Hour
 	monitorPruneEvery     = time.Hour
 )
@@ -40,6 +42,7 @@ type monitorRequest struct {
 	IntervalSeconds int    `json:"interval_seconds"`
 	NotifyEmail     string `json:"notify_email"`
 	Enabled         *bool  `json:"enabled,omitempty"`
+	ExpectedStatus  *int   `json:"expected_status,omitempty"`
 }
 
 func (srv *Server) handleMonitors(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +122,32 @@ func (srv *Server) handleMonitors(w http.ResponseWriter, r *http.Request) {
 }
 
 func normalizeMonitorRequest(user actor, req monitorRequest) (store.Monitor, error) {
+	protocol := strings.ToLower(strings.TrimSpace(req.Protocol))
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	m := store.Monitor{
+		ID:              req.ID,
+		WorkspaceID:     user.WorkspaceID,
+		UserID:          user.ID,
+		Name:            req.Name,
+		Protocol:        protocol,
+		IntervalSeconds: req.IntervalSeconds,
+		NotifyEmail:     req.NotifyEmail,
+		Enabled:         enabled,
+		ExpectedStatus:  req.ExpectedStatus,
+	}
+
+	if protocol == "http" {
+		target, err := httpcheck.NormalizeURL(req.Target)
+		if err != nil {
+			return store.Monitor{}, err
+		}
+		m.Target = target
+		return m, nil
+	}
+
 	target := strings.TrimSpace(req.Target)
 	port := req.Port
 	if host, parsedPort, ok := probe.SplitHostPort(target); ok {
@@ -131,22 +160,8 @@ func normalizeMonitorRequest(user actor, req monitorRequest) (store.Monitor, err
 	if err != nil {
 		return store.Monitor{}, err
 	}
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
-	}
-	m := store.Monitor{
-		ID:              req.ID,
-		WorkspaceID:     user.WorkspaceID,
-		UserID:          user.ID,
-		Name:            req.Name,
-		Protocol:        req.Protocol,
-		Target:          host,
-		IntervalSeconds: req.IntervalSeconds,
-		NotifyEmail:     req.NotifyEmail,
-		Enabled:         enabled,
-	}
-	if strings.EqualFold(strings.TrimSpace(req.Protocol), "tcpping") {
+	m.Target = host
+	if protocol == "tcpping" {
 		m.Port = &port
 	}
 	return m, nil
@@ -203,16 +218,56 @@ func (srv *Server) RunMonitors(ctx context.Context) {
 	}
 }
 
-// checkMonitor probes one monitor, records the outcome, feeds the samples to
-// history and alert rules, and emails on a change between up and down.
+// checkMonitor runs one check, records it, and emails on a change between up
+// and down or when an HTTPS certificate nears expiry.
 func (srv *Server) checkMonitor(ctx context.Context, m store.Monitor) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	port := 0
-	if m.Port != nil {
-		port = *m.Port
+	var check store.MonitorCheck
+	var summary *report.Summary
+	if m.Protocol == "http" {
+		check = srv.runHTTPCheck(ctx, m)
+	} else {
+		check, summary = srv.runProbeCheck(ctx, m)
 	}
+	if ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
+		return // shutting down
+	}
+
+	saveCtx, saveCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer saveCancel()
+	outcome, err := srv.store.RecordMonitorCheck(saveCtx, m, check)
+	if err != nil {
+		if !errors.Is(err, store.ErrMonitorNotFound) {
+			log.Printf("recording check for monitor %d failed: %v", m.ID, err)
+		}
+		return
+	}
+
+	// Ping and TCP samples also feed the workspace's alert rules.
+	if summary != nil && summary.Sent > 0 {
+		srv.enqueueAlertEvaluation(actor{User: store.User{ID: m.UserID}, WorkspaceID: m.WorkspaceID},
+			m.Protocol, m.Target, monitorPort(m), *summary, srv.buildConfiguredDashboardURL("alerts"))
+	}
+
+	if m.NotifyEmail == "" || srv.mailer == nil {
+		return
+	}
+	wentDown := !check.OK && outcome.Previous != "down"
+	recovered := check.OK && outcome.Previous == "down"
+	if wentDown || recovered {
+		srv.sendMonitorEmail(saveCtx, m, check, recovered)
+	}
+	if outcome.WarnTLS {
+		srv.sendCertificateWarning(saveCtx, m, *check.TLSExpiresAt)
+	}
+}
+
+// runProbeCheck sends three pings or TCP connects. Any reply means up. Each
+// sample is also written to the results table, so it shows in History.
+func (srv *Server) runProbeCheck(ctx context.Context, m store.Monitor) (store.MonitorCheck, *report.Summary) {
+	port := monitorPort(m)
 	record := func(res report.Result) error {
 		srv.storeResult(m.WorkspaceID, m.UserID, m.Protocol, m.Target, res.Addr, port, res, time.Now())
 		return nil
@@ -238,14 +293,12 @@ func (srv *Server) checkMonitor(ctx context.Context, m store.Monitor) {
 	default:
 		err = fmt.Errorf("unsupported protocol %q", m.Protocol)
 	}
-	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
-		return // shutting down
-	}
 
 	check := store.MonitorCheck{CheckedAt: time.Now(), LossPercent: 100}
 	switch {
 	case err != nil:
 		check.Error = err.Error()
+		return check, nil
 	case rep.Summary.Recv == 0:
 		check.Error = firstProbeError(rep)
 	default:
@@ -254,34 +307,63 @@ func (srv *Server) checkMonitor(ctx context.Context, m store.Monitor) {
 		avg := float64(rep.Summary.Avg) / float64(time.Millisecond)
 		check.RttMs = &avg
 	}
+	return check, &rep.Summary
+}
 
-	saveCtx, saveCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer saveCancel()
-	previous, err := srv.store.RecordMonitorCheck(saveCtx, m, check)
+// runHTTPCheck fetches the URL once. It is up when the final response, after
+// redirects, has the expected status, or any 2xx or 3xx when none is set.
+func (srv *Server) runHTTPCheck(ctx context.Context, m store.Monitor) store.MonitorCheck {
+	res, err := httpcheck.Run(ctx, m.Target, httpcheck.Config{
+		Timeout:     monitorHTTPTimeout,
+		DialControl: srv.targetPolicy.DialControl(),
+		RootCAs:     srv.monitorRootCAs,
+	})
+	check := store.MonitorCheck{CheckedAt: time.Now(), LossPercent: 100}
 	if err != nil {
-		if !errors.Is(err, store.ErrMonitorNotFound) {
-			log.Printf("recording check for monitor %d failed: %v", m.ID, err)
-		}
-		return
+		check.Error = err.Error()
+		return check
 	}
+	code := res.StatusCode
+	ms := float64(res.Duration) / float64(time.Millisecond)
+	check.StatusCode = &code
+	check.RttMs = &ms
+	check.TLSExpiresAt = res.TLSExpiresAt
+	if httpStatusMatches(code, m.ExpectedStatus) {
+		check.OK = true
+		check.LossPercent = 0
+		return check
+	}
+	if m.ExpectedStatus != nil {
+		check.Error = fmt.Sprintf("returned %d, expected %d", code, *m.ExpectedStatus)
+	} else {
+		check.Error = fmt.Sprintf("returned %d %s", code, http.StatusText(code))
+	}
+	return check
+}
 
-	if rep.Summary.Sent > 0 {
-		srv.enqueueAlertEvaluation(actor{User: store.User{ID: m.UserID}, WorkspaceID: m.WorkspaceID},
-			m.Protocol, m.Target, port, rep.Summary, srv.buildConfiguredDashboardURL("alerts"))
+func httpStatusMatches(code int, expected *int) bool {
+	if expected != nil {
+		return code == *expected
 	}
+	return code >= 200 && code < 400
+}
 
-	wentDown := !check.OK && previous != "down"
-	recovered := check.OK && previous == "down"
-	if (wentDown || recovered) && m.NotifyEmail != "" && srv.mailer != nil {
-		srv.sendMonitorEmail(saveCtx, m, check, recovered)
+func monitorPort(m store.Monitor) int {
+	if m.Port != nil {
+		return *m.Port
 	}
+	return 0
+}
+
+func monitorTargetLabel(m store.Monitor) string {
+	if m.Port != nil {
+		return fmt.Sprintf("%s:%d", m.Target, *m.Port)
+	}
+	return m.Target
 }
 
 func (srv *Server) sendMonitorEmail(ctx context.Context, m store.Monitor, check store.MonitorCheck, recovered bool) {
-	target := m.Target
-	if m.Port != nil {
-		target = fmt.Sprintf("%s:%d", m.Target, *m.Port)
-	}
+	target := monitorTargetLabel(m)
 	in := mailer.AlertEmailInput{
 		To:           m.NotifyEmail,
 		Severity:     "critical",
@@ -291,17 +373,45 @@ func (srv *Server) sendMonitorEmail(ctx context.Context, m store.Monitor, check 
 		TriggeredAt:  check.CheckedAt.UTC(),
 		DashboardURL: srv.buildConfiguredDashboardURL("monitors"),
 	}
+	if m.Protocol == "http" {
+		in.Summary = fmt.Sprintf("The last check of %s failed: %s.", target, check.Error)
+	}
 	if recovered {
 		in.Severity = "success"
 		in.Title = m.Name + " is back up"
 		in.Summary = fmt.Sprintf("%s is answering again.", target)
 		if check.RttMs != nil {
-			in.Summary = fmt.Sprintf("%s is answering again, average %.1f ms.", target, *check.RttMs)
+			in.Summary = fmt.Sprintf("%s is answering again, %.0f ms.", target, *check.RttMs)
 		}
 	}
 	in.Summary = strings.TrimSpace(in.Summary)
 	if err := srv.mailer.SendAlert(ctx, in); err != nil {
 		log.Printf("monitor email failed for monitor %d: %v", m.ID, err)
+	}
+}
+
+func (srv *Server) sendCertificateWarning(ctx context.Context, m store.Monitor, expires time.Time) {
+	days := int(time.Until(expires).Hours() / 24)
+	when := fmt.Sprintf("in %d days", days)
+	switch {
+	case days < 0:
+		when = "already"
+	case days == 0:
+		when = "today"
+	case days == 1:
+		when = "tomorrow"
+	}
+	in := mailer.AlertEmailInput{
+		To:           m.NotifyEmail,
+		Severity:     "warning",
+		Title:        "Certificate for " + m.Name + " expires " + when,
+		Summary:      fmt.Sprintf("The TLS certificate served by %s expires on %s UTC. Renew it before visitors start seeing errors.", m.Target, expires.UTC().Format("2 Jan 2006 15:04")),
+		Target:       m.Target,
+		TriggeredAt:  time.Now().UTC(),
+		DashboardURL: srv.buildConfiguredDashboardURL("monitors"),
+	}
+	if err := srv.mailer.SendAlert(ctx, in); err != nil {
+		log.Printf("certificate warning failed for monitor %d: %v", m.ID, err)
 	}
 }
 

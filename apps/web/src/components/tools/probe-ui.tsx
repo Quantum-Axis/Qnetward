@@ -102,7 +102,7 @@ export function LatencyChart({ points, emptyText }: { points: { seq: number; rtt
   const [hover, setHover] = useState<number | null>(null);
   const W = 800;
   const H = 220;
-  const PAD = { l: 44, r: 10, t: 12, b: 22 };
+  const PAD = { l: 56, r: 10, t: 12, b: 22 };
 
   const { max, min } = useMemo(() => {
     const vals = points.map((p) => p.rtt).filter((v): v is number => typeof v === "number");

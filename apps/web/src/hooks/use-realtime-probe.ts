@@ -108,6 +108,9 @@ export function useRealtimeProbe<TRequest extends Record<string, unknown>>(confi
   }, []);
 
   useEffect(() => {
+    // Set on every mount: React's development double-mount runs the cleanup once,
+    // and without this the hook would ignore every result as "unmounted".
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       clearActive();

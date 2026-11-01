@@ -193,11 +193,17 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
       >
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
           <Field label="Target" error={errors.host?.message} className="min-w-0 flex-1">
-            <input className="h-10 w-full px-3" placeholder={isPing ? "example.com or 1.1.1.1" : "api.example.com"} autoComplete="off" {...form.register("host")} />
+            <input
+              id="probe-target"
+              className="h-10 w-full px-3"
+              placeholder={isPing ? "example.com or 1.1.1.1" : "api.example.com"}
+              autoComplete="off"
+              {...form.register("host")}
+            />
           </Field>
           {!isPing ? (
             <Field label="Port" error={errors.port?.message} className="md:w-28">
-              <input type="number" className="h-10 w-full px-3" {...form.register("port" as const, { valueAsNumber: true })} />
+              <input id="probe-port" type="number" className="h-10 w-full px-3" {...form.register("port" as const, { valueAsNumber: true })} />
             </Field>
           ) : null}
           <div className="flex gap-2">
@@ -227,7 +233,13 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
         {showAdvanced ? (
           <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             <Field label="Count" hint={continuous ? "Ignored in continuous mode" : "1 to 100"} error={errors.count?.message}>
-              <input type="number" className="h-9 w-full px-3 disabled:opacity-50" disabled={continuous} {...form.register("count", { valueAsNumber: true })} />
+              <input
+                type="number"
+                className={cn("h-9 w-full px-3", continuous && "opacity-50")}
+                readOnly={continuous}
+                aria-disabled={continuous}
+                {...form.register("count", { valueAsNumber: true })}
+              />
             </Field>
             <Field label="Interval (ms)" error={errors.interval_ms?.message}>
               <input type="number" className="h-9 w-full px-3" {...form.register("interval_ms", { valueAsNumber: true })} />
@@ -244,15 +256,25 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
         ) : null}
 
         {formError ? (
-          <p className="mt-4 rounded-lg border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2.5 text-[13px] text-[#ff8fb3]">{formError}</p>
+          <p className="mt-4 rounded-lg border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2.5 text-[13px] text-[#ff8fb3]">
+            {formError}
+          </p>
         ) : null}
-        {isPing ? <p className="mt-3 text-[12px] text-[var(--lp-subtle)]">ICMP can need elevated privileges on the server. If it fails, TCP ping usually works.</p> : null}
+        {isPing ? (
+          <p className="mt-3 text-[12px] text-[var(--lp-subtle)]">
+            ICMP can need elevated privileges on the server. If it fails, TCP ping usually works.
+          </p>
+        ) : null}
       </form>
 
       <StatStrip
         items={[
           { label: "Sent / received", value: sent ? `${sent} / ${recv}` : "—" },
-          { label: "Packet loss", value: typeof loss === "number" ? `${loss.toFixed(loss < 10 ? 1 : 0)}%` : "—", tone: typeof loss !== "number" ? undefined : loss === 0 ? "good" : loss < 5 ? "warn" : "bad" },
+          {
+            label: "Packet loss",
+            value: typeof loss === "number" ? `${loss.toFixed(loss < 10 ? 1 : 0)}%` : "—",
+            tone: typeof loss !== "number" ? undefined : loss === 0 ? "good" : loss < 5 ? "warn" : "bad",
+          },
           { label: "Average", value: summary?.avg || (live.avg !== null ? formatMs(live.avg) : "—") },
           { label: "Fastest", value: summary?.min || (live.min !== null ? formatMs(live.min) : "—") },
           { label: "Slowest", value: summary?.max || (live.max !== null ? formatMs(live.max) : "—") },
@@ -261,7 +283,10 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
-        <Panel title="Latency" aside={<span className="text-[12px] text-[var(--lp-subtle)]">{currentRunLabel(activeContinuous, results.length)}</span>}>
+        <Panel
+          title="Latency"
+          aside={<span className="text-[12px] text-[var(--lp-subtle)]">{currentRunLabel(activeContinuous, results.length)}</span>}
+        >
           <LatencyChart points={chartPoints} emptyText="Run a probe and each reply appears here as it arrives." />
         </Panel>
         <Panel title="Run details">
@@ -279,7 +304,11 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
         </Panel>
       </div>
 
-      <Panel title="Replies" aside={<span className="text-[12px] text-[var(--lp-subtle)]">{results.length ? `${results.length} total, newest first` : ""}</span>} bodyClassName="p-0">
+      <Panel
+        title="Replies"
+        aside={<span className="text-[12px] text-[var(--lp-subtle)]">{results.length ? `${results.length} total, newest first` : ""}</span>}
+        bodyClassName="p-0"
+      >
         {results.length ? (
           <div className="max-h-[360px] overflow-y-auto border-t border-[var(--lp-border)]">
             <table className="w-full text-[13px]">
@@ -296,7 +325,9 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
                   <tr key={`${r.seq ?? i}-${i}`} className="border-b border-[var(--lp-border)] last:border-0">
                     <td className="lp-mono px-4 py-2 text-[var(--lp-subtle)]">{r.seq ?? "—"}</td>
                     <td className="lp-mono px-4 py-2 text-[var(--lp-muted)]">{r.addr || report?.addr || "—"}</td>
-                    <td className="lp-mono px-4 py-2 text-right">{r.error ? "—" : r.rtt || (typeof r.rtt_ms === "number" ? formatMs(r.rtt_ms) : "—")}</td>
+                    <td className="lp-mono px-4 py-2 text-right">
+                      {r.error ? "—" : r.rtt || (typeof r.rtt_ms === "number" ? formatMs(r.rtt_ms) : "—")}
+                    </td>
                     <td className="px-4 py-2">
                       {r.error ? <span className="text-[#fcd34d]">{r.error}</span> : <span className="text-[#86efac]">Reply</span>}
                     </td>

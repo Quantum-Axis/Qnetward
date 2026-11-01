@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Globe, Search } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -8,16 +10,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, ApiError } from "@/lib/api";
 import { DNSReport } from "@/lib/types";
 import { formatMs } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Field, PageHeader, Panel, RunStatus, StatStrip } from "@/components/tools/probe-ui";
 
 const resolverOptions = [
-  { value: "auto", label: "Auto Resolver" },
+  { value: "auto", label: "System resolver" },
   { value: "cloudflare", label: "Cloudflare 1.1.1.1" },
   { value: "google", label: "Google 8.8.8.8" },
   { value: "quad9", label: "Quad9 9.9.9.9" },
-  { value: "custom", label: "Custom Resolver" },
+  { value: "custom", label: "Custom…" },
 ] as const;
 
 const recordTypeOptions = ["all", "a", "aaaa", "cname", "ns", "mx", "txt", "dmarc", "soa", "srv", "caa", "dnskey", "ds", "rrsig", "ptr"] as const;
@@ -92,8 +92,12 @@ function failedSectionCount(report: DNSReport, selectedType: string) {
   }
   if (selectedType !== "all") {
     return isVisibleSection(selectedType, "ptr")
-      ? ((report.ptr ?? []).some((item) => item.error) ? 1 : 0)
-      : (sectionError(report, selectedType as (typeof recordSectionTypes)[number]) ? 1 : 0);
+      ? (report.ptr ?? []).some((item) => item.error)
+        ? 1
+        : 0
+      : sectionError(report, selectedType as (typeof recordSectionTypes)[number])
+        ? 1
+        : 0;
   }
 
   let failed = recordSectionTypes.filter((section) => sectionError(report, section)).length;
@@ -106,7 +110,7 @@ function failedSectionCount(report: DNSReport, selectedType: string) {
 function sectionMeta(durationMs: number, resolver?: string, authoritative?: boolean, extra?: string) {
   const meta = [formatMs(durationMs)];
   if (resolver) {
-    meta.push(`via ${resolver}`);
+    meta.push(resolver);
   }
   if (authoritative) {
     meta.push("AA");
@@ -114,61 +118,54 @@ function sectionMeta(durationMs: number, resolver?: string, authoritative?: bool
   if (extra) {
     meta.push(extra);
   }
-  return meta.join(" - ");
+  return meta.join(" · ");
 }
 
 function isVisibleSection(selectedType: string, sectionType: string) {
   return selectedType === "all" || selectedType === sectionType;
 }
 
-function postureChipClasses(isPositive: boolean) {
-  return isPositive
-    ? "rounded-full border border-emerald-400/25 bg-emerald-500/12 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-200"
-    : "rounded-full border border-rose-400/25 bg-rose-500/12 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-200";
+function Check({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[12px]"
+      style={
+        ok
+          ? { borderColor: "rgba(74,222,128,0.3)", color: "#86efac", background: "rgba(74,222,128,0.08)" }
+          : { borderColor: "var(--lp-border)", color: "var(--lp-subtle)" }
+      }
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: ok ? "#4ade80" : "#6c6c75" }} />
+      {label}
+    </span>
+  );
 }
 
-function DNSRecordSection({
-  title,
-  meta,
-  items,
-  error,
-}: {
-  title: string;
-  meta: string;
-  items: RecordItem[];
-  error?: string;
-}) {
+function DNSRecordSection({ title, meta, items, error }: { title: string; meta: string; items: RecordItem[]; error?: string }) {
   return (
-    <div className="dashboard-panel-muted rounded-2xl p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-space text-lg font-semibold text-white">{title}</h3>
-          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">{meta}</p>
-        </div>
-        <span className="rounded-full border border-teal-400/18 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-200">
-          {items.length}
-        </span>
+    <section className="rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f]">
+      <div className="flex items-baseline justify-between gap-3 px-4 pt-3.5">
+        <h3 className="text-[13px] font-medium">
+          {title}
+          <span className="ml-2 text-[12px] font-normal text-[var(--lp-subtle)]">{items.length}</span>
+        </h3>
+        <span className="truncate text-[11px] text-[var(--lp-subtle)]">{meta}</span>
       </div>
-      <div className="grid gap-2">
-        {items.length === 0 && !error ? (
-          <p className="rounded-2xl border border-dashed border-slate-800 px-4 py-4 text-sm text-slate-400">No records returned.</p>
-        ) : (
-          items.map((item) => (
-            <div key={`${item.value}-${item.ttl ?? 0}`} className="flex items-start justify-between gap-3 rounded-2xl border border-teal-400/12 bg-slate-950/70 px-4 py-3 text-sm text-slate-100">
-              <span className="break-all">{item.value}</span>
-              {typeof item.ttl === "number" ? (
-                <span className="shrink-0 rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
-                  TTL {item.ttl}s
-                </span>
-              ) : null}
-            </div>
-          ))
-        )}
+      <div className="p-2 pt-2.5">
+        {items.length === 0 && !error ? <p className="px-2 py-2 text-[13px] text-[var(--lp-subtle)]">No records returned.</p> : null}
+        {items.map((item) => (
+          <div key={`${item.value}-${item.ttl ?? 0}`} className="flex items-start justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-white/[0.03]">
+            <span className="lp-mono break-all text-[12px] text-[var(--lp-text)]">{item.value}</span>
+            {typeof item.ttl === "number" ? <span className="lp-mono shrink-0 text-[11px] text-[var(--lp-subtle)]">TTL {item.ttl}s</span> : null}
+          </div>
+        ))}
         {error ? (
-          <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>
+          <p className="m-1 rounded-md border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2 text-[12px] text-[#ff8fb3]">
+            {error}
+          </p>
         ) : null}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -218,7 +215,7 @@ export function DNSInspectorWorkspace() {
       healthySections,
       failedSections,
       totalSections,
-      ptrCount: (report.ptr ?? []).reduce((total, item) => total + ((item.records?.length ?? item.names?.length) ?? 0), 0),
+      ptrCount: (report.ptr ?? []).reduce((total, item) => total + (item.records?.length ?? item.names?.length ?? 0), 0),
       srvCount: report.srv.records?.length ?? 0,
       caaCount: report.caa.records?.length ?? 0,
       auditMode: report.record_type === "ALL" ? "Complete" : "Partial",
@@ -229,172 +226,261 @@ export function DNSInspectorWorkspace() {
   const watchedResolver = useWatch({ control: form.control, name: "resolver" });
   const selectedType = (report?.record_type ?? watchedRecordType ?? "all").toLowerCase();
   const showCustomResolver = watchedResolver === "custom";
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const target = searchParams.get("target")?.trim();
+    if (target) form.setValue("target", target);
+  }, [form, searchParams]);
+  const errors = form.formState.errors;
+
+  const sections = report
+    ? [
+        {
+          key: "a",
+          title: "A",
+          meta: sectionMeta(report.a.duration_ms, report.a.resolver, report.a.authoritative),
+          items: (report.a.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.a.error,
+        },
+        {
+          key: "aaaa",
+          title: "AAAA",
+          meta: sectionMeta(report.aaaa.duration_ms, report.aaaa.resolver, report.aaaa.authoritative),
+          items: (report.aaaa.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.aaaa.error,
+        },
+        {
+          key: "cname",
+          title: "CNAME",
+          meta: sectionMeta(report.cname.duration_ms, report.cname.resolver, report.cname.authoritative),
+          items: (report.cname.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.cname.error,
+        },
+        {
+          key: "ns",
+          title: "NS",
+          meta: sectionMeta(report.ns.duration_ms, report.ns.resolver, report.ns.authoritative),
+          items: (report.ns.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.ns.error,
+        },
+        {
+          key: "mx",
+          title: "MX",
+          meta: sectionMeta(report.mx.duration_ms, report.mx.resolver, report.mx.authoritative),
+          items: (report.mx.records ?? []).map((i) => ({ value: `${i.pref} ${i.host}`, ttl: i.ttl })),
+          error: report.mx.error,
+        },
+        {
+          key: "txt",
+          title: "TXT",
+          meta: sectionMeta(report.txt.duration_ms, report.txt.resolver, report.txt.authoritative),
+          items: (report.txt.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.txt.error,
+        },
+        {
+          key: "dmarc",
+          title: "DMARC",
+          meta: sectionMeta(report.dmarc.duration_ms, report.dmarc.resolver, report.dmarc.authoritative),
+          items: (report.dmarc.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.dmarc.error,
+        },
+        {
+          key: "soa",
+          title: "SOA",
+          meta: sectionMeta(report.soa.duration_ms, report.soa.resolver, report.soa.authoritative),
+          items: report.soa.record
+            ? [
+                {
+                  value: `${report.soa.record.ns} ${report.soa.record.mbox} serial ${report.soa.record.serial} refresh ${report.soa.record.refresh}`,
+                  ttl: report.soa.record.ttl,
+                },
+              ]
+            : [],
+          error: report.soa.error,
+        },
+        {
+          key: "srv",
+          title: "SRV",
+          meta: sectionMeta(report.srv.duration_ms, report.srv.resolver, report.srv.authoritative),
+          items: (report.srv.records ?? []).map((i) => ({ value: `${i.priority} ${i.weight} ${i.port} ${i.target}`, ttl: i.ttl })),
+          error: report.srv.error,
+        },
+        {
+          key: "caa",
+          title: "CAA",
+          meta: sectionMeta(report.caa.duration_ms, report.caa.resolver, report.caa.authoritative),
+          items: (report.caa.records ?? []).map((i) => ({ value: `${i.flag} ${i.tag} "${i.value}"`, ttl: i.ttl })),
+          error: report.caa.error,
+        },
+        {
+          key: "dnskey",
+          title: "DNSKEY",
+          meta: sectionMeta(report.dnskey.duration_ms, report.dnskey.resolver, report.dnskey.authoritative),
+          items: (report.dnskey.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.dnskey.error,
+        },
+        {
+          key: "ds",
+          title: "DS",
+          meta: sectionMeta(report.ds.duration_ms, report.ds.resolver, report.ds.authoritative),
+          items: (report.ds.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.ds.error,
+        },
+        {
+          key: "rrsig",
+          title: "RRSIG",
+          meta: sectionMeta(report.rrsig.duration_ms, report.rrsig.resolver, report.rrsig.authoritative),
+          items: (report.rrsig.records ?? []).map((i) => ({ value: i.value, ttl: i.ttl })),
+          error: report.rrsig.error,
+        },
+      ].filter((section) => isVisibleSection(selectedType, section.key) && (selectedType !== "all" || section.items.length > 0 || section.error))
+    : [];
+  const emptySections = report && selectedType === "all" ? recordSectionTypes.filter((t) => !sections.some((s) => s.key === t)) : [];
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
-      <Card>
-        <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Resolver Intelligence</p>
-        <h2 className="mt-2 font-space text-3xl font-bold text-white">DNS Inspector</h2>
-        <p className="mt-3 text-sm leading-7 text-slate-400">
-          Query a full record set or a single record type against a specific resolver and inspect TTL, authority, and reverse-DNS results.
-        </p>
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <PageHeader
+        title="DNS lookup"
+        description="Query every record type, or just one, against the resolver you choose. TTLs, authority, DNSSEC, and mail policy included."
+        status={
+          <RunStatus
+            tone={lookup.isPending ? "live" : report ? "done" : formError ? "error" : "idle"}
+            label={lookup.isPending ? "Resolving" : report ? "Done" : formError ? "Error" : "Idle"}
+          />
+        }
+      />
 
-        <form className="mt-8 grid gap-4" onSubmit={form.handleSubmit((values) => lookup.mutate(values))}>
-          <div>
-            <label className="field-label" htmlFor="dns-target">Target</label>
-            <Input id="dns-target" placeholder="example.com, 8.8.8.8, or _sip._tcp.example.com" {...form.register("target")} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="field-label" htmlFor="dns-record-type">Record Type</label>
-              <select id="dns-record-type" className="field-input" {...form.register("record_type")}>
-                {recordTypeOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="field-label" htmlFor="dns-timeout">Timeout (ms)</label>
-              <Input id="dns-timeout" type="number" {...form.register("timeout_ms", { valueAsNumber: true })} />
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="field-label" htmlFor="dns-resolver">Resolver</label>
-              <select id="dns-resolver" className="field-input" {...form.register("resolver")}>
-                {resolverOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {showCustomResolver ? (
-              <div>
-                <label className="field-label" htmlFor="dns-custom-resolver">Custom Resolver</label>
-                <Input id="dns-custom-resolver" placeholder="10.0.0.53 or 10.0.0.53:53" {...form.register("custom_resolver")} />
-              </div>
-            ) : null}
-          </div>
-          {formError ? <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{formError}</p> : null}
-          {form.formState.errors.custom_resolver?.message ? (
-            <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{form.formState.errors.custom_resolver.message}</p>
+      <form className="rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f] p-4" onSubmit={form.handleSubmit((values) => lookup.mutate(values))}>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_200px_auto] md:items-end">
+          <Field label="Domain or IP" error={errors.target?.message}>
+            <input
+              id="dns-target"
+              className="h-10 w-full px-3"
+              placeholder="example.com, 8.8.8.8, _sip._tcp.example.com"
+              autoComplete="off"
+              {...form.register("target")}
+            />
+          </Field>
+          <Field label="Record type">
+            <select id="dns-record-type" className="h-10 w-full px-2" {...form.register("record_type")}>
+              {recordTypeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option === "all" ? "All types" : option.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Resolver">
+            <select id="dns-resolver" className="h-10 w-full px-2" {...form.register("resolver")}>
+              {resolverOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <button type="submit" className="console-btn console-btn-primary h-10 px-5" disabled={lookup.isPending}>
+            <Search className="h-3.5 w-3.5" /> {lookup.isPending ? "Resolving…" : "Look up"}
+          </button>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_200px_auto]">
+          {showCustomResolver ? (
+            <Field label="Custom resolver" hint="host, IPv4, IPv6, or host:port" error={errors.custom_resolver?.message} className="md:col-start-3">
+              <input className="h-9 w-full px-3" placeholder="9.9.9.9:53" {...form.register("custom_resolver")} />
+            </Field>
           ) : null}
-          <Button type="submit" disabled={lookup.isPending}>{lookup.isPending ? "Resolving..." : "Run Lookup"}</Button>
-        </form>
-
-        <div className="dashboard-note-panel mt-6 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Inspector Notes</p>
-          <ul className="mt-3 grid gap-2 text-sm leading-7 text-slate-300">
-            <li>- Use `ALL` for a complete pass or select one record type to isolate a problem faster.</li>
-            <li>- Custom resolvers accept `host`, `IPv4`, `IPv6`, or `host:port`.</li>
-            <li>- TTL and resolver source are shown per section to help with cache and propagation analysis.</li>
-            <li>- Mail and DNSSEC posture cards are most useful when the query type is `ALL`.</li>
-          </ul>
+          <Field
+            label="Timeout (ms)"
+            error={errors.timeout_ms?.message}
+            className={showCustomResolver ? "md:col-start-2 md:row-start-1" : "md:col-start-2"}
+          >
+            <input type="number" className="h-9 w-full px-3" {...form.register("timeout_ms", { valueAsNumber: true })} />
+          </Field>
         </div>
-      </Card>
-
-      <Card>
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Inspector Summary</p>
-            <h3 className="mt-2 font-space text-2xl font-bold text-white">Forward, Reverse, and Policy Records</h3>
-          </div>
-          <span className="rounded-full border border-teal-400/18 bg-slate-950/70 px-3 py-1 text-xs uppercase tracking-[0.18em] text-slate-300">
-            {report ? report.kind : "Idle"}
-          </span>
-        </div>
-
-        {!report ? (
-          <p className="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-400">
-            Run a lookup to inspect address, routing, policy, resolver, TTL, and reverse-DNS data from the Go backend.
+        {formError ? (
+          <p className="mt-4 rounded-lg border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2.5 text-[13px] text-[#ff8fb3]">
+            {formError}
           </p>
-        ) : (
-          <div className="grid gap-6">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Target</p><p className="mt-3 text-lg font-semibold text-white break-all">{report.target}</p></div>
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Query</p><p className="mt-3 text-lg font-semibold text-white">{report.record_type}</p></div>
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Resolver</p><p className="mt-3 text-lg font-semibold text-white break-all">{report.resolver}</p></div>
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Duration</p><p className="mt-3 text-lg font-semibold text-white">{formatMs(report.summary.duration_ms)}</p></div>
-            </div>
+        ) : null}
+      </form>
 
-            {summary ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Healthy Sections</p><p className="mt-3 text-lg font-semibold text-emerald-300">{summary.healthySections}</p></div>
-                <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Failed Sections</p><p className="mt-3 text-lg font-semibold text-white">{summary.failedSections}</p></div>
-                <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">PTR Names</p><p className="mt-3 text-lg font-semibold text-white">{summary.ptrCount}</p></div>
-                <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Total Records</p><p className="mt-3 text-lg font-semibold text-white">{report.summary.total_records}</p></div>
-              </div>
-            ) : null}
+      {!report ? (
+        <div className="rounded-xl border border-dashed border-[var(--lp-border)] px-6 py-14 text-center">
+          <Globe className="mx-auto h-5 w-5 text-[var(--lp-subtle)]" />
+          <p className="mt-3 text-[13px] text-[var(--lp-muted)]">Look up a domain to see its records</p>
+          <p className="mt-1 text-[12px] text-[var(--lp-subtle)]">Choose “All types” for a full audit, including mail and DNSSEC posture.</p>
+        </div>
+      ) : (
+        <>
+          <StatStrip
+            items={[
+              { label: "Target", value: report.target },
+              { label: "Query", value: report.record_type },
+              { label: "Resolver", value: report.resolver || "system" },
+              { label: "Records", value: String(report.summary.total_records) },
+              { label: "Failed sections", value: String(summary?.failedSections ?? 0), tone: summary?.failedSections ? "warn" : "good" },
+              { label: "Duration", value: formatMs(report.summary.duration_ms) },
+            ]}
+          />
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Mail Posture</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{report.analysis.mail_ready ? "Mail-ready DNS" : "Mail policy incomplete"}</p>
-                  </div>
-                  <span className={postureChipClasses(report.analysis.mail_ready)}>{report.analysis.mail_ready ? "Ready" : "Review"}</span>
+          {selectedType === "all" ? (
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 [&>*]:min-w-0">
+              <Panel title="Mail" aside={<Check ok={report.analysis.mail_ready} label={report.analysis.mail_ready ? "Ready" : "Needs review"} />}>
+                <div className="flex flex-wrap gap-2">
+                  <Check ok={report.analysis.mx_present} label="MX" />
+                  <Check ok={report.analysis.spf_present} label="SPF" />
+                  <Check ok={report.analysis.dmarc_present} label="DMARC" />
+                  <Check ok={report.analysis.caa_present} label="CAA" />
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className={postureChipClasses(report.analysis.mx_present)}>MX</span>
-                  <span className={postureChipClasses(report.analysis.spf_present)}>SPF</span>
-                  <span className={postureChipClasses(report.analysis.dmarc_present)}>DMARC</span>
-                  <span className={postureChipClasses(report.analysis.caa_present)}>CAA</span>
-                </div>
-                <p className="mt-4 text-sm text-slate-400">
-                  {(summary?.auditMode ?? "Partial")} audit across {summary?.totalSections ?? 0} queried sections.
+                <p className="mt-3 text-[12px] text-[var(--lp-subtle)]">
+                  {report.analysis.mail_ready
+                    ? "MX, SPF, and DMARC are all published."
+                    : "A domain that sends mail should publish MX, SPF, and DMARC records."}
                 </p>
-              </div>
-
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Security Posture</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{report.analysis.dnssec_present ? "DNSSEC signals detected" : "No DNSSEC signals found"}</p>
-                  </div>
-                  <span className={postureChipClasses(report.analysis.dnssec_present)}>{report.analysis.dnssec_present ? "Observed" : "None"}</span>
+              </Panel>
+              <Panel
+                title="DNSSEC"
+                aside={<Check ok={report.analysis.dnssec_present} label={report.analysis.dnssec_present ? "Signed" : "Not signed"} />}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <Check ok={report.analysis.dnskey_present} label="DNSKEY" />
+                  <Check ok={report.analysis.ds_present} label="DS" />
+                  <Check ok={report.analysis.rrsig_present} label="RRSIG" />
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className={postureChipClasses(report.analysis.dnskey_present)}>DNSKEY</span>
-                  <span className={postureChipClasses(report.analysis.ds_present)}>DS</span>
-                  <span className={postureChipClasses(report.analysis.rrsig_present)}>RRSIG</span>
-                </div>
-                <p className="mt-4 text-sm text-slate-400">
-                  Use `ALL`, `DNSKEY`, `DS`, and `RRSIG` together when validating delegation and signing posture.
+                <p className="mt-3 text-[12px] text-[var(--lp-subtle)]">
+                  {report.analysis.dnssec_present
+                    ? "Signatures were returned for this zone."
+                    : "No DNSSEC records were returned, so answers can't be validated."}
                 </p>
-              </div>
+              </Panel>
             </div>
+          ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {isVisibleSection(selectedType, "a") ? <DNSRecordSection title="A Records" meta={sectionMeta(report.a.duration_ms, report.a.resolver, report.a.authoritative)} items={(report.a.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.a.error} /> : null}
-              {isVisibleSection(selectedType, "aaaa") ? <DNSRecordSection title="AAAA Records" meta={sectionMeta(report.aaaa.duration_ms, report.aaaa.resolver, report.aaaa.authoritative)} items={(report.aaaa.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.aaaa.error} /> : null}
-              {isVisibleSection(selectedType, "cname") ? <DNSRecordSection title="CNAME" meta={sectionMeta(report.cname.duration_ms, report.cname.resolver, report.cname.authoritative)} items={(report.cname.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.cname.error} /> : null}
-              {isVisibleSection(selectedType, "ns") ? <DNSRecordSection title="NS Records" meta={sectionMeta(report.ns.duration_ms, report.ns.resolver, report.ns.authoritative)} items={(report.ns.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.ns.error} /> : null}
-              {isVisibleSection(selectedType, "mx") ? <DNSRecordSection title="MX Records" meta={sectionMeta(report.mx.duration_ms, report.mx.resolver, report.mx.authoritative)} items={(report.mx.records ?? []).map((item) => ({ value: `${item.pref} ${item.host}`, ttl: item.ttl }))} error={report.mx.error} /> : null}
-              {isVisibleSection(selectedType, "txt") ? <DNSRecordSection title="TXT Records" meta={sectionMeta(report.txt.duration_ms, report.txt.resolver, report.txt.authoritative)} items={(report.txt.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.txt.error} /> : null}
-              {isVisibleSection(selectedType, "dmarc") ? <DNSRecordSection title="DMARC Records" meta={sectionMeta(report.dmarc.duration_ms, report.dmarc.resolver, report.dmarc.authoritative)} items={(report.dmarc.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.dmarc.error} /> : null}
-              {isVisibleSection(selectedType, "soa") ? <DNSRecordSection title="SOA Record" meta={sectionMeta(report.soa.duration_ms, report.soa.resolver, report.soa.authoritative)} items={report.soa.record ? [{ value: `${report.soa.record.ns} | ${report.soa.record.mbox} | serial ${report.soa.record.serial} | refresh ${report.soa.record.refresh}`, ttl: report.soa.record.ttl }] : []} error={report.soa.error} /> : null}
-              {isVisibleSection(selectedType, "srv") ? <DNSRecordSection title="SRV Records" meta={sectionMeta(report.srv.duration_ms, report.srv.resolver, report.srv.authoritative, `${summary?.srvCount ?? 0} records`)} items={(report.srv.records ?? []).map((item) => ({ value: `${item.priority} ${item.weight} ${item.port} ${item.target}`, ttl: item.ttl }))} error={report.srv.error} /> : null}
-              {isVisibleSection(selectedType, "caa") ? <DNSRecordSection title="CAA Records" meta={sectionMeta(report.caa.duration_ms, report.caa.resolver, report.caa.authoritative, `${summary?.caaCount ?? 0} records`)} items={(report.caa.records ?? []).map((item) => ({ value: `flag=${item.flag} ${item.tag} ${item.value}`, ttl: item.ttl }))} error={report.caa.error} /> : null}
-              {isVisibleSection(selectedType, "dnskey") ? <DNSRecordSection title="DNSKEY Records" meta={sectionMeta(report.dnskey.duration_ms, report.dnskey.resolver, report.dnskey.authoritative)} items={(report.dnskey.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.dnskey.error} /> : null}
-              {isVisibleSection(selectedType, "ds") ? <DNSRecordSection title="DS Records" meta={sectionMeta(report.ds.duration_ms, report.ds.resolver, report.ds.authoritative)} items={(report.ds.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.ds.error} /> : null}
-              {isVisibleSection(selectedType, "rrsig") ? <DNSRecordSection title="RRSIG Records" meta={sectionMeta(report.rrsig.duration_ms, report.rrsig.resolver, report.rrsig.authoritative)} items={(report.rrsig.records ?? []).map((item) => ({ value: item.value, ttl: item.ttl }))} error={report.rrsig.error} /> : null}
+          {sections.length ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 [&>*]:min-w-0">
+              {sections.map((section) => (
+                <DNSRecordSection key={section.key} title={section.title} meta={section.meta} items={section.items} error={section.error} />
+              ))}
             </div>
+          ) : null}
+          {emptySections.length ? (
+            <p className="text-[12px] text-[var(--lp-subtle)]">No records for: {emptySections.map((t) => t.toUpperCase()).join(", ")}.</p>
+          ) : null}
 
-            {(selectedType === "all" || selectedType === "ptr") ? (
+          {selectedType === "all" || selectedType === "ptr" ? (
+            (report.ptr ?? []).length ? (
               <DNSRecordSection
-                title="PTR / Reverse DNS"
-                meta={`${report.summary.reverse_lookups} names`}
-                items={(report.ptr ?? []).flatMap((item) => (item.records ?? []).map((record) => ({ value: `${item.address} -> ${record.value}`, ttl: record.ttl })))}
+                title="Reverse DNS (PTR)"
+                meta={`${report.summary.reverse_lookups} lookups`}
+                items={(report.ptr ?? []).flatMap((item) =>
+                  (item.records ?? []).map((record) => ({ value: `${item.address} → ${record.value}`, ttl: record.ttl })),
+                )}
                 error={(report.ptr ?? []).find((item) => item.error)?.error}
               />
-            ) : null}
-          </div>
-        )}
-      </Card>
+            ) : null
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

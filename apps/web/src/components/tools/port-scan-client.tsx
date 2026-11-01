@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ChevronDown, Play, SlidersHorizontal, Square } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ProbeReport } from "@/lib/types";
 import { ProbeRunState, useRealtimeProbe } from "@/hooks/use-realtime-probe";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { formatMs } from "@/lib/utils";
+import { cn, formatMs } from "@/lib/utils";
+import { Field, PageHeader, Panel, RunStatus, StatStrip, Toggle, type RunTone } from "@/components/tools/probe-ui";
 
 const schema = z.object({
   host: z.string().min(1, "Target is required"),
@@ -102,17 +103,6 @@ function runStateLabel(state: ProbeRunState) {
   }
 }
 
-function stateTone(state?: string) {
-  switch (state) {
-    case "open":
-      return "bg-nw-mint/15 text-nw-mint";
-    case "closed":
-      return "bg-secondary text-muted-foreground";
-    default:
-      return "bg-nw-gold/15 text-nw-gold";
-  }
-}
-
 export function PortScanClient() {
   const [openOnly, setOpenOnly] = useState(false);
   const [sortKey, setSortKey] = useState<PortScanSortKey>("port");
@@ -137,7 +127,6 @@ export function PortScanClient() {
     }),
   });
 
-  const latestResult = report?.results.at(-1);
   const visibleResults = useMemo(() => {
     const base = [...(report?.results ?? [])];
     const filtered = openOnly ? base.filter((result) => result.state === "open") : base;
@@ -176,211 +165,211 @@ export function PortScanClient() {
 
     return filtered;
   }, [openOnly, report?.results, sortKey]);
-  const openPortCount = useMemo(
-    () => (report?.results ?? []).filter((result) => result.state === "open").length,
-    [report?.results],
-  );
+  const openPortCount = useMemo(() => (report?.results ?? []).filter((result) => result.state === "open").length, [report?.results]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const target = searchParams.get("target")?.trim();
+    if (target) form.setValue("host", target);
+  }, [form, searchParams]);
+
+  const results = useMemo(() => report?.results ?? [], [report?.results]);
+  const counts = useMemo(() => {
+    const closed = results.filter((r) => r.state === "closed").length;
+    const filtered = results.filter((r) => r.state !== "open" && r.state !== "closed").length;
+    const openRtts = results.filter((r) => r.state === "open" && typeof r.rtt_ms === "number").map((r) => r.rtt_ms as number);
+    return { closed, filtered, fastest: openRtts.length ? Math.min(...openRtts) : null };
+  }, [results]);
+  const summary = report?.summary;
+  const tone: RunTone = runState === "error" ? "error" : isBusy ? "live" : results.length ? "done" : "idle";
+  const errors = form.formState.errors;
+  const portMap = useMemo(() => [...results].sort((a, b) => (a.port ?? 0) - (b.port ?? 0)), [results]);
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <section className="rounded-xl border border-border/40 bg-card/60 p-5 backdrop-blur-sm">
-        <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">Surface Mapping</p>
-            <h2 className="font-display text-xl font-bold text-foreground">Port Scan</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">{runStateLabel(runState)}</span>
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <PageHeader
+        title="Port scan"
+        description="Check which TCP ports accept connections on a host, with handshake time for each open port."
+        status={<RunStatus tone={tone} label={runStateLabel(runState)} />}
+      />
+
+      <form className="rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f] p-4" onSubmit={form.handleSubmit((values) => void run(values))}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <Field label="Target" error={errors.host?.message} className="min-w-0 flex-1">
+            <input id="scan-target" className="h-10 w-full px-3" placeholder="example.com or 203.0.113.10" autoComplete="off" {...form.register("host")} />
+          </Field>
+          <div className="flex gap-2">
+            <button type="submit" className="console-btn console-btn-primary h-10 flex-1 px-5 md:flex-none" disabled={isBusy}>
+              <Play className="h-3.5 w-3.5" /> {isBusy ? runStateLabel(runState) : "Scan"}
+            </button>
+            <button type="button" className="console-btn console-btn-secondary h-10 px-4" disabled={!isBusy} onClick={stop}>
+              <Square className="h-3 w-3" /> Stop
+            </button>
           </div>
         </div>
 
-        <form className="space-y-4" onSubmit={form.handleSubmit((values) => void run(values))}>
-          <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="flex-1">
-              <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Target Host</label>
-              <Input placeholder="example.com" {...form.register("host")} />
-            </div>
-            <div className="flex items-end gap-2">
-              <Button type="submit" className="px-5">{isBusy ? runStateLabel(runState) : "Run Port Scan"}</Button>
-              <Button type="button" variant="secondary" disabled={!isBusy} onClick={stop}>Stop</Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Port Range</label>
-              <Input placeholder="22,80,443,8080" {...form.register("ports")} />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Timeout (ms)</label>
-              <Input type="number" {...form.register("timeout_ms", { valueAsNumber: true })} />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Concurrency</label>
-              <Input type="number" {...form.register("concurrency", { valueAsNumber: true })} />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
+        <div className="mt-3">
+          <Field label="Ports" hint="Comma-separated ports and ranges, up to 4,096" error={errors.ports?.message}>
+            <input id="scan-ports" className="lp-mono h-10 w-full px-3 text-[13px]" placeholder="22,80,443,8000-8100" {...form.register("ports")} />
+          </Field>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[12px] text-[var(--lp-subtle)]">Presets</span>
             {scanPresets.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
-                className="rounded-full border border-border/40 bg-card/50 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition hover:border-cyan-400/30 hover:text-cyan-200"
                 onClick={() => {
-                  form.setValue("ports", preset.ports, { shouldDirty: true, shouldTouch: true });
-                  form.setValue("concurrency", preset.concurrency, { shouldDirty: true, shouldTouch: true });
+                  form.setValue("ports", preset.ports, { shouldValidate: true });
+                  form.setValue("concurrency", preset.concurrency);
                 }}
+                className="rounded-md border border-[var(--lp-border)] px-2.5 py-1 text-[12px] text-[var(--lp-muted)] transition-colors hover:border-[var(--lp-border-strong)] hover:text-[var(--lp-text)]"
               >
                 {preset.label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((v) => !v)}
+              aria-expanded={showAdvanced}
+              className="ml-auto inline-flex items-center gap-1 text-[13px] text-[var(--lp-muted)] hover:text-[var(--lp-text)]"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Options
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")} />
+            </button>
           </div>
-
-          {formError ? <p className="rounded-lg border border-nw-red/30 bg-nw-red/10 px-4 py-3 text-sm text-nw-red">{formError}</p> : null}
-
-          <p className="text-[10px] text-muted-foreground">Scans the specified host using the provided port set or ranges.</p>
-        </form>
-      </section>
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <div className="space-y-5 xl:col-span-2">
-          <section className="rounded-xl border border-border/40 bg-card/60 p-5 backdrop-blur-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display font-bold text-foreground">Exposure Summary</h3>
-              <span className="text-xs text-muted-foreground">Realtime</span>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <article className="rounded-lg border border-border/40 bg-card/60 p-4 text-center">
-                <span className="mb-0.5 block text-[9px] uppercase tracking-widest text-muted-foreground">Scanned</span>
-                <p className="text-lg font-bold text-foreground">{report?.summary.scanned ?? 0}</p>
-              </article>
-              <article className="rounded-lg border border-border/40 bg-card/60 p-4 text-center">
-                <span className="mb-0.5 block text-[9px] uppercase tracking-widest text-muted-foreground">Open</span>
-                <p className="text-lg font-bold text-nw-mint">{report?.summary.open ?? 0}</p>
-              </article>
-              <article className="rounded-lg border border-border/40 bg-card/60 p-4 text-center">
-                <span className="mb-0.5 block text-[9px] uppercase tracking-widest text-muted-foreground">Closed</span>
-                <p className="text-lg font-bold text-foreground">{report?.summary.closed ?? 0}</p>
-              </article>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-border/40 bg-card/60 p-5 backdrop-blur-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display font-bold text-foreground">Results</h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-2 rounded-full border border-border/40 bg-card/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={openOnly}
-                    onChange={(event) => setOpenOnly(event.target.checked)}
-                  />
-                  Open only
-                </label>
-                <select
-                  className="rounded-full border border-border/40 bg-card/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground outline-none"
-                  value={sortKey}
-                  onChange={(event) => setSortKey(event.target.value as PortScanSortKey)}
-                >
-                  <option value="port">Sort: Port</option>
-                  <option value="state">Sort: State</option>
-                  <option value="rtt">Sort: RTT</option>
-                </select>
-                <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold uppercase text-muted-foreground">{runStateLabel(runState)}</span>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/30">
-                    <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Port</th>
-                    <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Service</th>
-                    <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">State</th>
-                    <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">RTT</th>
-                    <th className="pb-2 text-left text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleResults.map((result, index) => (
-                    <tr key={`${result.port ?? index}-${result.addr ?? "na"}`} className="border-b border-border/10">
-                      <td className="py-2 font-mono text-foreground">{result.port ?? "-"}</td>
-                      <td className="py-2 text-xs font-medium text-cyan-200">{serviceLabels[result.port ?? 0] ?? "Custom"}</td>
-                      <td className="py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${stateTone(result.state)}`}>{result.state || "closed"}</span>
-                      </td>
-                      <td className="py-2 font-mono text-foreground">
-                        {result.rtt || (typeof result.rtt_ms === "number" ? formatMs(result.rtt_ms) : "-")}
-                      </td>
-                      <td className="py-2 font-mono text-muted-foreground">{result.addr || result.error || "-"}</td>
-                    </tr>
-                  ))}
-                  {report && visibleResults.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
-                        {openOnly ? "No open ports matched the current filter." : "Awaiting port results."}
-                      </td>
-                    </tr>
-                  ) : null}
-                  {!report ? (
-                    <tr>
-                      <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">Run a scan to populate results.</td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </section>
         </div>
 
-        <div className="space-y-4">
-          <article className="rounded-xl border border-border/40 bg-card/60 p-4 backdrop-blur-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">Run Context</span>
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-[9px] font-bold uppercase text-muted-foreground">{runStateLabel(runState).toLowerCase()}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: "Target", value: report?.target || form.getValues("host") || "-" },
-                { label: "Ports", value: form.getValues("ports") || "-" },
-                { label: "Protocol", value: "tcp" },
-                { label: "Updated", value: latestResult ? "Live" : "Awaiting run" },
-              ].map((item) => (
-                <div key={item.label}>
-                  <span className="text-[9px] uppercase tracking-widest text-muted-foreground">{item.label}</span>
-                  <p className="truncate text-xs font-medium text-foreground">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </article>
+        {showAdvanced ? (
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--lp-border)] pt-4 md:max-w-md">
+            <Field label="Timeout per port (ms)" error={errors.timeout_ms?.message}>
+              <input type="number" className="h-9 w-full px-3" {...form.register("timeout_ms", { valueAsNumber: true })} />
+            </Field>
+            <Field label="Parallel connections" hint="1 to 256" error={errors.concurrency?.message}>
+              <input type="number" className="h-9 w-full px-3" {...form.register("concurrency", { valueAsNumber: true })} />
+            </Field>
+          </div>
+        ) : null}
 
-          <article className="rounded-xl border border-border/40 bg-card/60 p-4 backdrop-blur-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">Latest Event</span>
-              <span className="text-[10px] font-mono text-muted-foreground">live</span>
-            </div>
-            <p className="text-xs font-medium text-foreground">{latestResult ? `${latestResult.port ?? "-"} ${latestResult.state || "closed"}` : "Awaiting telemetry"}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {latestResult ? `${latestResult.addr || latestResult.error || "-"} ${latestResult.rtt || (typeof latestResult.rtt_ms === "number" ? formatMs(latestResult.rtt_ms) : "")}` : "Run a scan to stream live events."}
-            </p>
-          </article>
+        {formError ? (
+          <p className="mt-4 rounded-lg border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2.5 text-[13px] text-[#ff8fb3]">
+            {formError}
+          </p>
+        ) : null}
+        <p className="mt-3 text-[12px] text-[var(--lp-subtle)]">Only scan hosts you own or have permission to test.</p>
+      </form>
 
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Events", value: String(report?.results.length ?? 0) },
-              { label: "Signal", value: runStateLabel(runState).toLowerCase() },
-              { label: "Open Ports", value: String(openPortCount) },
-              { label: "Last RTT", value: latestResult?.rtt || (typeof latestResult?.rtt_ms === "number" ? formatMs(latestResult.rtt_ms) : "-") },
-              { label: "Sort", value: sortKey },
-            ].map((item) => (
-              <article key={item.label} className="rounded-lg border border-border/40 bg-card/60 p-3 text-center">
-                <span className="mb-0.5 block text-[9px] uppercase tracking-widest text-muted-foreground">{item.label}</span>
-                <p className="text-sm font-bold text-foreground">{item.value}</p>
-              </article>
+      <StatStrip
+        items={[
+          { label: "Scanned", value: results.length ? String(summary?.scanned ?? results.length) : "—" },
+          { label: "Open", value: results.length ? String(summary?.open ?? openPortCount) : "—", tone: openPortCount ? "good" : undefined },
+          { label: "Closed", value: results.length ? String(summary?.closed ?? counts.closed) : "—" },
+          { label: "Filtered", value: results.length ? String(counts.filtered) : "—", tone: counts.filtered ? "warn" : undefined },
+          { label: "Fastest open", value: counts.fastest !== null ? formatMs(counts.fastest) : "—" },
+          { label: "Duration", value: summary?.duration || "—" },
+        ]}
+      />
+
+      {portMap.length ? (
+        <Panel
+          title="Port map"
+          aside={
+            <span className="flex gap-3 text-[12px] text-[var(--lp-subtle)]">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm bg-[#4ade80]" /> open
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm bg-[#fbbf24]" /> filtered
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm bg-white/15" /> closed
+              </span>
+            </span>
+          }
+        >
+          <div className="flex flex-wrap gap-1">
+            {portMap.map((r) => (
+              <span
+                key={r.port}
+                title={`${r.port} · ${r.state ?? "unknown"}${serviceLabels[r.port ?? 0] ? ` · ${serviceLabels[r.port ?? 0]}` : ""}`}
+                className="lp-mono grid h-7 min-w-[44px] place-items-center rounded px-1 text-[11px]"
+                style={
+                  r.state === "open"
+                    ? { background: "rgba(74,222,128,0.15)", color: "#86efac" }
+                    : r.state === "closed"
+                      ? { background: "rgba(255,255,255,0.05)", color: "var(--lp-subtle)" }
+                      : { background: "rgba(251,191,36,0.12)", color: "#fcd34d" }
+                }
+              >
+                {r.port}
+              </span>
             ))}
           </div>
-        </div>
-      </div>
+        </Panel>
+      ) : null}
+
+      <Panel
+        title="Results"
+        bodyClassName="p-0"
+        aside={
+          results.length ? (
+            <div className="flex items-center gap-3">
+              <Toggle label="Open only" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} />
+              <select
+                aria-label="Sort results"
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as PortScanSortKey)}
+                className="h-8 px-2 text-[13px]"
+              >
+                <option value="port">Sort by port</option>
+                <option value="state">Sort by state</option>
+                <option value="rtt">Sort by time</option>
+              </select>
+            </div>
+          ) : null
+        }
+      >
+        {visibleResults.length ? (
+          <div className="max-h-[420px] overflow-y-auto border-t border-[var(--lp-border)]">
+            <table className="w-full text-[13px]">
+              <thead className="sticky top-0 bg-[#1b1b1f]">
+                <tr className="border-b border-[var(--lp-border)] text-left text-[12px] text-[var(--lp-subtle)]">
+                  <th className="px-4 py-2 font-medium">Port</th>
+                  <th className="px-4 py-2 font-medium">Service</th>
+                  <th className="px-4 py-2 font-medium">State</th>
+                  <th className="px-4 py-2 text-right font-medium">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleResults.map((r) => (
+                  <tr key={`${r.port}-${r.state}`} className="border-b border-[var(--lp-border)] last:border-0">
+                    <td className="lp-mono px-4 py-2">{r.port}/tcp</td>
+                    <td className="px-4 py-2 text-[var(--lp-muted)]">{serviceLabels[r.port ?? 0] ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <span
+                        className="rounded-md border px-2 py-0.5 text-[12px]"
+                        style={
+                          r.state === "open"
+                            ? { borderColor: "rgba(74,222,128,0.3)", color: "#86efac", background: "rgba(74,222,128,0.08)" }
+                            : r.state === "closed"
+                              ? { borderColor: "var(--lp-border)", color: "var(--lp-muted)" }
+                              : { borderColor: "rgba(251,191,36,0.3)", color: "#fcd34d", background: "rgba(251,191,36,0.08)" }
+                        }
+                      >
+                        {r.state === "timeout" ? "filtered" : (r.state ?? "unknown")}
+                      </span>
+                    </td>
+                    <td className="lp-mono px-4 py-2 text-right">{typeof r.rtt_ms === "number" ? formatMs(r.rtt_ms) : r.rtt || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="px-4 pb-4 text-[13px] text-[var(--lp-subtle)]">
+            {results.length ? "No open ports in this scan." : "Pick ports or a preset, then scan. Results stream in as each port answers."}
+          </p>
+        )}
+      </Panel>
     </div>
   );
 }

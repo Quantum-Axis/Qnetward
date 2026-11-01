@@ -194,12 +194,9 @@ func (s *Store) UpdateUserProfile(ctx context.Context, userID int64, name, email
 	return updated, emailChanged, tx.Commit()
 }
 
+// CreateSession stores a session without browser details; see CreateSessionWithMeta.
 func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error {
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO sessions (user_id, token_hash, expires_at)
-		VALUES ($1, $2, $3)
-	`, userID, tokenHash, expiresAt.UTC())
-	return err
+	return s.CreateSessionWithMeta(ctx, userID, tokenHash, expiresAt, SessionMeta{})
 }
 
 func (s *Store) GetUserBySessionToken(ctx context.Context, tokenHash string) (User, error) {

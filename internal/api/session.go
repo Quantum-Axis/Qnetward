@@ -86,7 +86,8 @@ func (srv *Server) issueSession(w http.ResponseWriter, r *http.Request, ctx cont
 		return fmt.Errorf("failed to create session token")
 	}
 	expiresAt := time.Now().Add(defaultSessionTTL)
-	if err := srv.store.CreateSession(ctx, user.ID, tokenHash, expiresAt); err != nil {
+	meta := store.SessionMeta{UserAgent: r.UserAgent(), IPAddress: clientIPFromRequest(r)}
+	if err := srv.store.CreateSessionWithMeta(ctx, user.ID, tokenHash, expiresAt, meta); err != nil {
 		return err
 	}
 	setSessionCookie(w, r, token, expiresAt)

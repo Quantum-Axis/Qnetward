@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Globe, Link2, Plus, X } from "lucide-react";
-import { apiRequest, ApiError } from "@/lib/api";
+import { Globe, ImageUp, Link2, Plus, Trash2, X } from "lucide-react";
+import { apiRequest, apiUpload, ApiError } from "@/lib/api";
 import type { AuthMessageResponse, SessionResponse, UserProfile, UserProfileResponse } from "@/lib/types";
 import { Avatar, Notice, SaveState, SettingsCard, SettingsPageTitle } from "@/components/settings/settings-ui";
 
@@ -62,6 +62,79 @@ function useSaveProfile() {
       queryClient.setQueryData(["account-profile"], data);
     },
   });
+}
+
+const AVATAR_MAX_BYTES = 1024 * 1024;
+const AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+function AvatarCard({ session, data, disabled }: { session?: SessionResponse; data?: UserProfileResponse; disabled: boolean }) {
+  const queryClient = useQueryClient();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const uploadsEnabled = data?.avatar_uploads === true;
+  const avatarUrl = data?.avatar_url || null;
+
+  const setAvatar = (url: string) =>
+    queryClient.setQueryData<UserProfileResponse>(["account-profile"], (current) => (current ? { ...current, avatar_url: url } : current));
+  const upload = useMutation({
+    mutationFn: (file: File) => apiUpload<{ avatar_url: string }>("/api/account/avatar", "file", file),
+    onSuccess: (res) => setAvatar(res.avatar_url),
+  });
+  const remove = useMutation({
+    mutationFn: () => apiRequest<{ avatar_url: string }>("/api/account/avatar", { method: "DELETE" }),
+    onSuccess: () => setAvatar(""),
+  });
+  const busy = upload.isPending || remove.isPending;
+  const error = clientError ?? (upload.isError ? (upload.error as ApiError).message : remove.isError ? (remove.error as ApiError).message : null);
+
+  return (
+    <SettingsCard
+      id="avatar"
+      title="Avatar"
+      description={uploadsEnabled ? "A square image works best. PNG, JPEG, WebP, or GIF, up to 1 MB." : "Built from your initials. Photo uploads need file storage, which this server doesn't have set up."}
+      hint={<SaveState saved={upload.isSuccess ? "Avatar updated." : remove.isSuccess ? "Avatar removed." : null} error={error} />}
+      action={
+        uploadsEnabled ? (
+          <>
+            {avatarUrl ? (
+              <button type="button" className="console-btn console-btn-secondary" disabled={disabled || busy} onClick={() => remove.mutate()}>
+                <Trash2 className="h-3.5 w-3.5" /> Remove
+              </button>
+            ) : null}
+            <button type="button" className="console-btn console-btn-primary" disabled={disabled || busy} onClick={() => fileInput.current?.click()}>
+              <ImageUp className="h-3.5 w-3.5" /> {upload.isPending ? "Uploading" : avatarUrl ? "Change" : "Upload"}
+            </button>
+          </>
+        ) : undefined
+      }
+    >
+      <div className="flex items-center gap-4">
+        <Avatar name={session?.user?.name} email={session?.user?.email} src={avatarUrl} size={64} />
+        <div className="text-[13px] text-[var(--lp-muted)]">
+          <p className="text-[var(--lp-text)]">{session?.user?.name || session?.user?.email}</p>
+          <p className="text-[12px] text-[var(--lp-subtle)]">{avatarUrl ? "Visible to people in your workspaces." : "Your initials are shown until you upload a picture."}</p>
+        </div>
+      </div>
+      <input
+        ref={fileInput}
+        type="file"
+        accept={AVATAR_TYPES.join(",")}
+        className="hidden"
+        aria-label="Avatar image"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          setClientError(null);
+          upload.reset();
+          remove.reset();
+          if (!file) return;
+          if (!AVATAR_TYPES.includes(file.type)) return setClientError("Use a PNG, JPEG, WebP, or GIF image.");
+          if (file.size > AVATAR_MAX_BYTES) return setClientError("Image must be 1 MB or smaller.");
+          upload.mutate(file);
+        }}
+      />
+    </SettingsCard>
+  );
 }
 
 function DisplayNameCard({ session, disabled }: { session?: SessionResponse; disabled: boolean }) {
@@ -355,19 +428,7 @@ export function ProfileSettings() {
 
       {isDemo ? <Notice tone="info">This is the shared demo account, so profile changes are turned off.</Notice> : null}
 
-      <SettingsCard
-        id="avatar"
-        title="Avatar"
-        description="Built from your initials. Photo uploads arrive once file storage is set up for your workspace."
-      >
-        <div className="flex items-center gap-4">
-          <Avatar name={session?.user?.name} email={session?.user?.email} size={64} />
-          <div className="text-[13px] text-[var(--lp-muted)]">
-            <p className="text-[var(--lp-text)]">{session?.user?.name || session?.user?.email}</p>
-            <p className="text-[12px] text-[var(--lp-subtle)]">Change your display name below to update the initials.</p>
-          </div>
-        </div>
-      </SettingsCard>
+      <AvatarCard session={session} data={profileQuery.data} disabled={isDemo} />
 
       <DisplayNameCard session={session} disabled={isDemo} />
 

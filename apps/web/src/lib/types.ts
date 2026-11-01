@@ -18,6 +18,19 @@ export type UserProfile = {
 
 export type UserProfileResponse = {
   profile: UserProfile;
+  /** Path of the uploaded avatar, or empty to use initials. */
+  avatar_url: string;
+  /** Whether this server has file storage for avatar uploads. */
+  avatar_uploads: boolean;
+};
+
+export type AccountSession = {
+  id: number;
+  created_at: string;
+  expires_at: string;
+  user_agent: string;
+  ip_address: string;
+  current: boolean;
 };
 
 export type SessionResponse = {

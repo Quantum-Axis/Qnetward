@@ -12,7 +12,25 @@ export function initialsFor(name?: string | null, email?: string | null) {
   return source.slice(0, 2).toUpperCase();
 }
 
-export function Avatar({ name, email, size = 40, className }: { name?: string | null; email?: string | null; size?: number; className?: string }) {
+export function Avatar({
+  name,
+  email,
+  src,
+  size = 40,
+  className,
+}: {
+  name?: string | null;
+  email?: string | null;
+  src?: string | null;
+  size?: number;
+  className?: string;
+}) {
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- served by the API behind auth, not a static asset
+      <img src={src} alt="" width={size} height={size} className={cn("shrink-0 rounded-full object-cover", className)} style={{ width: size, height: size }} />
+    );
+  }
   return (
     <span
       aria-hidden="true"

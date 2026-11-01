@@ -22,7 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
-import type { SessionResponse, WorkspaceListResponse } from "@/lib/types";
+import type { SessionResponse, UserProfileResponse, WorkspaceListResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Avatar, initialsFor, roleLabel } from "@/components/settings/settings-ui";
 
@@ -136,6 +136,11 @@ export function SettingsShell({ context, children }: { context: "personal" | "wo
     queryFn: () => apiRequest<WorkspaceListResponse>("/api/workspaces"),
     enabled: session.data?.authenticated === true,
   });
+  const profile = useQuery({
+    queryKey: ["account-profile"],
+    queryFn: () => apiRequest<UserProfileResponse>("/api/account/profile"),
+    enabled: context === "personal" && session.data?.authenticated === true,
+  });
   const user = session.data?.user;
   const activeId = workspaces.data?.active_workspace_id ?? session.data?.active_workspace_id;
   const workspace = workspaces.data?.workspaces?.find((w) => w.id === activeId) ?? workspaces.data?.workspaces?.[0];
@@ -147,7 +152,7 @@ export function SettingsShell({ context, children }: { context: "personal" | "wo
       <header className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           {context === "personal" ? (
-            <Avatar name={user?.name} email={user?.email} size={44} />
+            <Avatar name={user?.name} email={user?.email} src={profile.data?.avatar_url || null} size={44} />
           ) : (
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.06] text-[14px] font-medium" aria-hidden="true">
               {initialsFor(workspace?.name)}

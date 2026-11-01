@@ -31,6 +31,18 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     cache: "no-store",
   });
 
+  return readResult<T>(response);
+}
+
+/** Sends a file as multipart form data. The browser sets the boundary, so no Content-Type here. */
+export async function apiUpload<T>(path: string, field: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append(field, file);
+  const response = await fetch(path, { method: "POST", body, credentials: "include", cache: "no-store" });
+  return readResult<T>(response);
+}
+
+async function readResult<T>(response: Response): Promise<T> {
   const payload = await parseResponse(response);
   if (!response.ok) {
     const message = typeof payload === "object" && payload && "error" in payload

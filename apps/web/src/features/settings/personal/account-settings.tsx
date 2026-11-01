@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, Check, Mail } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
 import type { AuthMessageResponse, SessionResponse } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -10,6 +11,76 @@ import { DefinitionList } from "@/components/tools/probe-ui";
 import { formatDate, Notice, SaveState, SettingsCard, SettingsPageTitle } from "@/components/settings/settings-ui";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function DeleteAccountCard({ email, disabled }: { email?: string; disabled: boolean }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [typed, setTyped] = useState("");
+  const remove = useMutation({
+    mutationFn: () => apiRequest<AuthMessageResponse>("/api/account", { method: "DELETE", body: JSON.stringify({ password, email: typed }) }),
+    onSuccess: async () => {
+      queryClient.clear();
+      router.replace("/login");
+    },
+  });
+  const matches = !!email && typed.trim().toLowerCase() === email.toLowerCase();
+
+  return (
+    <SettingsCard
+      id="delete-account"
+      tone="danger"
+      title="Delete account"
+      description="Permanently removes your account, probe history, alert rules, and the workspaces only you belong to. This can't be undone."
+      onSubmit={open ? () => matches && password && remove.mutate() : undefined}
+      hint={remove.isError ? <span className="text-[#ff8fb3]">{(remove.error as ApiError).message}</span> : "If you own a workspace with other members, transfer it or remove them first."}
+      action={
+        open ? (
+          <>
+            <button
+              type="button"
+              className="console-btn console-btn-secondary"
+              onClick={() => {
+                setOpen(false);
+                setPassword("");
+                setTyped("");
+                remove.reset();
+              }}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="console-btn bg-[#e11d48] text-white hover:bg-[#f43f5e]" disabled={!matches || !password || remove.isPending}>
+              {remove.isPending ? "Deleting" : "Delete my account"}
+            </button>
+          </>
+        ) : (
+          <button type="button" className="console-btn border border-[rgba(255,61,127,0.4)] text-[#ff8fb3] hover:bg-[rgba(255,61,127,0.1)]" disabled={disabled} onClick={() => setOpen(true)}>
+            Delete account…
+          </button>
+        )
+      }
+    >
+      {open ? (
+        <div className="grid max-w-sm gap-3">
+          <p className="flex items-start gap-2 text-[12px] leading-relaxed text-[#ff8fb3]">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> You&apos;ll be signed out and your data will be erased.
+          </p>
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">
+              Type <span className="lp-mono text-[var(--lp-text)]">{email}</span> to confirm
+            </span>
+            <input aria-label="Confirm email" className="h-9 w-full px-3" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">Password</span>
+            <input aria-label="Password" type="password" className="h-9 w-full px-3" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+        </div>
+      ) : null}
+    </SettingsCard>
+  );
+}
 
 export function AccountSettings() {
   const queryClient = useQueryClient();
@@ -118,6 +189,8 @@ export function AccountSettings() {
           ]}
         />
       </SettingsCard>
+
+      <DeleteAccountCard email={user?.email} disabled={isDemo} />
     </div>
   );
 }

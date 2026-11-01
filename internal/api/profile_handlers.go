@@ -22,7 +22,15 @@ const (
 )
 
 type profileResponse struct {
-	Profile store.UserProfile `json:"profile"`
+	Profile   store.UserProfile `json:"profile"`
+	AvatarURL string            `json:"avatar_url"`
+	// AvatarUploads says whether this server can store avatar images.
+	AvatarUploads bool `json:"avatar_uploads"`
+}
+
+func (srv *Server) profileResponse(ctx context.Context, userID int64, profile store.UserProfile) profileResponse {
+	key, _ := srv.store.GetUserAvatarKey(ctx, userID)
+	return profileResponse{Profile: profile, AvatarURL: avatarURL(userID, key), AvatarUploads: srv.objects != nil}
 }
 
 type profileUpdateRequest struct {
@@ -61,7 +69,7 @@ func (srv *Server) handleAccountProfile(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: "could not load profile"})
 			return
 		}
-		writeJSON(w, http.StatusOK, profileResponse{Profile: profile})
+		writeJSON(w, http.StatusOK, srv.profileResponse(ctx, user.ID, profile))
 		return
 	}
 
@@ -88,7 +96,7 @@ func (srv *Server) handleAccountProfile(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "could not save profile"})
 		return
 	}
-	writeJSON(w, http.StatusOK, profileResponse{Profile: saved})
+	writeJSON(w, http.StatusOK, srv.profileResponse(ctx, user.ID, saved))
 }
 
 func normalizeProfile(req profileUpdateRequest) (store.UserProfile, error) {

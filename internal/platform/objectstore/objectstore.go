@@ -129,3 +129,36 @@ func (c *Client) objectKey(key string) string {
 	}
 	return path.Join(strings.Trim(c.cfg.Prefix, "/"), key)
 }
+
+// Put stores raw bytes under key and returns the full object key.
+func (c *Client) Put(ctx context.Context, key, contentType string, data []byte) (string, error) {
+	if c == nil || c.client == nil {
+		return "", fmt.Errorf("object storage not configured")
+	}
+	return c.upload(ctx, key, contentType, bytes.NewReader(data), int64(len(data)))
+}
+
+// Get opens an object previously returned by Put. The caller closes the reader.
+func (c *Client) Get(ctx context.Context, objectKey string) (io.ReadCloser, string, int64, error) {
+	if c == nil || c.client == nil {
+		return nil, "", 0, fmt.Errorf("object storage not configured")
+	}
+	obj, err := c.client.GetObject(ctx, c.cfg.Bucket, objectKey, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, "", 0, err
+	}
+	info, err := obj.Stat()
+	if err != nil {
+		_ = obj.Close()
+		return nil, "", 0, err
+	}
+	return obj, info.ContentType, info.Size, nil
+}
+
+// Delete removes an object previously returned by Put. Missing objects are not an error.
+func (c *Client) Delete(ctx context.Context, objectKey string) error {
+	if c == nil || c.client == nil {
+		return fmt.Errorf("object storage not configured")
+	}
+	return c.client.RemoveObject(ctx, c.cfg.Bucket, objectKey, minio.RemoveObjectOptions{})
+}

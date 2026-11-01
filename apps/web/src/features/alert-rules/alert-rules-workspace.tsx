@@ -335,12 +335,13 @@ function RuleRow({
 
   return (
     <li className={cn("px-4 py-4 transition-colors", editing ? "bg-[rgba(255,61,127,0.05)]" : "hover:bg-white/[0.015]")}>
-      <div className="flex items-start gap-3">
+      {/* On phones the actions wrap to their own row so the rule text gets the full width. */}
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2 sm:flex-nowrap">
         <span className="relative mt-1.5 inline-flex h-2 w-2 shrink-0">
           {state === "firing" ? <span className="absolute inset-0 animate-ping rounded-full opacity-60 motion-reduce:animate-none" style={{ background: meta.dot }} /> : null}
           <span className="relative h-2 w-2 rounded-full" style={{ background: meta.dot }} />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-1.25rem)]">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-[14px] font-medium">{rule.name || buildAlertRuleDefaultName(rule.protocol, rule.target, rule.port ?? undefined)}</h3>
             <span className={cn("rounded-md border px-1.5 py-px text-[11px]", meta.pill)}>{meta.label}</span>
@@ -364,7 +365,7 @@ function RuleRow({
             {evaluated ? <span title={formatDateTime(rule.last_evaluated_at)}>Checked {evaluated}</span> : null}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1 max-sm:ml-5">
           <span className="mr-1" title={rule.enabled ? "Pause rule" : "Resume rule"}>
             <Toggle label="" aria-label={rule.enabled ? `Pause ${rule.name}` : `Resume ${rule.name}`} checked={rule.enabled} disabled={busy} onChange={(e) => onToggle(e.target.checked)} />
           </span>

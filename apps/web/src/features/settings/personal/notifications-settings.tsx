@@ -39,7 +39,7 @@ export function NotificationsSettings() {
   const elsewhere = rules.filter((rule) => rule.enabled && rule.recipient_email.toLowerCase() !== email.toLowerCase());
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <SettingsPageTitle title="Notifications" description="Where Qnetward reaches you, and what it sends." />
 
       <SettingsCard

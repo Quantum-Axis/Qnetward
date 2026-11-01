@@ -191,7 +191,7 @@ export function TeamWorkspace() {
   const owners = members.filter((m) => m.role === "owner").length;
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <SettingsPageTitle title="Team" description={`People in ${workspace?.name ?? "this workspace"} and what each of them can do.`} />
 
       {isDemo ? <Notice tone="info">This is the shared demo workspace, so inviting and changing members is turned off.</Notice> : null}
@@ -238,7 +238,7 @@ export function TeamWorkspace() {
             aria-label="Invite Email"
             type="email"
             placeholder="teammate@company.com"
-            className="h-9 min-w-0 flex-1 px-3"
+            className="h-9 w-full min-w-0 px-3 sm:flex-1"
             disabled={!canInvite || invite.isPending}
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}

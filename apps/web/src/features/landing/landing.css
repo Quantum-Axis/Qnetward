@@ -296,3 +296,15 @@
   }
 }
 }
+
+/*
+ * Horizontal scroll areas (tables, tab rows) clip their content only for
+ * elements positioned inside them. Without a positioned scroller, absolutely
+ * positioned children such as sr-only table headers escape it and widen the
+ * whole page on phones.
+ */
+@layer components {
+  .lp-root .overflow-x-auto {
+    position: relative;
+  }
+}

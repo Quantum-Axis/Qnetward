@@ -78,7 +78,7 @@ export function ProductShowcase() {
   const active = tools.find((t) => t.id === activeId) ?? tools[0];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-10">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-10">
       <div className="min-w-0">
         <div role="tablist" aria-label="Product tools" className="-mx-6 flex gap-2 overflow-x-auto px-6 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0">
           {tools.map((tool) => {

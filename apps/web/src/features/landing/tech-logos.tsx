@@ -67,7 +67,7 @@ function LogoRow({ items, dim = false }: { items: { icon: SimpleIcon; note: stri
             <svg role="img" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-label={icon.title}>
               <path d={icon.path} />
             </svg>
-            <span className="pointer-events-none absolute -bottom-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--lp-border)] bg-[var(--lp-bg-raised)] px-2 py-0.5 text-[11px] text-[var(--lp-muted)] opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute -bottom-7 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap sm:block rounded-md border border-[var(--lp-border)] bg-[var(--lp-bg-raised)] px-2 py-0.5 text-[11px] text-[var(--lp-muted)] opacity-0 transition-opacity group-hover:opacity-100">
               {icon.title} · {note}
             </span>
           </span>

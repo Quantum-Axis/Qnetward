@@ -227,7 +227,7 @@ export function LandingPage() {
 
         {/* how it works */}
         <section id="how" className="lp-divider scroll-mt-20 py-28">
-          <div className="lp-container grid gap-14 lg:grid-cols-12">
+          <div className="lp-container grid grid-cols-1 gap-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <div className="lg:sticky lg:top-28">
                 <SectionHeader label="How it works" title="Three steps, no install" />
@@ -275,7 +275,7 @@ export function LandingPage() {
 
         {/* developers */}
         <section id="developers" className="lp-divider scroll-mt-20 py-28">
-          <div className="lp-container grid items-start gap-14 lg:grid-cols-12">
+          <div className="lp-container grid grid-cols-1 items-start gap-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <SectionHeader label="Developers" title="The console is a client like any other" />
               <p className="lp-reveal mt-6 text-[16px] leading-relaxed text-[var(--lp-muted)]">
@@ -303,7 +303,7 @@ export function LandingPage() {
 
         {/* security */}
         <section id="security" className="lp-divider scroll-mt-20 py-28">
-          <div className="lp-container grid gap-14 lg:grid-cols-12">
+          <div className="lp-container grid grid-cols-1 gap-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <SectionHeader label="Security" title="A scanner should refuse to scan what isn't yours" />
               <p className="lp-reveal mt-6 text-[16px] leading-relaxed text-[var(--lp-muted)]">
@@ -409,7 +409,7 @@ export function LandingPage() {
 
         {/* faq */}
         <section id="faq" className="lp-divider scroll-mt-20 py-28">
-          <div className="lp-container grid gap-14 lg:grid-cols-12">
+          <div className="lp-container grid grid-cols-1 gap-14 lg:grid-cols-12">
             <div className="lg:col-span-4">
               <SectionHeader label="FAQ" title="Common questions" />
               <p className="lp-reveal mt-6 text-[15px] leading-relaxed text-[var(--lp-muted)]">
@@ -428,7 +428,7 @@ export function LandingPage() {
             className="pointer-events-none absolute inset-0"
             style={{ background: "radial-gradient(ellipse 40% 70% at 15% 100%, rgba(255,61,127,0.14), transparent 70%)" }}
           />
-          <div className="lp-container relative grid items-end gap-10 lg:grid-cols-12">
+          <div className="lp-container relative grid grid-cols-1 items-end gap-10 lg:grid-cols-12">
             <h2 className="lp-reveal text-[40px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[60px] lg:col-span-8">
               <span className="lp-hero-text">Start watching your network</span>
               <span className="lp-cursor" />

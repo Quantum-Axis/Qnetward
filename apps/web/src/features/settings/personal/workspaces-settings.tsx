@@ -52,7 +52,7 @@ export function WorkspacesSettings() {
   const invitations = invitationsQuery.data?.invitations ?? [];
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <SettingsPageTitle title="Workspaces" description="Workspaces you belong to, and invitations to join others." />
 
       <SettingsCard

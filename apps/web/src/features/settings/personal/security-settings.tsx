@@ -227,7 +227,7 @@ export function SecuritySettings() {
   const isDemo = session?.mode === "demo";
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <SettingsPageTitle title="Password and sessions" description="How you sign in, and where you're signed in." />
       {isDemo ? <Notice tone="info">This is the shared demo account, so password and session changes are turned off.</Notice> : null}
       <ChangePasswordCard email={session?.user?.email} disabled={isDemo} />

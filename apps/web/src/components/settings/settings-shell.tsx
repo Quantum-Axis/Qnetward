@@ -171,7 +171,7 @@ export function SettingsShell({ context, children }: { context: "personal" | "wo
         <ContextSwitcher context={context} workspaceName={workspace?.name} />
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-10">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-10">
         <nav aria-label={context === "personal" ? "Personal settings" : "Workspace settings"} className="min-w-0">
           {/* Small screens: one scrollable row of tabs. */}
           <ul className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:hidden">

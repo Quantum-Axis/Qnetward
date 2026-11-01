@@ -92,7 +92,7 @@ function AvatarCard({ session, data, disabled }: { session?: SessionResponse; da
       id="avatar"
       title="Avatar"
       description={uploadsEnabled ? "A square image works best. PNG, JPEG, WebP, or GIF, up to 1 MB." : "Built from your initials. Photo uploads need file storage, which this server doesn't have set up."}
-      hint={<SaveState saved={upload.isSuccess ? "Avatar updated." : remove.isSuccess ? "Avatar removed." : null} error={error} />}
+      hint={upload.isSuccess || remove.isSuccess || error ? <SaveState saved={upload.isSuccess ? "Avatar updated." : remove.isSuccess ? "Avatar removed." : null} error={error} /> : undefined}
       action={
         uploadsEnabled ? (
           <>
@@ -423,7 +423,7 @@ export function ProfileSettings() {
   const profile = profileQuery.data?.profile;
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <SettingsPageTitle title="Public profile" description="How you appear to teammates across Qnetward workspaces." />
 
       {isDemo ? <Notice tone="info">This is the shared demo account, so profile changes are turned off.</Notice> : null}
@@ -438,7 +438,7 @@ export function ProfileSettings() {
         <p className="text-[13px] text-[var(--lp-subtle)]">Loading profile…</p>
       ) : (
         // Each card keeps its own draft over the saved profile, so saving one leaves the others' edits alone.
-        <div className="grid gap-5">
+        <div className="grid grid-cols-1 gap-5">
           <AboutCard profile={profile} disabled={isDemo} />
           <SocialLinksCard profile={profile} disabled={isDemo} />
           <TimezoneCard profile={profile} disabled={isDemo} />

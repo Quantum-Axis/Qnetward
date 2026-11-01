@@ -113,7 +113,7 @@ export function AccountSettings() {
   });
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <SettingsPageTitle title="Account" description="The email you sign in with and the details of this account." />
 
       {isDemo ? <Notice tone="info">This is the shared demo account, so the email can&apos;t be changed.</Notice> : null}

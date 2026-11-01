@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"qnetward/internal/engine/report"
 	"qnetward/internal/platform/mailer"
+	"qnetward/internal/probe"
 	"qnetward/internal/store"
 )
 
@@ -118,20 +119,20 @@ func normalizeAlertRuleRequest(user store.User, req alertRuleRequest) (store.Ale
 
 	switch protocol {
 	case "ping":
-		normalizedTarget, err := normalizeHost(target)
+		normalizedTarget, err := probe.NormalizeHost(target)
 		if err != nil {
 			return store.AlertRule{}, err
 		}
 		target = normalizedTarget
 		port = 0
 	case "tcpping":
-		if parsedHost, parsedPort, ok := splitHostPort(target); ok {
+		if parsedHost, parsedPort, ok := probe.SplitHostPort(target); ok {
 			target = parsedHost
 			if port == 0 {
 				port = parsedPort
 			}
 		}
-		normalizedTarget, normalizedPort, _, err := normalizeTCPPingRequest(target, port, 1, defaultProbeInterval, defaultProbeTimeout, false)
+		normalizedTarget, normalizedPort, _, err := probe.NormalizeTCPPingRequest(target, port, 1, probe.DefaultInterval, probe.DefaultTimeout, false)
 		if err != nil {
 			return store.AlertRule{}, err
 		}

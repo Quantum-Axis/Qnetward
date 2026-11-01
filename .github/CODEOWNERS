@@ -3,6 +3,8 @@
 
 # Security-sensitive paths: changes here should get a careful second look.
 /internal/platform/netguard/ @Moparapairayat
-/cmd/qnetward/session.go @Moparapairayat
-/cmd/qnetward/auth_handlers.go @Moparapairayat
+/internal/api/session.go @Moparapairayat
+/internal/api/auth_handlers.go @Moparapairayat
+/internal/api/origin.go @Moparapairayat
+/internal/store/migrations/ @Moparapairayat
 /internal/store/ @Moparapairayat

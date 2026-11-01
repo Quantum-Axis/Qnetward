@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"qnetward/internal/engine/portscan"
 	"qnetward/internal/engine/report"
 	"qnetward/internal/engine/tcpping"
+	"qnetward/internal/probe"
 	"qnetward/internal/store"
 )
 
@@ -69,7 +70,7 @@ func (srv *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-	if normalizedHost, err := normalizeHost(req.Host); err != nil {
+	if normalizedHost, err := probe.NormalizeHost(req.Host); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	} else {
@@ -91,7 +92,7 @@ func (srv *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: "continuous mode requires realtime streaming"})
 		return
 	}
-	cfg, err := normalizePingConfig(count, interval, timeout, size, req.IPv6, false)
+	cfg, err := probe.NormalizePingConfig(count, interval, timeout, size, req.IPv6, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -115,7 +116,7 @@ func (srv *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 
 	srv.enqueueAlertEvaluation(user, "ping", req.Host, 0, rep.Summary, srv.buildDashboardURL(r, "alerts"))
 
-	writeJSON(w, http.StatusOK, toJSONReport(rep))
+	writeJSON(w, http.StatusOK, probe.ToJSONReport(rep))
 }
 
 func (srv *Server) handleTCPPing(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +141,7 @@ func (srv *Server) handleTCPPing(w http.ResponseWriter, r *http.Request) {
 
 	host := req.Host
 	port := req.Port
-	if parsedHost, parsedPort, ok := splitHostPort(host); ok {
+	if parsedHost, parsedPort, ok := probe.SplitHostPort(host); ok {
 		host = parsedHost
 		if port == 0 {
 			port = parsedPort
@@ -164,7 +165,7 @@ func (srv *Server) handleTCPPing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: "continuous mode requires realtime streaming"})
 		return
 	}
-	host, port, cfg, err := normalizeTCPPingRequest(host, port, count, interval, timeout, false)
+	host, port, cfg, err := probe.NormalizeTCPPingRequest(host, port, count, interval, timeout, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -188,7 +189,7 @@ func (srv *Server) handleTCPPing(w http.ResponseWriter, r *http.Request) {
 
 	srv.enqueueAlertEvaluation(user, "tcpping", host, port, rep.Summary, srv.buildDashboardURL(r, "alerts"))
 
-	writeJSON(w, http.StatusOK, toJSONReport(rep))
+	writeJSON(w, http.StatusOK, probe.ToJSONReport(rep))
 }
 
 func (srv *Server) handlePortScan(w http.ResponseWriter, r *http.Request) {
@@ -210,12 +211,12 @@ func (srv *Server) handlePortScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeout := defaultProbeTimeout
+	timeout := probe.DefaultTimeout
 	if req.TimeoutMs > 0 {
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
 
-	host, _, cfg, err := normalizePortScanRequest(req.Host, req.Ports, timeout, req.Concurrency)
+	host, _, cfg, err := probe.NormalizePortScanRequest(req.Host, req.Ports, timeout, req.Concurrency)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -234,7 +235,7 @@ func (srv *Server) handlePortScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toJSONPortScanReport(rep))
+	writeJSON(w, http.StatusOK, probe.ToJSONPortScanReport(rep))
 }
 
 func (srv *Server) handleDNSLookup(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +257,7 @@ func (srv *Server) handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, err := normalizeHost(req.Target)
+	target, err := probe.NormalizeHost(req.Target)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -265,7 +266,7 @@ func (srv *Server) handleDNSLookup(w http.ResponseWriter, r *http.Request) {
 	if req.TimeoutMs > 0 {
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
-	timeout, err = normalizeDNSLookupTimeout(timeout)
+	timeout, err = probe.NormalizeDNSLookupTimeout(timeout)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return

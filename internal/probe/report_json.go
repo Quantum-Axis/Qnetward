@@ -1,13 +1,14 @@
-package main
+package probe
 
 import (
+	"fmt"
 	"time"
 
 	"qnetward/internal/engine/portscan"
 	"qnetward/internal/engine/report"
 )
 
-type jsonResult struct {
+type JSONResult struct {
 	Seq   int      `json:"seq,omitempty"`
 	Port  int      `json:"port,omitempty"`
 	State string   `json:"state,omitempty"`
@@ -17,7 +18,7 @@ type jsonResult struct {
 	Addr  string   `json:"addr,omitempty"`
 }
 
-type jsonSummary struct {
+type JSONSummary struct {
 	Sent       int     `json:"sent"`
 	Recv       int     `json:"recv"`
 	Loss       float64 `json:"loss"`
@@ -35,71 +36,71 @@ type jsonSummary struct {
 	Duration   string  `json:"duration,omitempty"`
 }
 
-type jsonReport struct {
+type JSONReport struct {
 	Protocol string       `json:"protocol"`
 	Target   string       `json:"target"`
 	Addr     string       `json:"addr"`
 	Port     int          `json:"port,omitempty"`
-	Results  []jsonResult `json:"results"`
-	Summary  jsonSummary  `json:"summary"`
+	Results  []JSONResult `json:"results"`
+	Summary  JSONSummary  `json:"summary"`
 }
 
-func toJSONReport(rep report.Report) jsonReport {
-	jr := jsonReport{
+func ToJSONReport(rep report.Report) JSONReport {
+	jr := JSONReport{
 		Protocol: rep.Protocol,
 		Target:   rep.Target,
 		Addr:     rep.Addr,
 		Port:     rep.Port,
-		Summary:  toJSONSummary(rep.Summary),
+		Summary:  ToJSONSummary(rep.Summary),
 	}
 
-	jr.Results = make([]jsonResult, 0, len(rep.Results))
+	jr.Results = make([]JSONResult, 0, len(rep.Results))
 	for _, r := range rep.Results {
-		jr.Results = append(jr.Results, toJSONResult(r))
+		jr.Results = append(jr.Results, ToJSONResult(r))
 	}
 
 	return jr
 }
 
-func toJSONPortScanReport(rep portscan.Report) jsonReport {
-	jr := jsonReport{
+func ToJSONPortScanReport(rep portscan.Report) JSONReport {
+	jr := JSONReport{
 		Protocol: rep.Protocol,
 		Target:   rep.Target,
 		Addr:     rep.Addr,
-		Summary:  toJSONPortScanSummary(rep.Summary),
+		Summary:  ToJSONPortScanSummary(rep.Summary),
 	}
 
-	jr.Results = make([]jsonResult, 0, len(rep.Results))
+	jr.Results = make([]JSONResult, 0, len(rep.Results))
 	for _, r := range rep.Results {
-		jr.Results = append(jr.Results, toJSONPortScanResult(r))
+		jr.Results = append(jr.Results, ToJSONPortScanResult(r))
 	}
 
 	return jr
 }
 
-func toJSONSummary(s report.Summary) jsonSummary {
-	js := jsonSummary{
+func ToJSONSummary(s report.Summary) JSONSummary {
+	js := JSONSummary{
 		Sent:       s.Sent,
 		Recv:       s.Recv,
 		Loss:       s.Loss,
 		LossStreak: s.LossStreak,
 	}
 	if s.Recv > 0 {
-		js.Min = formatDuration(s.Min)
-		js.Avg = formatDuration(s.Avg)
-		js.Max = formatDuration(s.Max)
-		js.Median = formatDuration(s.Median)
-		js.StdDev = formatDuration(s.StdDev)
-		js.Jitter = formatDuration(s.Jitter)
+		js.Min = FormatDuration(s.Min)
+		js.Avg = FormatDuration(s.Avg)
+		js.Max = FormatDuration(s.Max)
+		js.Median = FormatDuration(s.Median)
+		js.StdDev = FormatDuration(s.StdDev)
+		js.Jitter = FormatDuration(s.Jitter)
 	}
 	if s.Duration > 0 {
-		js.Duration = formatDuration(s.Duration)
+		js.Duration = FormatDuration(s.Duration)
 	}
 	return js
 }
 
-func toJSONPortScanSummary(s portscan.Summary) jsonSummary {
-	return jsonSummary{
+func ToJSONPortScanSummary(s portscan.Summary) JSONSummary {
+	return JSONSummary{
 		Scanned:  s.Scanned,
 		Open:     s.Open,
 		Closed:   s.Closed,
@@ -108,12 +109,12 @@ func toJSONPortScanSummary(s portscan.Summary) jsonSummary {
 	}
 }
 
-func toJSONResult(r report.Result) jsonResult {
-	jr := jsonResult{Seq: r.Seq}
+func ToJSONResult(r report.Result) JSONResult {
+	jr := JSONResult{Seq: r.Seq}
 	if r.Error != "" {
 		jr.Error = r.Error
 	} else {
-		jr.RTT = formatDuration(r.RTT)
+		jr.RTT = FormatDuration(r.RTT)
 		ms := float64(r.RTT) / float64(time.Millisecond)
 		jr.RTTMs = &ms
 	}
@@ -123,17 +124,23 @@ func toJSONResult(r report.Result) jsonResult {
 	return jr
 }
 
-func toJSONPortScanResult(r portscan.Result) jsonResult {
-	jr := jsonResult{
+func ToJSONPortScanResult(r portscan.Result) JSONResult {
+	jr := JSONResult{
 		Port:  r.Port,
 		State: r.State,
 		Error: r.Error,
 		Addr:  r.Addr,
 	}
 	if r.State == "open" {
-		jr.RTT = formatDuration(r.RTT)
+		jr.RTT = FormatDuration(r.RTT)
 		ms := float64(r.RTT) / float64(time.Millisecond)
 		jr.RTTMs = &ms
 	}
 	return jr
+}
+
+// FormatDuration renders a duration in milliseconds with microsecond precision, as reports show it.
+func FormatDuration(d time.Duration) string {
+	ms := float64(d) / float64(time.Millisecond)
+	return fmt.Sprintf("%.3fms", ms)
 }

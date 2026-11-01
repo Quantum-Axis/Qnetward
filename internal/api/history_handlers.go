@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"qnetward/internal/probe"
 	"qnetward/internal/store"
 )
 
@@ -29,21 +30,21 @@ func parseHistoryQuery(values url.Values) (string, string, int, int, error) {
 
 	port := 0
 	if reqType == "tcpping" {
-		if parsedHost, parsedPort, ok := splitHostPort(host); ok {
+		if parsedHost, parsedPort, ok := probe.SplitHostPort(host); ok {
 			host = parsedHost
 			if port == 0 {
 				port = parsedPort
 			}
 		}
 	}
-	if normalizedHost, err := normalizeHost(host); err != nil {
+	if normalizedHost, err := probe.NormalizeHost(host); err != nil {
 		return "", "", 0, 0, err
 	} else {
 		host = normalizedHost
 	}
 
 	if portStr != "" {
-		p, err := parsePort(portStr)
+		p, err := probe.ParsePort(portStr)
 		if err != nil {
 			return "", "", 0, 0, fmt.Errorf("invalid port")
 		}

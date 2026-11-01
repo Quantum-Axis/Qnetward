@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The `internal/modules/` part is superseded by
+[ADR 0008](0008-http-layer-in-internal-api.md).
 
 ## Context
 

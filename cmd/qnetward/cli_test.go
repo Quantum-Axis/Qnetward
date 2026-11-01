@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"qnetward/internal/probe"
 	"testing"
 )
 
@@ -26,4 +28,17 @@ func TestNormalizeArgsMovesValueFlagsAheadOfPositionals(t *testing.T) {
 	if fs.NArg() != 1 || fs.Arg(0) != "example.com" {
 		t.Fatalf("expected host positional arg, got %q", fs.Arg(0))
 	}
+}
+
+func newPingFlagSet() *flag.FlagSet {
+	fs := flag.NewFlagSet("ping", flag.ContinueOnError)
+	fs.Bool("ipv6", false, "")
+	fs.Int("count", probe.DefaultCount, "")
+	return fs
+}
+
+func newTCPPingFlagSet() *flag.FlagSet {
+	fs := flag.NewFlagSet("tcpping", flag.ContinueOnError)
+	fs.Int("port", probe.DefaultTCPPort, "")
+	return fs
 }

@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -12,8 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"qnetward/internal/store"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestHandleAuthSessionReturnsUnauthenticatedWithoutCookie(t *testing.T) {

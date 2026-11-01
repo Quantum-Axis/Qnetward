@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"net/http"
@@ -57,8 +57,8 @@ type Server struct {
 	authLimiter    *rateLimiter
 }
 
-// NewServer wires a Server from its dependencies and options.
-func NewServer(deps Deps, opts Options) *Server {
+// New wires a Server from its dependencies and options.
+func New(deps Deps, opts Options) *Server {
 	srv := &Server{
 		store:          deps.Store,
 		cache:          deps.Cache,

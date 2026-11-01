@@ -12,13 +12,14 @@ import (
 	"qnetward/internal/engine/portscan"
 	"qnetward/internal/engine/report"
 	"qnetward/internal/engine/tcpping"
+	"qnetward/internal/probe"
 )
 
 func runPing(args []string) {
 	fs := flag.NewFlagSet("ping", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	count := fs.Int("count", defaultProbeCount, "number of probes")
+	count := fs.Int("count", probe.DefaultCount, "number of probes")
 	interval := fs.Duration("interval", time.Second, "interval between probes")
 	timeout := fs.Duration("timeout", 2*time.Second, "per-probe timeout")
 	size := fs.Int("size", 32, "ICMP payload size in bytes")
@@ -40,7 +41,7 @@ func runPing(args []string) {
 	}
 
 	host := fs.Arg(0)
-	cfg, err := normalizePingConfig(*count, *interval, *timeout, *size, *ipv6, false)
+	cfg, err := probe.NormalizePingConfig(*count, *interval, *timeout, *size, *ipv6, false)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -63,7 +64,7 @@ func runTCPPing(args []string) {
 	fs := flag.NewFlagSet("tcpping", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	count := fs.Int("count", defaultProbeCount, "number of probes")
+	count := fs.Int("count", probe.DefaultCount, "number of probes")
 	interval := fs.Duration("interval", time.Second, "interval between probes")
 	timeout := fs.Duration("timeout", 2*time.Second, "per-probe timeout")
 	port := fs.Int("port", 80, "TCP port")
@@ -92,14 +93,14 @@ func runTCPPing(args []string) {
 	})
 
 	if !portFromFlag {
-		parsedHost, parsedPort, ok := splitHostPort(host)
+		parsedHost, parsedPort, ok := probe.SplitHostPort(host)
 		if ok {
 			host = parsedHost
 			*port = parsedPort
 		}
 	}
 
-	host, resolvedPort, cfg, err := normalizeTCPPingRequest(host, *port, *count, *interval, *timeout, false)
+	host, resolvedPort, cfg, err := probe.NormalizeTCPPingRequest(host, *port, *count, *interval, *timeout, false)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -123,8 +124,8 @@ func runPortScan(args []string) {
 	fs.SetOutput(os.Stderr)
 
 	portsSpec := fs.String("ports", defaultScanPorts, "comma-separated ports and ranges (for example 22,80,443,8000-8100)")
-	timeout := fs.Duration("timeout", defaultProbeTimeout, "per-port timeout")
-	concurrency := fs.Int("concurrency", defaultScanWorkers, "maximum parallel connection attempts")
+	timeout := fs.Duration("timeout", probe.DefaultTimeout, "per-port timeout")
+	concurrency := fs.Int("concurrency", probe.DefaultScanWorkers, "maximum parallel connection attempts")
 	jsonOut := fs.Bool("json", false, "JSON output")
 
 	fs.Usage = func() {
@@ -141,7 +142,7 @@ func runPortScan(args []string) {
 		os.Exit(2)
 	}
 
-	host, ports, cfg, err := normalizePortScanRequest(fs.Arg(0), *portsSpec, *timeout, *concurrency)
+	host, ports, cfg, err := probe.NormalizePortScanRequest(fs.Arg(0), *portsSpec, *timeout, *concurrency)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -183,12 +184,12 @@ func runDNSLookup(args []string) {
 		os.Exit(2)
 	}
 
-	target, err := normalizeHost(fs.Arg(0))
+	target, err := probe.NormalizeHost(fs.Arg(0))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	normalizedTimeout, err := normalizeDNSLookupTimeout(*timeout)
+	normalizedTimeout, err := probe.NormalizeDNSLookupTimeout(*timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -222,7 +223,7 @@ func printPing(rep report.Report) {
 		if addr == "" {
 			addr = rep.Addr
 		}
-		fmt.Printf("reply from %s: seq=%d time=%s\n", addr, r.Seq, formatDuration(r.RTT))
+		fmt.Printf("reply from %s: seq=%d time=%s\n", addr, r.Seq, probe.FormatDuration(r.RTT))
 	}
 	printSummary(rep)
 }
@@ -234,7 +235,7 @@ func printTCPPing(rep report.Report) {
 			fmt.Printf("seq=%d %s\n", r.Seq, r.Error)
 			continue
 		}
-		fmt.Printf("seq=%d time=%s\n", r.Seq, formatDuration(r.RTT))
+		fmt.Printf("seq=%d time=%s\n", r.Seq, probe.FormatDuration(r.RTT))
 	}
 	printSummary(rep)
 }
@@ -248,7 +249,7 @@ func printPortScan(rep portscan.Report, ports []int) {
 
 	for _, result := range rep.Results {
 		if result.State == "open" {
-			fmt.Printf("port=%d state=open time=%s", result.Port, formatDuration(result.RTT))
+			fmt.Printf("port=%d state=open time=%s", result.Port, probe.FormatDuration(result.RTT))
 		} else {
 			fmt.Printf("port=%d state=%s", result.Port, result.State)
 		}
@@ -279,31 +280,31 @@ func printSummary(rep report.Report) {
 	fmt.Printf("%d probes, %d replies, %.1f%% loss\n", rep.Summary.Sent, rep.Summary.Recv, rep.Summary.Loss)
 	if rep.Summary.Recv > 0 {
 		fmt.Printf("rtt min/avg/max/median/stddev = %s/%s/%s/%s/%s\n",
-			formatDuration(rep.Summary.Min),
-			formatDuration(rep.Summary.Avg),
-			formatDuration(rep.Summary.Max),
-			formatDuration(rep.Summary.Median),
-			formatDuration(rep.Summary.StdDev),
+			probe.FormatDuration(rep.Summary.Min),
+			probe.FormatDuration(rep.Summary.Avg),
+			probe.FormatDuration(rep.Summary.Max),
+			probe.FormatDuration(rep.Summary.Median),
+			probe.FormatDuration(rep.Summary.StdDev),
 		)
-		fmt.Printf("jitter = %s\n", formatDuration(rep.Summary.Jitter))
+		fmt.Printf("jitter = %s\n", probe.FormatDuration(rep.Summary.Jitter))
 	}
 	if rep.Summary.LossStreak > 0 {
 		fmt.Printf("max consecutive loss = %d\n", rep.Summary.LossStreak)
 	}
 	if rep.Summary.Duration > 0 {
-		fmt.Printf("duration = %s\n", formatDuration(rep.Summary.Duration))
+		fmt.Printf("duration = %s\n", probe.FormatDuration(rep.Summary.Duration))
 	}
 }
 
 func printJSON(rep report.Report) {
-	jr := toJSONReport(rep)
+	jr := probe.ToJSONReport(rep)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(jr)
 }
 
 func printPortScanJSON(rep portscan.Report) {
-	jr := toJSONPortScanReport(rep)
+	jr := probe.ToJSONPortScanReport(rep)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(jr)
@@ -408,9 +409,4 @@ func printDNSLookupJSON(rep dnslookup.Report) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(rep)
-}
-
-func formatDuration(d time.Duration) string {
-	ms := float64(d) / float64(time.Millisecond)
-	return fmt.Sprintf("%.3fms", ms)
 }

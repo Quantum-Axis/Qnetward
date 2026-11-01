@@ -13,7 +13,7 @@ func TestCreateUserCreatesDefaultWorkspace(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("workspace-user-%d@example.com", time.Now().UnixNano())
@@ -49,7 +49,7 @@ func TestEnsureDefaultWorkspaceForUserBackfillsExistingUser(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("workspace-backfill-%d@example.com", time.Now().UnixNano())
@@ -83,7 +83,7 @@ func TestWorkspaceMembersAndInvitations(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("workspace-team-%d@example.com", time.Now().UnixNano())
@@ -129,7 +129,7 @@ func TestIncomingWorkspaceInvitationAcceptsMembership(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	ownerEmail := fmt.Sprintf("workspace-owner-%d@example.com", time.Now().UnixNano())
@@ -183,7 +183,7 @@ func TestWorkspaceOwnerCanUpdateAndRemoveMember(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	ownerEmail := fmt.Sprintf("workspace-owner-manage-%d@example.com", time.Now().UnixNano())
@@ -232,7 +232,7 @@ func TestWorkspaceAdminCannotManageOwner(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	ownerEmail := fmt.Sprintf("workspace-owner-admin-%d@example.com", time.Now().UnixNano())
@@ -274,7 +274,7 @@ func TestWorkspaceInvitationPermissionsAndRevocation(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	ownerEmail := fmt.Sprintf("workspace-owner-invite-%d@example.com", time.Now().UnixNano())

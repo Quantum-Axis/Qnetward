@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"qnetward/internal/engine/portscan"
 	"qnetward/internal/engine/report"
 	"qnetward/internal/engine/tcpping"
+	"qnetward/internal/probe"
 	"qnetward/internal/store"
 
 	"github.com/gorilla/websocket"
@@ -34,15 +35,15 @@ type wsRequest struct {
 }
 
 type wsEvent struct {
-	Type     string       `json:"type"`
-	Protocol string       `json:"protocol,omitempty"`
-	Target   string       `json:"target,omitempty"`
-	Addr     string       `json:"addr,omitempty"`
-	Port     int          `json:"port,omitempty"`
-	Ts       int64        `json:"ts,omitempty"`
-	Result   *jsonResult  `json:"result,omitempty"`
-	Summary  *jsonSummary `json:"summary,omitempty"`
-	Error    string       `json:"error,omitempty"`
+	Type     string             `json:"type"`
+	Protocol string             `json:"protocol,omitempty"`
+	Target   string             `json:"target,omitempty"`
+	Addr     string             `json:"addr,omitempty"`
+	Port     int                `json:"port,omitempty"`
+	Ts       int64              `json:"ts,omitempty"`
+	Result   *probe.JSONResult  `json:"result,omitempty"`
+	Summary  *probe.JSONSummary `json:"summary,omitempty"`
+	Error    string             `json:"error,omitempty"`
 }
 
 type wsWriter struct {
@@ -219,11 +220,11 @@ func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user stor
 	}
 	size := req.Size
 	var err error
-	req.Host, err = normalizeHost(req.Host)
+	req.Host, err = probe.NormalizeHost(req.Host)
 	if err != nil {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
-	cfg, err := normalizePingConfig(req.Count, interval, timeout, size, req.IPv6, req.Continuous)
+	cfg, err := probe.NormalizePingConfig(req.Count, interval, timeout, size, req.IPv6, req.Continuous)
 	if err != nil {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
@@ -232,7 +233,7 @@ func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user stor
 	rep, err := ping.RunStreamContext(ctx, req.Host, cfg, func(res report.Result) error {
 		ts := time.Now()
 		srv.storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, ts)
-		jr := toJSONResult(res)
+		jr := probe.ToJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",
 			Protocol: "icmp",
@@ -243,7 +244,7 @@ func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user stor
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			summary := toJSONSummary(rep.Summary)
+			summary := probe.ToJSONSummary(rep.Summary)
 			return writer.WriteEvent(wsEvent{
 				Type:     "stopped",
 				Protocol: "icmp",
@@ -255,7 +256,7 @@ func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user stor
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
-	summary := toJSONSummary(rep.Summary)
+	summary := probe.ToJSONSummary(rep.Summary)
 	srv.enqueueAlertEvaluation(user, "ping", req.Host, 0, rep.Summary, srv.buildConfiguredDashboardURL("alerts"))
 	return writer.WriteEvent(wsEvent{
 		Type:     "summary",
@@ -275,7 +276,7 @@ func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user s
 
 	host := req.Host
 	port := req.Port
-	if parsedHost, parsedPort, ok := splitHostPort(host); ok {
+	if parsedHost, parsedPort, ok := probe.SplitHostPort(host); ok {
 		host = parsedHost
 		if port == 0 {
 			port = parsedPort
@@ -294,7 +295,7 @@ func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user s
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
 
-	host, port, cfg, err := normalizeTCPPingRequest(host, port, req.Count, interval, timeout, req.Continuous)
+	host, port, cfg, err := probe.NormalizeTCPPingRequest(host, port, req.Count, interval, timeout, req.Continuous)
 	if err != nil {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
@@ -303,7 +304,7 @@ func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user s
 	rep, err := tcpping.RunStreamContext(ctx, host, port, cfg, func(res report.Result) error {
 		ts := time.Now()
 		srv.storeResult(user.ID, "tcpping", host, res.Addr, port, res, ts)
-		jr := toJSONResult(res)
+		jr := probe.ToJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",
 			Protocol: "tcp",
@@ -315,7 +316,7 @@ func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user s
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			summary := toJSONSummary(rep.Summary)
+			summary := probe.ToJSONSummary(rep.Summary)
 			return writer.WriteEvent(wsEvent{
 				Type:     "stopped",
 				Protocol: "tcp",
@@ -328,7 +329,7 @@ func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user s
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
-	summary := toJSONSummary(rep.Summary)
+	summary := probe.ToJSONSummary(rep.Summary)
 	srv.enqueueAlertEvaluation(user, "tcpping", host, port, rep.Summary, srv.buildConfiguredDashboardURL("alerts"))
 	return writer.WriteEvent(wsEvent{
 		Type:     "summary",
@@ -347,12 +348,12 @@ func (srv *Server) streamPortScanWS(ctx context.Context, writer *wsWriter, req w
 	}
 	defer release()
 
-	timeout := defaultProbeTimeout
+	timeout := probe.DefaultTimeout
 	if req.TimeoutMs > 0 {
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
 
-	host, _, cfg, err := normalizePortScanRequest(req.Host, req.Ports, timeout, req.Concurrency)
+	host, _, cfg, err := probe.NormalizePortScanRequest(req.Host, req.Ports, timeout, req.Concurrency)
 	if err != nil {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
@@ -360,7 +361,7 @@ func (srv *Server) streamPortScanWS(ctx context.Context, writer *wsWriter, req w
 	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := portscan.RunStreamContext(ctx, host, cfg, func(res portscan.Result) error {
 		ts := time.Now()
-		jr := toJSONPortScanResult(res)
+		jr := probe.ToJSONPortScanResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",
 			Protocol: "tcp-portscan",
@@ -371,7 +372,7 @@ func (srv *Server) streamPortScanWS(ctx context.Context, writer *wsWriter, req w
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			summary := toJSONPortScanSummary(rep.Summary)
+			summary := probe.ToJSONPortScanSummary(rep.Summary)
 			return writer.WriteEvent(wsEvent{
 				Type:     "stopped",
 				Protocol: rep.Protocol,
@@ -383,7 +384,7 @@ func (srv *Server) streamPortScanWS(ctx context.Context, writer *wsWriter, req w
 		return writer.WriteEvent(wsEvent{Type: "error", Error: err.Error()})
 	}
 
-	summary := toJSONPortScanSummary(rep.Summary)
+	summary := probe.ToJSONPortScanSummary(rep.Summary)
 	return writer.WriteEvent(wsEvent{
 		Type:     "summary",
 		Protocol: rep.Protocol,

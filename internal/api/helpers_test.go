@@ -1,8 +1,7 @@
-package main
+package api
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,19 +14,6 @@ import (
 	"qnetward/internal/platform/netguard"
 	"qnetward/internal/store"
 )
-
-func newPingFlagSet() *flag.FlagSet {
-	fs := flag.NewFlagSet("ping", flag.ContinueOnError)
-	fs.Bool("ipv6", false, "")
-	fs.Int("count", defaultProbeCount, "")
-	return fs
-}
-
-func newTCPPingFlagSet() *flag.FlagSet {
-	fs := flag.NewFlagSet("tcpping", flag.ContinueOnError)
-	fs.Int("port", defaultTCPPort, "")
-	return fs
-}
 
 func openTestStore(t *testing.T) *store.Store {
 	t.Helper()
@@ -202,5 +188,5 @@ var testSrv = newTestServer()
 
 func newTestServer() *Server {
 	// Handler tests probe listeners on 127.0.0.1; the hosted default blocks that.
-	return NewServer(Deps{}, Options{TargetPolicy: netguard.Policy{AllowPrivate: true}})
+	return New(Deps{}, Options{TargetPolicy: netguard.Policy{AllowPrivate: true}})
 }

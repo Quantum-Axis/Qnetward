@@ -5,47 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 )
 
-const (
-	defaultProbeCount    = 5
-	defaultProbeInterval = time.Second
-	defaultProbeTimeout  = 2 * time.Second
-	defaultPingSize      = 32
-	defaultTCPPort       = 80
-	defaultScanPorts     = "22,80,443,8080"
-	defaultScanWorkers   = 64
-	maxProbeCount        = 100
-	minProbeInterval     = 100 * time.Millisecond
-	maxProbeInterval     = 60 * time.Second
-	minProbeTimeout      = 100 * time.Millisecond
-	maxProbeTimeout      = 60 * time.Second
-	minPingSize          = 8
-	maxPingSize          = 65535
-	minScanConcurrency   = 1
-	maxScanConcurrency   = 256
-	maxScanPorts         = 4096
-	wsWriteTimeout       = 10 * time.Second
-	wsReadTimeout        = 60 * time.Second
-	maxJSONBodyBytes     = 8 << 10
-	maxWSMessageBytes    = 4 << 10
-	maxHostLength        = 255
-	maxHistoryLimit      = 1000
-	maxConcurrentProbes  = 8
-	authCookieName       = "qnetward_session"
-	defaultSessionTTL    = 30 * 24 * time.Hour
-	defaultResetTTL      = 30 * time.Minute
-	defaultVerifyCodeTTL = 10 * time.Minute
-	verifyResendCooldown = 60 * time.Second
-	resetIssueCooldown   = 60 * time.Second
-	rateLimitSweepEvery  = 5 * time.Minute
-	rateLimitBucketTTL   = 30 * time.Minute
-	maxRateLimitBuckets  = 8192
-	minPasswordLength    = 8
-	maxPasswordLength    = 72
-	maxNameLength        = 80
-)
+const defaultScanPorts = "22,80,443,8080"
 
 type boolFlag interface {
 	IsBoolFlag() bool

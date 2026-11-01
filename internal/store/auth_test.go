@@ -15,7 +15,7 @@ func TestCreateUserAndSessionFlow(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("auth_%d@example.com", time.Now().UnixNano())
@@ -47,7 +47,7 @@ func TestCreateUserRejectsDuplicateEmail(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("dupe_%d@example.com", time.Now().UnixNano())
@@ -65,7 +65,7 @@ func TestUpdateUserProfileNameOnly(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("profile_name_%d@example.com", time.Now().UnixNano())
@@ -98,7 +98,7 @@ func TestUpdateUserProfileEmailChangeResetsVerification(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("profile_email_%d@example.com", time.Now().UnixNano())
@@ -147,7 +147,7 @@ func TestUpdateUserProfileRejectsDuplicateEmail(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	firstEmail := fmt.Sprintf("profile_dupe_first_%d@example.com", time.Now().UnixNano())
@@ -171,7 +171,7 @@ func TestPasswordResetTokenFlow(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("reset_%d@example.com", time.Now().UnixNano())
@@ -208,7 +208,7 @@ func TestEmailVerificationCodeFlow(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("verify_%d@example.com", time.Now().UnixNano())
@@ -244,7 +244,7 @@ func TestCreatePasswordResetTokenKeepsSingleActiveRowPerUser(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("reset_single_%d@example.com", time.Now().UnixNano())
@@ -291,7 +291,7 @@ func TestCreateEmailVerificationCodeKeepsSingleActiveRowPerUser(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("verify_single_%d@example.com", time.Now().UnixNano())

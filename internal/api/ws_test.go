@@ -1,9 +1,10 @@
-package main
+package api
 
 import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"qnetward/internal/probe"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func TestHandleWSRejectsInvalidPingRequest(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if err := conn.WriteJSON(wsRequest{Type: "ping", Host: "example.com", Count: maxProbeCount + 1}); err != nil {
+	if err := conn.WriteJSON(wsRequest{Type: "ping", Host: "example.com", Count: probe.MaxCount + 1}); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
 

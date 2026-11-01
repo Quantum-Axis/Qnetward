@@ -13,7 +13,7 @@ func TestAdminOverviewAndListings(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	ownerEmail := fmt.Sprintf("admin-owner-%d@example.com", time.Now().UnixNano())

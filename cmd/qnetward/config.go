@@ -1,13 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
-	"qnetward/internal/store"
 )
 
 // lookupEnv reads key and, for QNETWARD_* keys, falls back to the legacy
@@ -63,36 +60,4 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return parsed
-}
-
-func parseAllowedOrigins(raw string) (map[string]struct{}, error) {
-	origins := make(map[string]struct{})
-	for _, item := range strings.Split(raw, ",") {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		normalized, err := normalizeOrigin(item)
-		if err != nil {
-			return nil, fmt.Errorf("invalid allowed origin %q: %w", item, err)
-		}
-		origins[normalized] = struct{}{}
-	}
-	return origins, nil
-}
-
-func parseAdminEmails(raw string) (map[string]struct{}, error) {
-	adminEmails := make(map[string]struct{})
-	for _, item := range strings.Split(raw, ",") {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		email, err := store.NormalizeEmail(item)
-		if err != nil {
-			return nil, fmt.Errorf("invalid admin email %q: %w", item, err)
-		}
-		adminEmails[email] = struct{}{}
-	}
-	return adminEmails, nil
 }

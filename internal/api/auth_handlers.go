@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"qnetward/internal/platform/mailer"
 	"qnetward/internal/store"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type authRequest struct {

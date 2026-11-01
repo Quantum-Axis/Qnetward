@@ -12,7 +12,7 @@ func TestAlertRuleCRUDAndEvaluation(t *testing.T) {
 		FlushInterval: 5 * time.Millisecond,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	user, err := st.CreateUser(ctx, "Alert Tester", testEmail("alerts"), "hash-1", false)

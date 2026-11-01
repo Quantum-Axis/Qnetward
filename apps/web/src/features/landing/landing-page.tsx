@@ -188,12 +188,15 @@ export function LandingPage() {
               <br className="hidden md:block" />
               Diagnostics and uptime monitors today. Agents and attack-surface scans next.
             </p>
-            <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-6 text-[15px]">
-                Start monitoring free
+            {/* Phones keep both buttons on one row, with shorter labels. */}
+            <div className="mx-auto mt-7 grid max-w-sm grid-cols-2 gap-2.5 sm:flex sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
+              <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-3 text-[14px] sm:px-6 sm:text-[15px]">
+                <span className="sm:hidden">Start free</span>
+                <span className="hidden sm:inline">Start monitoring free</span>
               </Link>
-              <a href="#how" className="lp-btn lp-btn-secondary h-11 px-6 text-[15px]">
-                See how it works
+              <a href="#how" className="lp-btn lp-btn-secondary h-11 px-3 text-[14px] sm:px-6 sm:text-[15px]">
+                <span className="sm:hidden">How it works</span>
+                <span className="hidden sm:inline">See how it works</span>
               </a>
             </div>
             <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-[var(--lp-subtle)]">

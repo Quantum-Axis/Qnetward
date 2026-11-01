@@ -15,7 +15,6 @@ export function AuthLayoutCard({
   title,
   subtitle,
   headerAction,
-  wide = false,
   contentClassName,
   below,
   children,
@@ -27,7 +26,7 @@ export function AuthLayoutCard({
   /** Kept for compatibility; no longer rendered. */
   eyebrow?: string;
   headerAction?: HeaderAction;
-  /** Wider form column, used by the multi-step sign-up. */
+  /** Kept for compatibility; every auth page now uses the same card size. */
   wide?: boolean;
   contentClassName?: string;
   /** Shown under the card, above the terms line (e.g. the demo entry). */
@@ -39,8 +38,8 @@ export function AuthLayoutCard({
       {/* On phones the card is the page: no frame, full width. From sm up it floats as a card. */}
       <div
         className={cn(
-          "grid w-full max-w-[480px] overflow-hidden sm:rounded-2xl sm:border sm:border-[var(--lp-border)] sm:bg-[#1d1d21] sm:shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:grid-cols-2",
-          wide ? "lg:max-w-[960px]" : "lg:max-w-[900px]",
+          // One size for every auth page, so moving between sign in, sign up, and its steps doesn't make the card jump.
+          "grid w-full max-w-[480px] overflow-hidden sm:rounded-2xl sm:border sm:border-[var(--lp-border)] sm:bg-[#1d1d21] sm:shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:min-h-[680px] lg:max-w-[920px] lg:grid-cols-2",
         )}
       >
         <div className="flex flex-col px-5 py-7 sm:px-10 sm:py-11">

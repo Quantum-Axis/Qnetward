@@ -13,7 +13,6 @@ export default function SignupPage() {
         icon={<UserPlus />}
         title="Create your account"
         subtitle="Free during beta. Invite your team once you're in."
-        wide
       >
         <SignupForm />
       </AuthLayoutCard>

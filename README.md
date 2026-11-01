@@ -1,73 +1,81 @@
+<div align="center">
+
 # Qnetward
 
-Qnetward is a self-hosted network diagnostics toolkit built with Go and a Next.js frontend. It combines a CLI, a backend API/probe engine, realtime probe streaming, and a production stack built around PostgreSQL/TimescaleDB, Redis, and S3-compatible object storage.
+### Network visibility, without the guesswork.
 
+Run live network diagnostics, watch results stream in real time, and keep a searchable history — on infrastructure you control.
 
-## Contributors
+<br />
 
-- MOPARA PAIR AYAT
-- MONABBER EAMAN
+![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-TimescaleDB-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Cache-Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
+![License](https://img.shields.io/badge/License-See_repository-64748B?style=flat-square)
 
-## Overview
+<br />
 
-You run the server, open the dashboard in your browser, and inspect live ICMP, TCP, or port-scan results as they arrive. The app uses:
+[Get started](#-get-started) · [Explore features](#-what-you-can-do) · [Architecture](#-how-it-fits-together) · [Production](#-production-deployment)
 
-- PostgreSQL/TimescaleDB for durable time-series history
-- Redis for fast history caching
-- S3-compatible object storage for exported history artifacts
+</div>
 
-Core capabilities:
-- ICMP ping
-- TCP ping
-- TCP port scan
-- Realtime WebSocket streaming
-- Stop/cancel for live runs
-- PostgreSQL/TimescaleDB history
-- Redis-backed history cache
-- Export endpoint with optional S3 upload
-- Latency chart + result table
-- Scrollable live result view
-- Local-first and production deployment model
+---
 
-## Architecture
+## ✨ What you can do
 
+| Diagnose | Observe | Operate |
+| --- | --- | --- |
+| ICMP and TCP ping | Live WebSocket result streams | Workspaces and team invitations |
+| TCP port scans | Latency charts and result tables | Alert rules with email delivery |
+| DNS lookup and inspection | Searchable probe history | Platform admin console |
+| Export results as JSON or CSV | Redis-backed history cache | Self-host the full stack |
+
+Qnetward pairs a Go probe engine with a Next.js dashboard. Run it locally for a focused diagnostic session, or deploy the production stack for persistent history, alerts, and team workflows.
+
+## 🚀 Get started
+
+### Requirements
+
+- Go 1.25+
+- Node.js and pnpm for the web dashboard
+- PostgreSQL for persistent history (TimescaleDB is supported)
+
+### 1. Start the Go backend
+
+From the repository root:
+
+```powershell
+go build -o qnetward.exe .\cmd\qnetward
+.\qnetward.exe serve --listen 127.0.0.1:8080 --db-dsn "postgres://qnetward:change-me@127.0.0.1:5432/qnetward?sslmode=disable" --timescale
 ```
-apps/web/              Next.js dashboard
-cmd/qnetward/          entrypoint: CLI commands, flag parsing, dependency wiring
-internal/api/          HTTP + WebSocket API (handlers are methods on api.Server)
-internal/probe/        probe validation, limits, and report JSON shared by CLI and API
-internal/engine/       pure network engines (no HTTP, no DB)
-  ping/  tcpping/  portscan/  dnslookup/  report/
-internal/platform/     infrastructure adapters
-  cache/ (Redis)  objectstore/ (S3)  mailer/ (Resend)
-internal/store/        PostgreSQL/TimescaleDB persistence, migrations, batching, retention
-deploy/                production docker-compose stack
-scripts/               smoke tests and tooling
+
+On Linux or macOS:
+
+```bash
+go build -o qnetward ./cmd/qnetward
+./qnetward serve --listen 127.0.0.1:8080 --db-dsn "postgres://qnetward:change-me@127.0.0.1:5432/qnetward?sslmode=disable" --timescale
 ```
 
-Inside `internal/api`, code is split by domain: `auth_handlers.go`,
-`session.go`, `workspace_handlers.go`, `admin_handlers.go`,
-`probe_handlers.go`, `history_handlers.go`, `alert_handlers.go`, `ws.go`,
-plus shared `httpx.go`, `origin.go`, and `ratelimit.go`. `api.New` takes the
-store, cache, object storage, and mailer as dependencies; nothing reads globals.
-Schema changes are numbered SQL files in `internal/store/migrations`
-(see [ADR 0007](docs/adr/0007-versioned-schema-migrations.md)).
+### 2. Start the dashboard
 
-## Tech Stack
+In another terminal:
 
-- Go
-- Next.js
-- TypeScript
-- PostgreSQL
-- TimescaleDB
-- Redis
-- S3-compatible object storage
-- Gorilla WebSocket
-- Tailwind CSS
+```powershell
+cd apps/web
+Copy-Item .env.example .env.local
+pnpm install
+pnpm dev
+```
 
-## Features
+Open **http://127.0.0.1:3000**. The backend health endpoint is at **http://127.0.0.1:8080/healthz**.
 
-### CLI
+> For ICMP probes on Linux, grant the binary raw socket access with `sudo setcap cap_net_raw+ep ./qnetward` or run it with the required privileges.
+
+## 🖥️ CLI
+
+Use the same probe engines directly from the command line:
 
 ```bash
 ./qnetward ping 8.8.8.8
@@ -75,66 +83,42 @@ Schema changes are numbered SQL files in `internal/store/migrations`
 ./qnetward portscan --ports 22,80,443 example.com
 ```
 
-### Web UI
+## 🧭 How it fits together
 
-- Realtime results
-- Live latency chart
-- History loading
-- Port scan mode
-- Mobile-friendly layout
-- Stop button for active WebSocket runs
-
-### API
-
-- `POST /api/ping`
-- `POST /api/tcpping`
-- `POST /api/portscan`
-- `GET /api/history`
-- `POST /api/export/history`
-- `GET /healthz`
-- `GET /ws`
-
-## Quick Start
-
-### Windows
-
-```powershell
-go mod tidy
-go build -o qnetward.exe .\cmd\qnetward
-.\qnetward.exe serve --listen 127.0.0.1:8080 --db-dsn "postgres://qnetward:change-me@127.0.0.1:5432/qnetward?sslmode=disable" --timescale
+```mermaid
+flowchart LR
+    U[Browser or CLI] --> W[Next.js dashboard]
+    W -->|HTTP / WebSocket| A[Go API]
+    A --> E[Probe engines]
+    A --> DB[(PostgreSQL / TimescaleDB)]
+    A --> R[(Redis cache)]
+    A --> S[(S3-compatible storage)]
 ```
 
-Open:
+| Area | Responsibility |
+| --- | --- |
+| `apps/web/` | Next.js dashboard and API proxy routes |
+| `cmd/qnetward/` | CLI entry point, server startup, dependency wiring |
+| `internal/api/` | HTTP and WebSocket endpoints |
+| `internal/engine/` | Network probe engines, independent of HTTP and storage |
+| `internal/probe/` | Shared probe validation, limits, and report types |
+| `internal/store/` | PostgreSQL/TimescaleDB persistence and migrations |
+| `internal/platform/` | Redis cache, S3-compatible object storage, email adapter |
+| `deploy/` | Production Docker Compose and proxy configuration |
 
-```text
-backend: http://127.0.0.1:8080
-frontend: http://127.0.0.1:3000
-```
+## 🌐 API at a glance
 
-### Linux
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/ping` | ICMP probe |
+| `POST` | `/api/tcpping` | TCP connectivity and latency probe |
+| `POST` | `/api/portscan` | TCP port scan |
+| `GET` | `/api/history` | Query saved probe results |
+| `POST` | `/api/export/history` | Download or upload a history export |
+| `GET` | `/healthz` | Service and dependency health |
+| `GET` | `/ws` | Realtime probe stream |
 
-```bash
-go mod tidy
-go build -o qnetward ./cmd/qnetward
-./qnetward serve --listen 127.0.0.1:8080 --db-dsn "postgres://qnetward:change-me@127.0.0.1:5432/qnetward?sslmode=disable" --timescale
-```
-
-Open:
-
-```text
-backend: http://127.0.0.1:8080
-frontend: http://127.0.0.1:3000
-```
-
-For ICMP on Linux, root or `CAP_NET_RAW` may be required:
-
-```bash
-sudo setcap cap_net_raw+ep ./qnetward
-```
-
-## Example API Requests
-
-### TCP Ping
+Example TCP ping request:
 
 ```bash
 curl -X POST http://127.0.0.1:8080/api/tcpping \
@@ -142,149 +126,74 @@ curl -X POST http://127.0.0.1:8080/api/tcpping \
   -d '{"host":"example.com","port":443,"count":4,"interval_ms":1000,"timeout_ms":2000}'
 ```
 
-### History
+## 🐳 Production deployment
 
-```bash
-curl "http://127.0.0.1:8080/api/history?type=tcpping&host=example.com&port=443&limit=20"
-```
-
-### Export History
-
-Download JSON:
-
-```bash
-curl -X POST http://127.0.0.1:8080/api/export/history \
-  -H "Content-Type: application/json" \
-  -d '{"type":"tcpping","host":"example.com","port":443,"limit":50,"format":"json"}'
-```
-
-Upload CSV to configured S3-compatible object storage:
-
-```bash
-curl -X POST http://127.0.0.1:8080/api/export/history \
-  -H "Content-Type: application/json" \
-  -d '{"type":"tcpping","host":"example.com","port":443,"limit":50,"format":"csv","destination":"s3"}'
-```
-
-## Production Stack
-
-Recommended production stack:
-
-- PostgreSQL + TimescaleDB
-- Redis
-- S3-compatible object storage
-
-Environment variables:
-
-```bash
-QNETWARD_DB_DSN=postgres://qnetward:change-me@timescaledb:5432/qnetward?sslmode=disable
-QNETWARD_TIMESCALE=true
-QNETWARD_REDIS_ADDR=redis:6379
-QNETWARD_S3_ENDPOINT=minio:9000
-QNETWARD_S3_ACCESS_KEY=minioadmin
-QNETWARD_S3_SECRET_KEY=change-me
-QNETWARD_S3_BUCKET=qnetward-artifacts
-QNETWARD_S3_SSL=false
-QNETWARD_DEMO_ENABLED=false
-QNETWARD_ADMIN_EMAILS=admin@example.com
-QNETWARD_ALLOW_PRIVATE_TARGETS=false   # true only for self-hosted LAN monitoring
-```
-
-Start the production stack:
+The production Compose stack includes the web app, Go API, PostgreSQL/TimescaleDB, Redis, and S3-compatible object storage.
 
 ```bash
 cp .env.example .env
+# Set secure credentials and deployment-specific values in .env
 docker compose -f deploy/docker-compose.production.yml --env-file .env up --build
 ```
 
-Health check response now includes dependency status for:
+Common settings:
 
-- database
-- redis
-- object storage
+| Variable | Purpose |
+| --- | --- |
+| `QNETWARD_DB_DSN` | PostgreSQL connection string |
+| `QNETWARD_TIMESCALE` | Enable TimescaleDB integration |
+| `QNETWARD_REDIS_ADDR` | Redis address |
+| `QNETWARD_S3_ENDPOINT` | S3-compatible endpoint |
+| `QNETWARD_S3_ACCESS_KEY` / `QNETWARD_S3_SECRET_KEY` | Object storage credentials |
+| `QNETWARD_S3_BUCKET` | Bucket for exported artifacts |
+| `QNETWARD_ADMIN_EMAILS` | Platform administrator accounts |
+| `QNETWARD_ALLOW_PRIVATE_TARGETS` | Allow private network probes for self-hosted LAN monitoring |
 
-## Contributor Demo Access
+Keep secrets out of version control. The example values are for local setup only.
 
-For temporary contributor access, enable demo mode and ask contributors to use the login page.
+## 🛡️ Probe safety
 
-Demo mode:
+The API blocks loopback, private, link-local, multicast, carrier-grade NAT, reserved, and cloud metadata targets by default. TCP probes validate resolved addresses at connection time to reduce DNS rebinding risks. For trusted, self-hosted LAN monitoring, set `QNETWARD_ALLOW_PRIVATE_TARGETS=true`; cloud metadata endpoints remain blocked. The CLI runs locally and does not apply the API target restriction.
 
-- adds a `Continue as Demo` button on `/login`
-- signs contributors into a shared temporary demo account
-- allows the full dashboard and tool routes
-- uses the real application data and behavior of that demo account
+If you expose Qnetward publicly, put a trusted reverse proxy or access control layer in front of it.
 
-## Development
-
-Common tasks are in the `Makefile` (`make help`). Architecture decisions are recorded in [`docs/adr/`](docs/adr/README.md).
-
-Build:
+## 🧰 Development
 
 ```bash
 go build -o qnetward ./cmd/qnetward
-```
-
-Run internal tests:
-
-```bash
 go test ./internal/...
-```
-
-Run vet:
-
-```bash
 go vet ./...
 ```
 
-Run the HTTP smoke test against a running local stack:
+Frontend checks, from `apps/web/`:
+
+```bash
+pnpm lint
+pnpm build
+pnpm test:e2e
+```
+
+For the HTTP smoke test, start the local stack first, then run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 -BaseUrl http://127.0.0.1:8080
 ```
 
-GitHub Actions runs on every pull request and every push to `main`:
+Architecture decisions live in [`docs/adr/`](docs/adr/README.md). The frontend setup details are in [`apps/web/README.md`](apps/web/README.md).
 
-- `go vet ./...`
-- `go test -race -p 1 ./...` against a TimescaleDB service, so Postgres-backed tests run too
-- `apps/web` `pnpm lint` and `pnpm build`
+## 🗺️ Project status
 
-Playwright E2E and the Docker smoke test are run locally (see above).
+**Available:** ICMP and TCP ping, port scans, DNS inspection, realtime streaming, history and export, alert rules, workspaces, team invitations, and admin console.
 
-## Probe Target Safety
+**Planned:** Multi-target monitoring, HTTP/HTTPS checks, and expanded DNS tooling such as DNSSEC and propagation checks.
 
-The API refuses to probe addresses that would let a user reach the server's own network:
-loopback, RFC 1918 private ranges, carrier-grade NAT, link-local, multicast, and reserved
-ranges (see `internal/platform/netguard`). TCP ping checks the address at connect time, so a
-hostname that later re-resolves to a private IP (DNS rebinding) is still rejected. Custom DNS
-resolvers are checked the same way.
+## Contributors
 
-Self-hosted installs that monitor their own LAN can set `QNETWARD_ALLOW_PRIVATE_TARGETS=true`.
-Cloud metadata endpoints such as `169.254.169.254` stay blocked either way. The CLI is not
-restricted, since it runs on the operator's own machine.
+- MOPARA PAIR AYAT
+- MONABBER EAMAN
 
-## Notes
+<div align="center">
 
-- This project is built for self-hosted use.
-- If you expose it publicly, put a trusted reverse proxy, tunnel, or access control layer in front of it.
-- Runtime artifacts such as `*.log` and `*.exe` are ignored by `.gitignore`.
-- WebSocket is the primary realtime path. HTTP is used as a fallback path.
-- Production mode is designed around PostgreSQL/TimescaleDB + Redis + S3-compatible storage.
+<sub>Built for operators who want a clearer view of their network.</sub>
 
-## Current Scope
-
-Implemented now:
-- ICMP ping
-- TCP ping
-- TCP port scan
-- Realtime Web UI
-- Realtime result streaming
-- History storage
-- Stop/cancel for active live runs
-- DNS lookup / inspector
-- Alert rules with email delivery
-- Workspaces, team invitations, and platform admin console
-
-Planned next:
-- Multi-target monitoring
-- HTTP/HTTPS checks
-- Full DNS toolkit (DNSSEC, propagation)
+</div>

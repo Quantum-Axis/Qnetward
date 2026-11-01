@@ -24,27 +24,28 @@ export function AlternateSignIn({ mode }: { mode: "signin" | "signup" }) {
 
   return (
     <div className="grid gap-3">
-      <button
-        type="button"
-        className="auth-provider-button relative"
-        onClick={() => setNotice(`${verb} with Google is coming soon. Use your email for now.`)}
-      >
-        <GoogleMark />
-        <span>{verb} with Google</span>
-        <span className="auth-soon-tag">Soon</span>
-      </button>
-
-      <div className="auth-divider">Or</div>
-
-      <button
-        type="button"
-        className="auth-provider-button relative"
-        onClick={() => setNotice("Passkeys are coming soon. Use your email for now.")}
-      >
-        <Fingerprint className="h-4 w-4 text-[var(--lp-muted)]" aria-hidden="true" />
-        <span>{mode === "signin" ? "Sign in with a passkey" : "Use a passkey"}</span>
-        <span className="auth-soon-tag">Soon</span>
-      </button>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          className="auth-provider-button"
+          aria-label={`${verb} with Google (coming soon)`}
+          onClick={() => setNotice(`${verb} with Google is coming soon. Use your email for now.`)}
+        >
+          <GoogleMark />
+          <span>Google</span>
+          <span className="auth-soon-tag">Soon</span>
+        </button>
+        <button
+          type="button"
+          className="auth-provider-button"
+          aria-label={`${mode === "signin" ? "Sign in with a passkey" : "Use a passkey"} (coming soon)`}
+          onClick={() => setNotice("Passkeys are coming soon. Use your email for now.")}
+        >
+          <Fingerprint className="h-4 w-4 text-[var(--lp-muted)]" aria-hidden="true" />
+          <span>Passkey</span>
+          <span className="auth-soon-tag">Soon</span>
+        </button>
+      </div>
 
       {notice ? (
         <p role="status" className="rounded-lg border border-[var(--lp-border)] bg-white/[0.03] px-3 py-2 text-center text-[12px] text-[var(--lp-muted)]">

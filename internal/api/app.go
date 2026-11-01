@@ -102,6 +102,7 @@ func (srv *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/auth/resend-verification", srv.handleAuthResendVerification)
 	mux.HandleFunc("/api/auth/forgot-password", srv.handleAuthForgotPassword)
 	mux.HandleFunc("/api/auth/reset-password", srv.handleAuthResetPassword)
+	mux.HandleFunc("/api/account/profile", srv.handleAccountProfile)
 	mux.HandleFunc("/api/workspaces", srv.handleWorkspaces)
 	mux.HandleFunc("/api/workspace/team", srv.handleWorkspaceTeam)
 	mux.HandleFunc("/api/workspace/invitations", srv.handleWorkspaceInvitations)

@@ -8,8 +8,8 @@ type View = { now: number; yMin: number; yMax: number };
 
 const W = 800;
 
-/** Catmull-Rom to cubic Bézier, with control points clamped so the curve never overshoots. */
-function smoothPath(pts: { x: number; y: number }[]) {
+/** Catmull-Rom to cubic Bézier, with control points clamped so the curve never overshoots in x or y. */
+export function smoothPath(pts: { x: number; y: number }[]) {
   if (pts.length === 0) return "";
   if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`;
   let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
@@ -20,9 +20,10 @@ function smoothPath(pts: { x: number; y: number }[]) {
     const p3 = pts[i + 2] ?? p2;
     const lo = Math.min(p1.y, p2.y);
     const hi = Math.max(p1.y, p2.y);
-    const c1x = p1.x + (p2.x - p0.x) / 6;
+    // Keep control points between their two anchors so uneven spacing never loops the curve backwards.
+    const c1x = Math.min(p2.x, Math.max(p1.x, p1.x + (p2.x - p0.x) / 6));
     const c1y = Math.min(hi, Math.max(lo, p1.y + (p2.y - p0.y) / 6));
-    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2x = Math.min(p2.x, Math.max(p1.x, p2.x - (p3.x - p1.x) / 6));
     const c2y = Math.min(hi, Math.max(lo, p2.y - (p3.y - p1.y) / 6));
     d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
   }

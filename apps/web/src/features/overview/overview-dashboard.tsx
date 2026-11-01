@@ -19,6 +19,7 @@ import {
 import type { HistoryPoint, RuntimeHealthResponse } from "@/lib/types";
 import type { OverviewTargetSnapshot } from "@/features/overview/overview-helpers";
 import { cn } from "@/lib/utils";
+import { LivePill, smoothPath, usePrefersReducedMotion } from "@/components/charts/live-signal-chart";
 
 const SERIES_COLORS = ["#ff3d7f", "#22c3d6", "#a78bfa", "#4ade80"];
 
@@ -236,6 +237,8 @@ type Series = { id: string; label: string; color: string; points: { ts: number; 
 export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTargetSnapshot[]; historyMap: Map<string, HistoryPoint[]> }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverTs, setHoverTs] = useState<number | null>(null);
+  const now = useNow(2_000);
+  const reducedMotion = usePrefersReducedMotion();
 
   const series = useMemo<Series[]>(() => {
     return targets
@@ -304,14 +307,25 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => yMin + (yMax - yMin) * f);
 
   // Break a line where probes stopped for a while, instead of drawing a straight bridge across the gap.
+  const breakTimes = axis.breaks.map((k) => axis.times[k]);
   const linePath = (points: Series["points"]) => {
     const deltas = points.slice(1).map((p, idx) => p.ts - points[idx].ts).sort((a, b) => a - b);
     const typical = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
     const gap = Math.max(60_000, typical * 10);
-    return points
-      .map((p, idx) => `${idx === 0 || p.ts - points[idx - 1].ts > gap ? "M" : "L"}${x(p.ts).toFixed(1)},${y(p.rtt).toFixed(1)}`)
-      .join(" ");
+    const runs: Series["points"][] = [];
+    points.forEach((p, idx) => {
+      const prev = points[idx - 1];
+      const crossesBreak = prev && breakTimes.some((t) => t > prev.ts && t <= p.ts);
+      if (idx === 0 || p.ts - prev.ts > gap || crossesBreak) runs.push([]);
+      runs[runs.length - 1].push(p);
+    });
+    return runs.map((run) => smoothPath(run.map((p) => ({ x: x(p.ts), y: y(p.rtt) })))).join(" ");
   };
+
+  // A series counts as live while samples keep arriving; its newest point gets a pulsing head.
+  const LIVE_WINDOW = 20_000;
+  const lastSampleAt = all.length ? Math.max(...all.map((p) => p.ts)) : null;
+  const anyLive = lastSampleAt !== null && now - lastSampleAt < LIVE_WINDOW;
 
   const nearest = (s: Series, ts: number) => s.points.reduce((best, p) => (Math.abs(p.ts - ts) < Math.abs(best.ts - ts) ? p : best), s.points[0]);
 
@@ -337,7 +351,9 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
         <h2 id="rt-title" className="text-[14px] font-medium">
           Response time
         </h2>
-        <span className="ml-auto text-[12px] text-[var(--lp-subtle)]">Last 24 samples per target</span>
+        <span className="ml-auto flex items-center gap-3">
+          {anyLive ? <LivePill live updatedAt={lastSampleAt} /> : <span className="text-[12px] text-[var(--lp-subtle)]">Last 24 samples per target</span>}
+        </span>
       </div>
       {series.length ? (
         <>
@@ -391,6 +407,18 @@ export function ResponseTimeChart({ targets, historyMap }: { targets: OverviewTa
                   opacity={hoverTs === null ? 1 : 0.9}
                 />
               ))}
+              {series.map((s) => {
+                const head = s.points[s.points.length - 1];
+                const live = now - head.ts < LIVE_WINDOW;
+                const hx = x(head.ts);
+                const hy = y(head.rtt);
+                return (
+                  <g key={`head-${s.id}`} pointerEvents="none">
+                    {live && !reducedMotion ? <circle cx={hx} cy={hy} r="9" fill={s.color} opacity="0.35" className="lp-map-ping" /> : null}
+                    <circle cx={hx} cy={hy} r={live ? 3.5 : 2.5} fill={live ? s.color : "#1b1b1f"} stroke={s.color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                  </g>
+                );
+              })}
               {hoverTs !== null ? (
                 <>
                   <line x1={x(hoverTs)} x2={x(hoverTs)} y1={PAD.t} y2={H - PAD.b} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />

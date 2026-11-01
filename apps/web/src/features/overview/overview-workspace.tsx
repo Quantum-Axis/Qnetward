@@ -113,7 +113,7 @@ export function OverviewWorkspace() {
   const recentTargetsQuery = useQuery({
     queryKey: ["recent-history-targets"],
     queryFn: () => apiRequest<RecentHistoryTarget[]>("/api/history/recent-targets?limit=12"),
-    refetchInterval: 20_000,
+    refetchInterval: 5_000,
     enabled: sessionQuery.data?.authenticated === true && !isDemo,
   });
 
@@ -145,7 +145,7 @@ export function OverviewWorkspace() {
       return {
         queryKey: ["overview-history", rule.protocol, rule.target, rule.port ?? 0],
         queryFn: () => apiRequest<HistoryPoint[]>(`/api/history?${params.toString()}`),
-        refetchInterval: 20_000,
+        refetchInterval: 5_000,
       };
     }),
   });
@@ -169,6 +169,21 @@ export function OverviewWorkspace() {
     });
     return map;
   }, [liveSamples]);
+
+  // Samples streamed from a tool tab in this browser land on the chart before the next history poll.
+  const chartHistoryMap = useMemo(() => {
+    if (!liveSamples.length) return historyMap;
+    const map = new Map(historyMap);
+    liveSamples.forEach((sample) => {
+      const key = `${sample.protocol}:${sample.target}:${sample.port ?? 0}`;
+      const points = map.get(key);
+      if (!points) return;
+      const lastTs = points.reduce((max, p) => Math.max(max, p.ts), 0);
+      if (sample.ts <= lastTs) return;
+      map.set(key, [...points, { ts: sample.ts, rtt_ms: sample.rttMs ?? undefined, error: sample.error }].slice(-48));
+    });
+    return map;
+  }, [historyMap, liveSamples]);
 
   const targetSnapshots = useMemo(
     () =>
@@ -206,7 +221,7 @@ export function OverviewWorkspace() {
       />
       <StatCards targets={targetSnapshots} historyMap={historyMap} alertRuleCount={alertRuleCount} firingCount={firingCount} />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] [&>*]:min-w-0">
-        <ResponseTimeChart targets={targetSnapshots} historyMap={historyMap} />
+        <ResponseTimeChart targets={targetSnapshots} historyMap={chartHistoryMap} />
         <TargetHealthCard targets={targetSnapshots} />
       </div>
       <TargetsSummary targets={targetSnapshots} />

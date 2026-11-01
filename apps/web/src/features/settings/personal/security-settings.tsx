@@ -10,6 +10,7 @@ import { formatDate, Notice, SaveState, SettingsCard, SettingsPageTitle } from "
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 72;
+const SESSIONS_PREVIEW = 6;
 
 function describeAgent(ua: string) {
   if (!ua) return { label: "Unknown browser", mobile: false };
@@ -140,8 +141,12 @@ function SessionsCard({ disabled }: { disabled: boolean }) {
       router.replace("/login");
     },
   });
+  const [showAll, setShowAll] = useState(false);
   const sessions = sessionsQuery.data?.sessions ?? [];
   const others = sessions.filter((s) => !s.current).length;
+  // The current session first, then newest; long lists stay short until asked.
+  const ordered = [...sessions].sort((a, b) => Number(b.current) - Number(a.current) || b.created_at.localeCompare(a.created_at));
+  const visible = showAll ? ordered : ordered.slice(0, SESSIONS_PREVIEW);
 
   return (
     <SettingsCard
@@ -172,7 +177,7 @@ function SessionsCard({ disabled }: { disabled: boolean }) {
         <p className="text-[13px] text-[var(--lp-subtle)]">Loading sessions…</p>
       ) : (
         <ul className="divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
-          {sessions.map((s) => {
+          {visible.map((s) => {
             const agent = describeAgent(s.user_agent);
             const Icon = agent.mobile ? Smartphone : Monitor;
             return (
@@ -203,6 +208,13 @@ function SessionsCard({ disabled }: { disabled: boolean }) {
               </li>
             );
           })}
+          {ordered.length > SESSIONS_PREVIEW ? (
+            <li className="px-4 py-2">
+              <button type="button" className="text-[13px] text-[var(--lp-muted)] hover:text-[var(--lp-text)]" onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show fewer" : `Show all ${ordered.length} sessions`}
+              </button>
+            </li>
+          ) : null}
         </ul>
       )}
     </SettingsCard>

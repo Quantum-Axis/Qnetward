@@ -11,26 +11,26 @@ test("admin user can access admin routes and demo user is gated out", async ({ b
 
   await loginWithCredentials(page, adminUser);
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "Admin Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Admin overview" })).toBeVisible();
 
   await page.goto("/admin/users");
-  await expect(page.getByRole("heading", { name: "Admin Users" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Platform Users" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Users", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All users" })).toBeVisible();
 
   await page.goto("/admin/workspaces");
-  await expect(page.getByRole("heading", { name: "Admin Workspaces" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Workspace Inventory" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Workspaces", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All workspaces" })).toBeVisible();
 
   await page.goto("/admin/system");
-  await expect(page.getByRole("heading", { name: "Admin System" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Dependency Health" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "System", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dependencies" })).toBeVisible();
 
   const demoContext = await browser.newContext({ baseURL });
   const demoPage = await demoContext.newPage();
   await loginAsDemoUser(demoPage);
   await demoPage.goto("/admin");
   await expect(demoPage).toHaveURL(/\/overview$/);
-  await expect(demoPage.getByText("Network Operations Overview")).toBeVisible();
+  await expect(demoPage.getByRole("heading", { name: /welcome back/i })).toBeVisible();
   await demoContext.close();
 });
 

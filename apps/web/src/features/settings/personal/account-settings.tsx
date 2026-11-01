@@ -155,10 +155,9 @@ export function AccountSettings() {
         title="Verification"
         description="A verified address is required for alert emails and invitations to reach you."
         hint={
-          <SaveState
-            saved={resend.isSuccess ? resend.data.message || "Code sent." : null}
-            error={resend.isError ? (resend.error as ApiError).message : null}
-          />
+          resend.isSuccess || resend.isError ? (
+            <SaveState saved={resend.isSuccess ? resend.data.message || "Code sent." : null} error={resend.isError ? (resend.error as ApiError).message : null} />
+          ) : undefined
         }
         action={
           !verified && !isDemo && user?.email ? (

@@ -1,139 +1,119 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, ApiError } from "@/lib/api";
-import { AdminOverviewResponse, AdminUsersResponse } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import type { AdminOverviewResponse, AdminUsersResponse } from "@/lib/types";
+import { PageHeader, Panel, StatStrip } from "@/components/tools/probe-ui";
+import { Avatar } from "@/components/settings/settings-ui";
+import { HeadRow, Pill, SearchBox, Segmented, TableShell, Td, Th, timeAgo } from "@/features/admin/admin-ui";
 
-function verificationTone(verifiedAt?: string | null) {
-  return verifiedAt ? "dashboard-chip dashboard-chip-success" : "dashboard-chip dashboard-chip-muted";
-}
-
-function platformRoleTone(role: "admin" | "user") {
-  return role === "admin" ? "dashboard-chip dashboard-chip-warning" : "dashboard-chip dashboard-chip-muted";
-}
+type Filter = "all" | "admins" | "unverified" | "active";
 
 export function AdminUsersWorkspace() {
-  const usersQuery = useQuery({
-    queryKey: ["admin-users"],
-    queryFn: () => apiRequest<AdminUsersResponse>("/api/admin/users?limit=100"),
-  });
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const usersQuery = useQuery({ queryKey: ["admin-users"], queryFn: () => apiRequest<AdminUsersResponse>("/api/admin/users?limit=100") });
+  const overviewQuery = useQuery({ queryKey: ["admin-overview"], queryFn: () => apiRequest<AdminOverviewResponse>("/api/admin/overview") });
 
-  const overviewQuery = useQuery({
-    queryKey: ["admin-overview"],
-    queryFn: () => apiRequest<AdminOverviewResponse>("/api/admin/overview"),
-  });
-
-  const users = usersQuery.data?.users ?? [];
-  const stats = {
-    platformAdmins: users.filter((user) => user.platform_role === "admin").length,
-    activeSessions: users.reduce((total, user) => total + user.active_session_count, 0),
+  const users = useMemo(() => usersQuery.data?.users ?? [], [usersQuery.data]);
+  const counts = {
+    all: users.length,
+    admins: users.filter((u) => u.platform_role === "admin").length,
+    unverified: users.filter((u) => !u.email_verified_at).length,
+    active: users.filter((u) => u.active_session_count > 0).length,
   };
+  const q = query.trim().toLowerCase();
+  const rows = users
+    .filter((u) => (filter === "admins" ? u.platform_role === "admin" : filter === "unverified" ? !u.email_verified_at : filter === "active" ? u.active_session_count > 0 : true))
+    .filter((u) => !q || `${u.name} ${u.email}`.toLowerCase().includes(q))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const o = overviewQuery.data;
 
   return (
-    <div className="grid gap-6">
-      <section className="dashboard-hero-panel rounded-[1.7rem] p-5 md:p-6">
-        <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Platform Admin</p>
-        <h2 className="mt-1.5 font-space text-[1.9rem] font-bold leading-tight text-white">Admin Users</h2>
-        <p className="mt-1 max-w-3xl text-sm text-slate-400">
-          Global user directory across the SaaS platform, including verification state, workspace participation, and active session posture.
-        </p>
-      </section>
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <PageHeader title="Users" description="Every account on this deployment, newest first. Showing up to 100." />
 
-      {usersQuery.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(usersQuery.error as ApiError).message || "Unable to load admin users."}
-        </div>
-      ) : null}
+      <StatStrip
+        items={[
+          { label: "Accounts", value: o ? String(o.user_count) : String(users.length || "—") },
+          { label: "Verified", value: o ? String(o.verified_user_count) : "—" },
+          { label: "Unverified", value: String(counts.unverified), tone: counts.unverified ? "warn" : undefined },
+          { label: "Signed in now", value: String(counts.active) },
+          { label: "Platform admins", value: String(counts.admins) },
+          { label: "Active sessions", value: o ? String(o.session_count) : "—" },
+        ]}
+      />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Users</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{overviewQuery.data?.user_count ?? users.length}</p>
-          <p className="mt-2 text-sm text-slate-400">Global user accounts</p>
-        </Card>
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Verified</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{overviewQuery.data?.verified_user_count ?? "-"}</p>
-          <p className="mt-2 text-sm text-slate-400">Verified identities</p>
-        </Card>
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Platform Admins</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{stats.platformAdmins}</p>
-          <p className="mt-2 text-sm text-slate-400">Accounts with admin RBAC</p>
-        </Card>
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Active Sessions</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{stats.activeSessions}</p>
-          <p className="mt-2 text-sm text-slate-400">Authenticated session volume</p>
-        </Card>
-      </section>
-
-      <div className="dashboard-table dashboard-table-shell rounded-[1.5rem]">
-        <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-4 md:px-5">
-          <div>
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Directory</p>
-            <h3 className="mt-1 text-lg font-semibold text-white">Platform Users</h3>
+      <Panel
+        title="All users"
+        bodyClassName="p-0"
+        aside={
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              label="Filter users"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { id: "all", label: "All", count: counts.all },
+                { id: "active", label: "Signed in", count: counts.active },
+                { id: "unverified", label: "Unverified", count: counts.unverified },
+                { id: "admins", label: "Admins", count: counts.admins },
+              ]}
+            />
+            <SearchBox value={query} onChange={setQuery} placeholder="Search name or email" />
           </div>
-          <span className="dashboard-subtle-chip">{users.length} loaded</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Platform Role</th>
-                <th>Verification</th>
-                <th>Workspaces</th>
-                <th>Active Sessions</th>
-                <th>Created</th>
-              </tr>
-            </thead>
+        }
+      >
+        {usersQuery.isError ? (
+          <p className="px-4 pb-4 text-[13px] text-[#ff8fb3]">{(usersQuery.error as ApiError).message || "Couldn't load users."}</p>
+        ) : usersQuery.isLoading ? (
+          <p className="px-4 pb-4 text-[13px] text-[var(--lp-subtle)]">Loading users…</p>
+        ) : rows.length === 0 ? (
+          <p className="px-4 pb-4 text-[13px] text-[var(--lp-subtle)]">No users match.</p>
+        ) : (
+          <TableShell minWidth={820}>
+            <HeadRow>
+              <Th>User</Th>
+              <Th>Status</Th>
+              <Th align="right">Workspaces</Th>
+              <Th align="right">Sessions</Th>
+              <Th align="right">Joined</Th>
+            </HeadRow>
             <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-sm text-slate-400">
-                    No users found yet.
-                  </td>
-                </tr>
-              ) : (
-                users.map((user) => (
-                  <tr key={user.id}>
-                    <td data-label="User">
+              {rows.map((u) => (
+                <tr key={u.id} className="border-b border-[var(--lp-border)] last:border-0 hover:bg-white/[0.015]">
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={u.name} email={u.email} size={28} />
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-                        <p className="truncate text-xs text-slate-400">{user.email}</p>
+                        <p className="truncate">{u.name || "—"}</p>
+                        <p className="lp-mono truncate text-[12px] text-[var(--lp-subtle)]">{u.email}</p>
                       </div>
-                    </td>
-                    <td data-label="Platform Role">
-                      <span className={platformRoleTone(user.platform_role)}>{user.platform_role}</span>
-                    </td>
-                    <td data-label="Verification">
-                      <div className="flex flex-col gap-1">
-                        <span className={verificationTone(user.email_verified_at)}>
-                          {user.email_verified_at ? "Verified" : "Pending"}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {user.email_verified_at ? formatDateTime(user.email_verified_at) : "Awaiting email confirmation"}
-                        </span>
-                      </div>
-                    </td>
-                    <td data-label="Workspaces">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium text-white">{user.workspace_count}</span>
-                        <span className="text-xs text-slate-500">{user.owned_workspace_count} owned</span>
-                      </div>
-                    </td>
-                    <td data-label="Active Sessions">{user.active_session_count}</td>
-                    <td data-label="Created">{formatDateTime(user.created_at)}</td>
-                  </tr>
-                ))
-              )}
+                    </div>
+                  </Td>
+                  <Td>
+                    <div className="flex flex-wrap gap-1">
+                      {u.platform_role === "admin" ? <Pill tone="accent">Admin</Pill> : null}
+                      {u.email_verified_at ? <Pill tone="good">Verified</Pill> : <Pill tone="warn">Unverified</Pill>}
+                    </div>
+                  </Td>
+                  <Td align="right" className="lp-mono">
+                    {u.workspace_count}
+                    {u.owned_workspace_count ? <span className="text-[var(--lp-subtle)]"> · owns {u.owned_workspace_count}</span> : null}
+                  </Td>
+                  <Td align="right" className="lp-mono">
+                    {u.active_session_count ? u.active_session_count : <span className="text-[var(--lp-subtle)]">0</span>}
+                  </Td>
+                  <Td align="right" className="text-[var(--lp-subtle)]">
+                    <span title={new Date(u.created_at).toLocaleString()}>{timeAgo(u.created_at)}</span>
+                  </Td>
+                </tr>
+              ))}
             </tbody>
-          </table>
-        </div>
-      </div>
+          </TableShell>
+        )}
+      </Panel>
     </div>
   );
 }

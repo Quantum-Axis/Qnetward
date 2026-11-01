@@ -1,140 +1,112 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Database, HardDrive, Mail, RefreshCw, Zap } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
-import { AdminSystemResponse, RuntimeHealthResponse } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import type { AdminSystemResponse, RuntimeHealthDependency, RuntimeHealthResponse } from "@/lib/types";
+import { cn, formatDateTime } from "@/lib/utils";
+import { DefinitionList, PageHeader, Panel, RunStatus } from "@/components/tools/probe-ui";
+import { Pill } from "@/features/admin/admin-ui";
 
-function dependencyTone(healthy: boolean, enabled: boolean) {
-  if (!enabled) {
-    return "dashboard-chip dashboard-chip-muted";
-  }
-  return healthy ? "dashboard-chip dashboard-chip-success" : "dashboard-chip dashboard-chip-danger";
+type DepRow = { key: string; name: string; purpose: string; icon: typeof Database; enabled: boolean; dep?: RuntimeHealthDependency; required?: boolean };
+
+function depState(row: DepRow) {
+  if (!row.enabled) return { label: row.required ? "Missing" : "Not configured", tone: row.required ? ("bad" as const) : ("muted" as const) };
+  if (!row.dep) return { label: "Configured", tone: "good" as const };
+  return row.dep.healthy ? { label: "Healthy", tone: "good" as const } : { label: "Unreachable", tone: "bad" as const };
 }
 
 export function AdminSystemWorkspace() {
-  const systemQuery = useQuery({
-    queryKey: ["admin-system"],
-    queryFn: () => apiRequest<AdminSystemResponse>("/api/admin/system"),
-  });
-
-  const healthQuery = useQuery({
-    queryKey: ["runtime-health"],
-    queryFn: () => apiRequest<RuntimeHealthResponse>("/api/healthz"),
-  });
-
+  const queryClient = useQueryClient();
+  const systemQuery = useQuery({ queryKey: ["admin-system"], queryFn: () => apiRequest<AdminSystemResponse>("/api/admin/system") });
+  const healthQuery = useQuery({ queryKey: ["runtime-health"], queryFn: () => apiRequest<RuntimeHealthResponse>("/api/healthz"), refetchInterval: 15_000 });
   const system = systemQuery.data;
   const health = healthQuery.data;
 
+  const rows: DepRow[] = [
+    { key: "db", name: "PostgreSQL", purpose: "Accounts, workspaces, alert rules, and probe history", icon: Database, enabled: health?.database.enabled ?? true, dep: health?.database, required: true },
+    { key: "redis", name: "Redis", purpose: "Caches history queries", icon: Zap, enabled: health?.redis.enabled ?? system?.runtime.redis_enabled ?? false, dep: health?.redis },
+    { key: "s3", name: "Object storage", purpose: "History exports and avatar images", icon: HardDrive, enabled: health?.object_storage.enabled ?? system?.runtime.object_storage_enabled ?? false, dep: health?.object_storage },
+    { key: "mail", name: "Email delivery", purpose: "Verification, password reset, invitations, and alerts", icon: Mail, enabled: system?.runtime.email_delivery_enabled ?? false },
+  ];
+  const failing = rows.filter((r) => depState(r).tone === "bad").length;
+
   return (
-    <div className="grid gap-6">
-      <section className="dashboard-hero-panel rounded-[1.7rem] p-5 md:p-6">
-        <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Platform Admin</p>
-        <h2 className="mt-1.5 font-space text-[1.9rem] font-bold leading-tight text-white">Admin System</h2>
-        <p className="mt-1 max-w-3xl text-sm text-slate-400">
-          Runtime dependency posture, feature flags, and platform-wide operational counts for the current SaaS control plane.
-        </p>
-      </section>
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <PageHeader
+        title="System"
+        description="The services this deployment depends on, and how it's configured. Health refreshes every 15 seconds."
+        status={<RunStatus tone={!health ? "idle" : failing ? "error" : "live"} label={!health ? "Checking" : failing ? `${failing} need attention` : "Operational"} />}
+      />
 
       {systemQuery.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(systemQuery.error as ApiError).message || "Unable to load admin system context."}
-        </div>
+        <p className="rounded-lg border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2.5 text-[13px] text-[#ff8fb3]">
+          {(systemQuery.error as ApiError).message || "Couldn't load system details."}
+        </p>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Users</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{system?.overview.user_count ?? "-"}</p>
-          <p className="mt-2 text-sm text-slate-400">Accounts across the platform</p>
-        </Card>
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Workspaces</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{system?.overview.workspace_count ?? "-"}</p>
-          <p className="mt-2 text-sm text-slate-400">Provisioned SaaS tenants</p>
-        </Card>
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Active Sessions</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{system?.overview.session_count ?? "-"}</p>
-          <p className="mt-2 text-sm text-slate-400">Authenticated session count</p>
-        </Card>
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Pending Invitations</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{system?.overview.pending_invitation_count ?? "-"}</p>
-          <p className="mt-2 text-sm text-slate-400">Open join invitations</p>
-        </Card>
-      </section>
+      <Panel
+        title="Dependencies"
+        bodyClassName="p-0"
+        aside={
+          <button
+            type="button"
+            aria-label="Refresh health"
+            className="console-btn console-btn-secondary h-8 w-8 px-0"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["runtime-health"] })}
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", healthQuery.isFetching && "animate-spin")} />
+          </button>
+        }
+      >
+        <ul className="divide-y divide-[var(--lp-border)] border-t border-[var(--lp-border)]">
+          {rows.map((row) => {
+            const state = depState(row);
+            return (
+              <li key={row.key} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[var(--lp-border-strong)] bg-white/[0.03]">
+                  <row.icon className="h-4 w-4 text-[var(--lp-muted)]" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 text-[13px]">
+                    {row.name}
+                    {row.dep?.driver ? <span className="lp-mono text-[11px] text-[var(--lp-subtle)]">{row.dep.driver}</span> : null}
+                  </p>
+                  <p className="text-[12px] text-[var(--lp-subtle)]">{row.dep?.error ? <span className="text-[#ff8fb3]">{row.dep.error}</span> : row.purpose}</p>
+                </div>
+                <Pill tone={state.tone}>{state.label}</Pill>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="border-t border-[var(--lp-border)] px-4 py-2.5 text-[12px] text-[var(--lp-subtle)]">
+          {health?.time ? `Last checked ${formatDateTime(health.time)}` : "Waiting for the first health check."}
+        </p>
+      </Panel>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <Card className="rounded-[1.5rem]">
-          <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Runtime</p>
-          <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Dependency Health</h3>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Database</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className={dependencyTone(Boolean(health?.database.healthy), Boolean(health?.database.enabled))}>
-                  {health?.database.enabled ? (health?.database.healthy ? "Healthy" : "Unhealthy") : "Disabled"}
-                </span>
-                <span className="text-sm text-slate-400">{system?.runtime.database_driver ?? health?.database.driver ?? "-"}</span>
-              </div>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Redis</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className={dependencyTone(Boolean(health?.redis.healthy), Boolean(health?.redis.enabled))}>
-                  {health?.redis.enabled ? (health?.redis.healthy ? "Healthy" : "Unhealthy") : "Disabled"}
-                </span>
-              </div>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Object Storage</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className={dependencyTone(Boolean(health?.object_storage.healthy), Boolean(health?.object_storage.enabled))}>
-                  {health?.object_storage.enabled ? (health?.object_storage.healthy ? "Healthy" : "Unhealthy") : "Disabled"}
-                </span>
-              </div>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Email Delivery</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className={dependencyTone(system?.runtime.email_delivery_enabled ?? false, true)}>
-                  {system?.runtime.email_delivery_enabled ? "Enabled" : "Disabled"}
-                </span>
-              </div>
-            </div>
-          </div>
-          <p className="mt-4 text-sm text-slate-400">
-            {health?.time ? `Latest runtime probe: ${formatDateTime(health.time)}` : "Waiting for runtime health payload."}
-          </p>
-        </Card>
-
-        <div className="grid gap-6">
-          <Card className="rounded-[1.5rem]">
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Feature Flags</p>
-            <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Platform Controls</h3>
-            <div className="mt-5 grid gap-3">
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Demo Access</p>
-                <p className="mt-2 text-lg font-semibold text-white">{system?.features.demo_enabled ? "Enabled" : "Disabled"}</p>
-              </div>
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Session TTL</p>
-                <p className="mt-2 text-lg font-semibold text-white">{system?.features.session_ttl_hours ?? "-"} hours</p>
-              </div>
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Configured Admins</p>
-                <p className="mt-2 text-lg font-semibold text-white">{system?.features.configured_admins ?? "-"}</p>
-              </div>
-              <div className="dashboard-note-panel p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Public Base URL</p>
-                <p className="mt-2 break-all text-sm text-slate-300">{system?.features.public_base_url || "Not configured"}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </section>
+      <div className="grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
+        <Panel title="Configuration">
+          <DefinitionList
+            items={[
+              { label: "Public base URL", value: system?.features.public_base_url || "Not set" },
+              { label: "Session lifetime", value: system ? `${system.features.session_ttl_hours / 24} days` : "—" },
+              { label: "Demo login", value: system ? (system.features.demo_enabled ? "On" : "Off") : "—" },
+              { label: "Platform admins", value: system ? String(system.features.configured_admins) : "—" },
+              { label: "Database driver", value: system?.runtime.database_driver || "—" },
+            ]}
+          />
+        </Panel>
+        <Panel title="Platform totals">
+          <DefinitionList
+            items={[
+              { label: "Users", value: system ? `${system.overview.user_count} (${system.overview.verified_user_count} verified)` : "—" },
+              { label: "Workspaces", value: system ? String(system.overview.workspace_count) : "—" },
+              { label: "Active sessions", value: system ? String(system.overview.session_count) : "—" },
+              { label: "Invitations", value: system ? `${system.overview.invitation_count} (${system.overview.pending_invitation_count} pending)` : "—" },
+            ]}
+          />
+        </Panel>
+      </div>
     </div>
   );
 }

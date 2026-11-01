@@ -631,3 +631,23 @@
   opacity: 0.6;
   cursor: wait;
 }
+
+/* Phones: 16px text stops iOS Safari from zooming into a focused field, and
+   taller targets are easier to hit. */
+@media (max-width: 639px) {
+  .lp-auth .auth-input {
+    height: 46px;
+    font-size: 16px;
+  }
+
+  .lp-auth .auth-primary-button,
+  .lp-auth .auth-muted-button,
+  .lp-auth .auth-provider-button {
+    height: 46px;
+    font-size: 15px;
+  }
+
+  .lp-auth .auth-input-shell {
+    background: #1d1d21;
+  }
+}

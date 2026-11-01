@@ -35,19 +35,20 @@ export function AuthLayoutCard({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#18181b] px-4 py-8 sm:py-12">
+    <div className="flex min-h-[100dvh] flex-col items-center bg-[#18181b] pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] sm:justify-center sm:px-4 sm:py-12">
+      {/* On phones the card is the page: no frame, full width. From sm up it floats as a card. */}
       <div
         className={cn(
-          "grid w-full overflow-hidden rounded-2xl border border-[var(--lp-border)] bg-[#1d1d21] shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:grid-cols-2",
-          wide ? "max-w-[960px]" : "max-w-[900px]",
+          "grid w-full max-w-[480px] overflow-hidden sm:rounded-2xl sm:border sm:border-[var(--lp-border)] sm:bg-[#1d1d21] sm:shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:grid-cols-2",
+          wide ? "lg:max-w-[960px]" : "lg:max-w-[900px]",
         )}
       >
-        <div className="flex flex-col px-6 py-9 sm:px-10 sm:py-11">
-          <Link href="/" className="mb-8 flex w-fit items-center gap-2" aria-label="Qnetward home">
+        <div className="flex flex-col px-5 py-7 sm:px-10 sm:py-11">
+          <Link href="/" className="mb-7 flex w-fit items-center gap-2 sm:mb-8" aria-label="Qnetward home">
             <QnetwardMark size={22} />
             <span className="text-[15px] font-semibold tracking-tight">Qnetward</span>
           </Link>
-          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">{title}</h1>
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em] sm:text-[24px]">{title}</h1>
           <div className="mt-1.5 text-[14px] leading-relaxed text-[var(--lp-muted)]">{subtitle}</div>
           <div className={cn("mt-7 flex-1", contentClassName)}>{children}</div>
           {headerAction ? (
@@ -64,8 +65,8 @@ export function AuthLayoutCard({
         </div>
       </div>
 
-      {below ? <div className="mt-6">{below}</div> : null}
-      <p className="mt-6 text-center text-[12px] text-[var(--lp-subtle)]">
+      {below ? <div className="mt-2 sm:mt-6">{below}</div> : null}
+      <p className="mt-5 max-w-[340px] px-5 text-center text-[12px] leading-relaxed text-[var(--lp-subtle)] sm:mt-6 sm:max-w-none">
         By continuing, you agree to our{" "}
         <Link href="/terms" className="auth-footer-link text-[var(--lp-muted)]">
           Terms of Service

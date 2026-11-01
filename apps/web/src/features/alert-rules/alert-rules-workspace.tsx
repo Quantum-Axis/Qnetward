@@ -505,7 +505,7 @@ export function AlertRulesWorkspace() {
     <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
       <PageHeader
         title="Alert rules"
-        description="Latency and loss thresholds checked after every ICMP and TCP ping run. Breaches send an email, with a cooldown so one incident is one message."
+        description="Latency and loss thresholds checked after every ICMP and TCP ping, whether you run it or a monitor does. Breaches send an email, with a cooldown so one incident is one message."
         status={
           rules.length ? (
             <RunStatus tone={counts.firing ? "error" : "live"} label={counts.firing ? `${counts.firing} firing` : "All clear"} />
@@ -577,7 +577,7 @@ export function AlertRulesWorkspace() {
             <div className="mx-4 mb-4 flex flex-col items-center rounded-lg border border-dashed border-[var(--lp-border)] px-6 py-12 text-center">
               <BellRing className="h-5 w-5 text-[var(--lp-subtle)]" />
               <p className="mt-3 text-[13px] text-[var(--lp-muted)]">No alert rules yet</p>
-              <p className="mt-1 max-w-sm text-[12px] text-[var(--lp-subtle)]">Create one on the right. It is checked after every ping or TCP ping run against the same target.</p>
+              <p className="mt-1 max-w-sm text-[12px] text-[var(--lp-subtle)]">Create one on the right. It is checked after every ping or TCP ping against the same target, including scheduled monitor checks.</p>
             </div>
           ) : visibleRules.length === 0 ? (
             <p className="px-4 pb-4 text-[13px] text-[var(--lp-subtle)]">No {filter} rules.</p>

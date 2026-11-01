@@ -64,9 +64,9 @@ const steps = [
     hint: "tcpping db.internal:5432",
   },
   {
-    title: "Decide what's worth waking up for",
-    body: "Add a latency or loss threshold to any target. When it trips, the people on that workspace get an email.",
-    hint: "loss > 10% for 5 probes",
+    title: "Keep watching what matters",
+    body: "Turn a URL, port, or host into a monitor checked every minute, even with the tab closed. When it goes down, or a certificate is about to expire, you get an email.",
+    hint: "GET https://api.acme.dev/health · every 1m",
   },
 ];
 
@@ -147,8 +147,8 @@ export function LandingPage() {
         <div className="lp-container flex h-10 items-center justify-center gap-3 text-[13px]">
           <span className="lp-badge lp-badge-new">New</span>
           <span className="text-[var(--lp-muted)]">
-            <span className="hidden sm:inline">Team workspaces, invitations, and roles are live</span>
-            <span className="sm:hidden">Team workspaces are live</span>
+            <span className="hidden sm:inline">Uptime monitors for websites, APIs, and servers are live</span>
+            <span className="sm:hidden">Uptime monitors are live</span>
           </span>
           <Link href="/signup" className="text-[var(--lp-text)] underline-offset-4 hover:underline">
             Try it →
@@ -178,7 +178,7 @@ export function LandingPage() {
             <p className="mx-auto mt-5 max-w-3xl text-[18px] leading-relaxed text-[var(--lp-muted)]">
               Qnetward probes, monitors, and protects your infrastructure from one platform.{" "}
               <br className="hidden md:block" />
-              Live diagnostics today, agents, device telemetry, and attack-surface scanning next.
+              Diagnostics and uptime monitors today. Agents and attack-surface scans next.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-6 text-[15px]">

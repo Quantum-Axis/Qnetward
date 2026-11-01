@@ -2,12 +2,13 @@
 
 import Image, { type StaticImageData } from "next/image";
 import { useState } from "react";
-import { Activity, BellRing, Globe, History, Radar } from "lucide-react";
+import { Activity, BellRing, Globe, History, Radar, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import pingShot from "../../../public/landing/tool-ping.jpg";
 import portscanShot from "../../../public/landing/tool-portscan.jpg";
 import dnsShot from "../../../public/landing/tool-dns.jpg";
 import alertsShot from "../../../public/landing/tool-alerts.jpg";
+import monitorsShot from "../../../public/landing/tool-monitors.jpg";
 import historyShot from "../../../public/landing/tool-history.jpg";
 
 type Tool = {
@@ -32,6 +33,15 @@ const tools: Tool[] = [
     alt: "TCP ping to cloudflare.com on port 443, running: 13 of 13 replies, average 122 ms, and a live latency chart.",
   },
   {
+    id: "monitors",
+    name: "Uptime monitors",
+    body: "Websites, APIs, and servers checked every minute to every hour, with the tab closed. The last 30 checks at a glance, and certificate expiry for HTTPS.",
+    path: "monitors",
+    icon: Radio,
+    image: monitorsShot,
+    alt: "Monitors page: five monitors, one down with a 404 and four up, each with a strip of its last checks, 24-hour uptime, and certificate expiry.",
+  },
+  {
     id: "portscan",
     name: "Port scan",
     body: "Up to 4,096 ports per run with 256 parallel connections. A port map, service names, and handshake time for each open port.",
@@ -52,7 +62,7 @@ const tools: Tool[] = [
   {
     id: "alerts",
     name: "Alert rules",
-    body: "Latency and loss thresholds checked after every run. Cooldowns mean one bad minute sends one email, not twenty.",
+    body: "Latency and loss thresholds checked after every ping, yours or a monitor's. Cooldowns mean one bad minute sends one email, not twenty.",
     path: "alerts",
     icon: BellRing,
     image: alertsShot,

@@ -21,7 +21,7 @@ const items = [
   },
   {
     q: "How do I get alerted?",
-    a: "Set latency and packet-loss thresholds per target and get an email when a rule fires. Slack, Telegram, Discord, and webhooks are next.",
+    a: "Add a monitor and you get an email when it goes down, when it comes back, and two weeks before an HTTPS certificate expires. Alert rules add latency and loss thresholds on top. Slack, Telegram, Discord, and webhooks are next.",
   },
 ];
 

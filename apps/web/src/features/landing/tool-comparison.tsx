@@ -2,7 +2,7 @@ const rows = [
   { before: "ping and mtr in a terminal", after: "Live ICMP and TCP ping with loss streaks and jitter" },
   { before: "nmap on someone's laptop", after: "Port scans saved to history, visible to the team" },
   { before: "dig, nslookup, and a DNS website", after: "DNS inspector with DNSSEC and reverse lookups" },
-  { before: "A separate uptime checker", after: "Alert rules on latency and loss, with history" },
+  { before: "A separate uptime checker", after: "HTTP(S), TCP, and ping monitors with certificate expiry warnings" },
   { before: "A spreadsheet of client sites", after: "One workspace per client, with roles" },
 ];
 

@@ -16,6 +16,10 @@ A self-hosted command center for live connectivity checks, DNS inspection, and n
 
 **[Quick start](#-quick-start) · [Capabilities](#-capabilities) · [Architecture](#-architecture) · [Deploy](#-deploy-with-docker)**
 
+<br />
+
+![Qnetward real-time network monitoring dashboard](assets/qnetward-readme-hero.jpg)
+
 </div>
 
 ---

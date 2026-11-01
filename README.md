@@ -141,15 +141,21 @@ Qnetward combines a Go probe engine with a Next.js dashboard. Start with a singl
 
 ### 🎨 Frontend & Web Experience
 
-<img src="https://skillicons.dev/icons?i=nextjs,react,ts,tailwind&theme=dark" alt="Next.js, React, TypeScript, and Tailwind CSS" />
+<img src="https://skillicons.dev/icons?i=nextjs,react,ts,tailwind,nodejs,pnpm&theme=dark" alt="Next.js, React, TypeScript, Tailwind CSS, Node.js, and pnpm" />
 
-**Next.js** · **React** · **TypeScript** · **Tailwind CSS**
+**Next.js** · **React** · **TypeScript** · **Tailwind CSS** · **Node.js** · **pnpm**
 
 ### 🗄️ Data & Platform
 
-<img src="https://skillicons.dev/icons?i=postgres,redis,docker&theme=dark" alt="PostgreSQL, Redis, and Docker" />
+<img src="https://skillicons.dev/icons?i=postgres,redis&theme=dark" alt="PostgreSQL and Redis" />
 
-**PostgreSQL** · **TimescaleDB** · **Redis** · **Docker Compose** · **S3-compatible storage** · **MinIO**
+**PostgreSQL** · **TimescaleDB** · **Redis** · **S3-compatible storage** · **MinIO** · **Resend**
+
+### 🚀 Deployment & Quality
+
+<img src="https://skillicons.dev/icons?i=docker,nginx,githubactions&theme=dark" alt="Docker, Nginx, and GitHub Actions" />
+
+**Docker Compose** · **Nginx** · **GitHub Actions** · **Playwright**
 
 ## Get running
 

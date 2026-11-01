@@ -396,3 +396,46 @@
 .lp-console .grid-shell {
   background-image: none;
 }
+
+/* ---------- live signals ---------- */
+@keyframes lp-signal-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.lp-console .lp-signal-flash {
+  animation: lp-signal-flash 0.5s ease-in-out 3;
+}
+
+@keyframes lp-value-up {
+  from {
+    color: #4ade80;
+  }
+}
+
+@keyframes lp-value-down {
+  from {
+    color: #ff6b9a;
+  }
+}
+
+.lp-console .lp-value-good {
+  animation: lp-value-up 1.2s ease-out;
+}
+
+.lp-console .lp-value-bad {
+  animation: lp-value-down 1.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-console .lp-signal-flash,
+  .lp-console .lp-value-good,
+  .lp-console .lp-value-bad {
+    animation: none;
+  }
+}

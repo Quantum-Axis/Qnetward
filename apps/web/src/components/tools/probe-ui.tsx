@@ -2,6 +2,7 @@
 
 import { ReactNode, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { AnimatedValue } from "@/components/charts/animated-value";
 
 /* Shared building blocks for the diagnostic tool pages. */
 
@@ -80,7 +81,7 @@ export function Toggle({ label, description, ...input }: { label: string; descri
   );
 }
 
-export function StatStrip({ items }: { items: { label: string; value: string; tone?: "good" | "warn" | "bad" }[] }) {
+export function StatStrip({ items }: { items: { label: string; value: string; tone?: "good" | "warn" | "bad"; better?: "lower" | "higher" }[] }) {
   const color = { good: "#4ade80", warn: "#fbbf24", bad: "#ff3d7f" };
   return (
     <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-[var(--lp-border)] bg-[var(--lp-border)] sm:grid-cols-3 xl:grid-cols-6">
@@ -88,7 +89,7 @@ export function StatStrip({ items }: { items: { label: string; value: string; to
         <div key={item.label} className="bg-[#1b1b1f] px-4 py-3.5">
           <dt className="text-[12px] text-[var(--lp-subtle)]">{item.label}</dt>
           <dd className="lp-mono mt-1 truncate text-[18px]" style={{ color: item.tone ? color[item.tone] : undefined }}>
-            {item.value}
+            <AnimatedValue value={item.value} better={item.better} />
           </dd>
         </div>
       ))}

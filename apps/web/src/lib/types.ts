@@ -136,6 +136,8 @@ export type AdminSystemResponse = {
 };
 
 export type ProbeResult = {
+  /** Client-side arrival time (ms since epoch) for streamed results. */
+  ts?: number;
   seq?: number;
   addr?: string;
   error?: string;

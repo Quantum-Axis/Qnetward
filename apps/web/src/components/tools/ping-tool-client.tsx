@@ -9,7 +9,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ProbeReport } from "@/lib/types";
 import { ProbeRunState, useRealtimeProbe } from "@/hooks/use-realtime-probe";
 import { cn, formatMs } from "@/lib/utils";
-import { DefinitionList, Field, LatencyChart, PageHeader, Panel, RunStatus, StatStrip, Toggle, type RunTone } from "@/components/tools/probe-ui";
+import { LivePill, LiveSignalChart } from "@/components/charts/live-signal-chart";
+import { DefinitionList, Field, PageHeader, Panel, RunStatus, StatStrip, Toggle, type RunTone } from "@/components/tools/probe-ui";
 
 const pingSchema = z
   .object({
@@ -149,10 +150,19 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
   const summary = report?.summary;
   const continuous = useWatch({ control: form.control, name: "continuous" }) === true;
   const results = useMemo(() => report?.results ?? [], [report]);
-  const chartPoints = useMemo(
-    () => results.slice(-60).map((r, i) => ({ seq: r.seq ?? i + 1, rtt: r.error ? null : parseLatencyMs(r.rtt_ms ?? r.rtt) })),
-    [results],
-  );
+  const intervalMs = Number(useWatch({ control: form.control, name: "interval_ms" })) || 1000;
+  const countValue = Number(useWatch({ control: form.control, name: "count" })) || 5;
+  // Streamed results carry their arrival time; HTTP fallback results are spaced by the interval.
+  const signalPoints = useMemo(() => {
+    const base = results.find((r) => typeof r.ts === "number")?.ts ?? 0;
+    return results.slice(-240).map((r, i) => ({
+      t: typeof r.ts === "number" ? r.ts : base + i * intervalMs,
+      v: r.error ? null : parseLatencyMs(r.rtt_ms ?? r.rtt),
+      label: `seq ${r.seq ?? i + 1}`,
+    }));
+  }, [results, intervalMs]);
+  const signalWindow = activeContinuous ? 60_000 : Math.min(60_000, Math.max(10_000, countValue * intervalMs + 2_000));
+  const lastSampleAt = results.at(-1)?.ts ?? null;
   const live = useMemo(() => {
     const ok = results.map((r) => (r.error ? null : parseLatencyMs(r.rtt_ms ?? r.rtt))).filter((v): v is number => typeof v === "number");
     const avg = ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : null;
@@ -275,19 +285,25 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
             value: typeof loss === "number" ? `${loss.toFixed(loss < 10 ? 1 : 0)}%` : "—",
             tone: typeof loss !== "number" ? undefined : loss === 0 ? "good" : loss < 5 ? "warn" : "bad",
           },
-          { label: "Average", value: summary?.avg || (live.avg !== null ? formatMs(live.avg) : "—") },
-          { label: "Fastest", value: summary?.min || (live.min !== null ? formatMs(live.min) : "—") },
-          { label: "Slowest", value: summary?.max || (live.max !== null ? formatMs(live.max) : "—") },
-          { label: "Jitter", value: summaryValue(summary?.jitter) === "-" ? "—" : summaryValue(summary?.jitter) },
+          { label: "Average", better: "lower", value: summary?.avg || (live.avg !== null ? formatMs(live.avg) : "—") },
+          { label: "Fastest", better: "lower", value: summary?.min || (live.min !== null ? formatMs(live.min) : "—") },
+          { label: "Slowest", better: "lower", value: summary?.max || (live.max !== null ? formatMs(live.max) : "—") },
+          { label: "Jitter", better: "lower", value: summaryValue(summary?.jitter) === "-" ? "—" : summaryValue(summary?.jitter) },
         ]}
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <Panel
           title="Latency"
-          aside={<span className="text-[12px] text-[var(--lp-subtle)]">{currentRunLabel(activeContinuous, results.length)}</span>}
+          aside={<LivePill live={isBusy && results.length > 0} updatedAt={lastSampleAt} />}
         >
-          <LatencyChart points={chartPoints} emptyText="Run a probe and each reply appears here as it arrives." />
+          <LiveSignalChart
+            points={signalPoints}
+            live={isBusy}
+            windowMs={signalWindow}
+            emptyText="Run a probe and each reply streams in here as it arrives."
+          />
+          {results.length ? <p className="mt-2 text-[12px] text-[var(--lp-subtle)]">{currentRunLabel(activeContinuous, results.length)} · hover to pause</p> : null}
         </Panel>
         <Panel title="Run details">
           <DefinitionList
@@ -346,5 +362,5 @@ export function PingToolClient({ mode }: { mode: "ping" | "tcpping" }) {
 
 function currentRunLabel(continuous: boolean, count: number) {
   if (!count) return "";
-  return continuous ? `continuous · last ${Math.min(count, 60)} replies` : `last ${Math.min(count, 60)} replies`;
+  return continuous ? `continuous · ${count} replies` : `${count} replies`;
 }

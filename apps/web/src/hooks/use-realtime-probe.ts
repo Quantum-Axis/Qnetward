@@ -48,7 +48,7 @@ function mergeStreamEvent(current: ProbeReport | null, fallback: ProbeReport, ev
       target: event.target ?? base.target,
       addr: event.result.addr ?? event.addr ?? base.addr,
       port: event.result.port ?? event.port ?? base.port,
-      results: [...base.results, event.result],
+      results: [...base.results, { ...event.result, ts: typeof event.ts === "number" ? event.ts : Date.now() }],
     };
   }
 

@@ -7,6 +7,7 @@ import { GitHubIcon, LandingNav } from "./landing-nav";
 import { NetworkCanvas } from "./network-canvas";
 import { Pricing } from "./pricing";
 import { ProductShowcase } from "./product-showcase";
+import { RoadmapPreview } from "./roadmap-preview";
 import { QnetwardMark } from "./qnetward-mark";
 import { TechLogos } from "./tech-logos";
 import { ToolComparison } from "./tool-comparison";
@@ -16,19 +17,19 @@ const footer: { title: string; links: [string, string][] }[] = [
   {
     title: "Product",
     links: [
-      ["Ping & TCP ping", "#group-probe"],
-      ["Port scan", "#group-probe"],
-      ["DNS inspector", "#group-probe"],
-      ["Alert rules", "#group-automate"],
-      ["Workspaces", "#group-automate"],
+      ["Ping & TCP ping", "#products"],
+      ["Port scan", "#products"],
+      ["DNS lookup", "#products"],
+      ["Alert rules", "#products"],
+      ["Pricing", "#pricing"],
     ],
   },
   {
     title: "Platform",
     links: [
-      ["Probe agents", "#group-monitor"],
-      ["Device collector", "#group-monitor"],
-      ["Attack surface", "#group-protect"],
+      ["Roadmap", "/roadmap"],
+      ["Probe agents", "/roadmap#theme-reach"],
+      ["Attack surface", "/roadmap#theme-secure"],
       ["Global network", "#network"],
     ],
   },
@@ -44,7 +45,6 @@ const footer: { title: string; links: [string, string][] }[] = [
   {
     title: "Company",
     links: [
-      ["Pricing", "#pricing"],
       ["Security", "#security"],
       ["FAQ", "#faq"],
       ["Sign in", "/login"],
@@ -70,25 +70,40 @@ const steps = [
   },
 ];
 
-const upcoming = [
-  ["Probe agents", "Outbound-only binary for private networks and remote sites."],
-  ["Device collector", "SNMP, gNMI, Redfish, and syslog from the gear you already run."],
-  ["Attack surface", "Continuous discovery of subdomains, open services, and certificates."],
-  ["Root-cause hints", "Group a storm of alerts and point at the most likely cause."],
-];
 
 const securityToday = [
   "Passwords hashed with bcrypt; sessions and reset tokens stored only as hashes",
   "Rate limits on sign-in, verification, and probe endpoints",
   "Strict origin checks on the API and live WebSocket",
   "Workspace data visible only to its members, by role",
+  "Probes to private and cloud-metadata addresses blocked by default",
 ];
 
 const securityBeforeScans = [
   "Proof of ownership via DNS TXT record or HTTP token",
   "Per-target scope, rate limit, and a kill switch",
-  "Private and cloud-metadata address ranges blocked",
   "An audit log entry for every scan: who, what, when",
+];
+
+const scanTiers = [
+  {
+    tier: "Tier 0",
+    name: "Passive",
+    who: "Any domain",
+    body: "Public signals only: certificates, DNS records, and HTTP headers. Nothing is sent that a browser wouldn't send.",
+  },
+  {
+    tier: "Tier 1",
+    name: "Active",
+    who: "Verified owners",
+    body: "Port and service discovery, unlocked only after you prove ownership with a DNS TXT record or an HTTP token.",
+  },
+  {
+    tier: "Tier 2",
+    name: "Deep",
+    who: "By approval",
+    body: "Authenticated or intrusive checks. Needs a paid plan, signed consent, and a manual review before the first run.",
+  },
 ];
 
 function SectionHeader({
@@ -252,22 +267,8 @@ export function LandingPage() {
               <ProductShowcase />
             </div>
 
-            <div className="lp-reveal mt-20">
-              <div className="flex items-baseline justify-between gap-6 border-b border-[var(--lp-border)] pb-4">
-                <h3 className="text-[15px] font-medium">In development</h3>
-                <span className="text-[13px] text-[var(--lp-subtle)]">Not available yet</span>
-              </div>
-              <dl className="grid sm:grid-cols-2 lg:grid-cols-4">
-                {upcoming.map(([name, body], i) => (
-                  <div
-                    key={name}
-                    className={`border-b border-[var(--lp-border)] py-6 sm:pr-8 lg:border-b-0 ${i > 0 ? "lg:border-l lg:pl-8" : ""}`}
-                  >
-                    <dt className="text-[15px] text-[var(--lp-text)]">{name}</dt>
-                    <dd className="mt-2 text-[14px] leading-relaxed text-[var(--lp-muted)]">{body}</dd>
-                  </div>
-                ))}
-              </dl>
+            <div className="mt-20">
+              <RoadmapPreview />
             </div>
           </div>
         </section>
@@ -333,6 +334,25 @@ export function LandingPage() {
                   ))}
                 </ul>
               </div>
+            </div>
+            <div className="lp-reveal lg:col-span-12">
+              <div className="flex items-baseline justify-between gap-6 border-b border-[var(--lp-border)] pb-4">
+                <h3 className="text-[15px] font-medium">How scanning will be gated</h3>
+                <span className="text-[13px] text-[var(--lp-subtle)]">Planned · each tier unlocks the next</span>
+              </div>
+              <ol className="grid md:grid-cols-3">
+                {scanTiers.map((t, i) => (
+                  <li key={t.tier} className={`border-b border-[var(--lp-border)] py-6 md:border-b-0 md:pr-8 ${i > 0 ? "md:border-l md:pl-8" : ""}`}>
+                    <div className="flex items-center gap-2 text-[13px]">
+                      <span className="lp-mono text-[var(--lp-subtle)]">{t.tier}</span>
+                      <span className="text-[var(--lp-subtle)]">·</span>
+                      <span className="text-[var(--lp-muted)]">{t.who}</span>
+                    </div>
+                    <h4 className="mt-2 text-[17px] font-normal">{t.name}</h4>
+                    <p className="mt-2 text-[14px] leading-relaxed text-[var(--lp-muted)]">{t.body}</p>
+                  </li>
+                ))}
+              </ol>
             </div>
           </div>
         </section>

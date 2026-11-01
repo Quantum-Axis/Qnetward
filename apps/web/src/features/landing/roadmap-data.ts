@@ -1,0 +1,86 @@
+/**
+ * The public roadmap, shared by the landing preview and /roadmap. Keep it at
+ * feature level: no dates, no internal technology choices. Move an item to
+ * "now" only when it ships in the console.
+ */
+
+export type Horizon = "now" | "next" | "later";
+
+export type RoadmapItem = {
+  name: string;
+  body: string;
+  horizon: Horizon;
+};
+
+export type RoadmapTheme = {
+  id: string;
+  name: string;
+  summary: string;
+  items: RoadmapItem[];
+};
+
+export const horizonMeta: Record<Horizon, { label: string; caption: string }> = {
+  now: { label: "Now", caption: "In the console today" },
+  next: { label: "Next", caption: "What we're building toward" },
+  later: { label: "Later", caption: "Planned, order may change" },
+};
+
+export const roadmap: RoadmapTheme[] = [
+  {
+    id: "diagnose",
+    name: "Diagnose",
+    summary: "Find out what's wrong, right now, from a browser tab.",
+    items: [
+      { name: "Ping and TCP ping", body: "Streamed replies with a live latency chart, loss, and jitter.", horizon: "now" },
+      { name: "Port scan", body: "Up to 4,096 ports per run, with service names and handshake times.", horizon: "now" },
+      { name: "DNS lookup", body: "Every record type, any resolver, with DNSSEC and mail checks.", horizon: "now" },
+      { name: "Traceroute", body: "Hop-by-hop paths with latency per hop.", horizon: "next" },
+    ],
+  },
+  {
+    id: "monitor",
+    name: "Monitor",
+    summary: "Know before your users do.",
+    items: [
+      { name: "Alert rules", body: "Latency and loss thresholds with cooldowns, delivered by email.", horizon: "now" },
+      { name: "History and export", body: "Stored results you can chart, filter, and export as CSV or JSON.", horizon: "now" },
+      { name: "Uptime monitors", body: "HTTP, TLS, and ping checks on a schedule, from several regions.", horizon: "next" },
+      { name: "Chat and webhook alerts", body: "Slack, Telegram, Discord, and your own webhooks.", horizon: "next" },
+      { name: "Status pages", body: "A public page your customers can check during an incident.", horizon: "next" },
+      { name: "Incidents and on-call", body: "Group related alerts into one incident and page whoever is on call.", horizon: "later" },
+    ],
+  },
+  {
+    id: "reach",
+    name: "Reach every network",
+    summary: "See inside private networks and the gear you already run.",
+    items: [
+      { name: "Probe agents", body: "An outbound-only agent for private networks and remote sites.", horizon: "next" },
+      { name: "Device collector", body: "SNMP, gNMI, Redfish, and syslog from routers, switches, and servers.", horizon: "later" },
+      { name: "Topology", body: "A live map of your network built from neighbour discovery.", horizon: "later" },
+    ],
+  },
+  {
+    id: "secure",
+    name: "Secure",
+    summary: "Scan only what you're allowed to, and keep a record of it.",
+    items: [
+      { name: "Passive checks", body: "Certificates, DNS, and HTTP headers from public signals only.", horizon: "next" },
+      { name: "Attack surface", body: "Discovery of subdomains, open services, and certificates on domains you've verified.", horizon: "later" },
+      { name: "Deep scans", body: "Authorized, intrusive checks with signed consent and manual approval.", horizon: "later" },
+    ],
+  },
+  {
+    id: "team",
+    name: "Team and platform",
+    summary: "Run it with your team, your way.",
+    items: [
+      { name: "Workspaces and roles", body: "Invitations, owner, admin, member, and viewer roles, and workspace switching.", horizon: "now" },
+      { name: "Account security", body: "Password changes, session management, and account deletion.", horizon: "now" },
+      { name: "SSO, SCIM, and audit log", body: "Enterprise sign-in, user provisioning, and an exportable audit trail.", horizon: "later" },
+      { name: "Root-cause hints", body: "Point at the most likely cause when a storm of alerts arrives.", horizon: "later" },
+    ],
+  },
+];
+
+export const itemsByHorizon = (horizon: Horizon) => roadmap.flatMap((theme) => theme.items.filter((item) => item.horizon === horizon));

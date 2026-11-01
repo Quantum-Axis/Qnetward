@@ -516,3 +516,75 @@
     opacity: 0;
   }
 }
+
+/* ---------- split card (form + artwork) ---------- */
+.lp-auth .auth-input-group {
+  gap: 6px;
+}
+
+.lp-auth .auth-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lp-text);
+}
+
+.lp-auth .auth-input-shell {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #18181b;
+}
+
+.lp-auth .auth-input {
+  height: 40px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.lp-auth .auth-primary-button,
+.lp-auth .auth-muted-button,
+.lp-auth .auth-provider-button {
+  height: 40px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+/* Links read as text with a quiet dotted underline, not as accent-coloured buttons. */
+.lp-auth .auth-inline-link,
+.lp-auth .auth-footer-link {
+  color: var(--lp-text);
+  font-weight: 500;
+  text-decoration: underline dotted rgba(255, 255, 255, 0.35);
+  text-underline-offset: 3px;
+}
+
+.lp-auth .auth-inline-link:hover,
+.lp-auth .auth-footer-link:hover {
+  color: var(--lp-text);
+  text-decoration-color: rgba(255, 255, 255, 0.8);
+}
+
+.lp-auth .auth-divider {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lp-auth .auth-art-drift {
+  transform-origin: 50% 40%;
+  animation: auth-drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes auth-drift {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate3d(-18px, 14px, 0) rotate(-1.5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-auth .auth-art-drift {
+    animation: none;
+  }
+}

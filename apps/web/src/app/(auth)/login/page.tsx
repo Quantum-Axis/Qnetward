@@ -7,10 +7,10 @@ export default function LoginPage() {
   return (
     <GuestOnly>
       <AuthLayoutCard
-        headerAction={{ prompt: "New to Qnetward?", label: "Create an account", href: "/signup" }}
+        headerAction={{ prompt: "Don't have an account?", label: "Sign up", href: "/signup" }}
         icon={<LogIn />}
-        title="Sign in to Qnetward"
-        subtitle="Welcome back. Pick up where your team left off."
+        title="Welcome back"
+        subtitle="Sign in to your Qnetward account"
       >
         <LoginForm />
       </AuthLayoutCard>

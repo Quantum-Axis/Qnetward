@@ -16,11 +16,21 @@ type AuthInputFieldProps = {
   inputProps?: InputHTMLAttributes<HTMLInputElement>;
 };
 
+const PLACEHOLDERS: Record<string, string> = {
+  Email: "you@company.com",
+  Password: "Your password",
+  "New password": "At least 8 characters",
+  "Confirm password": "Type it again",
+  "First name": "Ada",
+  "Last name": "Lovelace",
+  "Verification code": "6-digit code",
+};
+
 /**
- * Compact auth field: the label stays in the DOM for screen readers and tests,
- * and doubles as the placeholder; an optional leading icon sits inside the input.
+ * Auth field with its label above the input. `icon` is accepted for older
+ * callers but no longer drawn: plain inputs read better on the split card.
  */
-export function AuthInputField({ id, label, icon: Icon, error, passwordToggle = false, labelAction, inputProps }: AuthInputFieldProps) {
+export function AuthInputField({ id, label, error, passwordToggle = false, labelAction, inputProps }: AuthInputFieldProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const { className, placeholder, type, onKeyUp, onBlur, ...restInputProps } = inputProps ?? {};
@@ -34,15 +44,14 @@ export function AuthInputField({ id, label, icon: Icon, error, passwordToggle = 
 
   return (
     <div className="auth-input-group">
-      <label className="sr-only" htmlFor={id}>
+      <label className="auth-field-label" htmlFor={id}>
         {label}
       </label>
-      <div className={cn("auth-input-shell", Icon && "auth-input-shell-icon", error && "auth-input-shell-error")}>
-        {Icon ? <Icon className="auth-input-icon" aria-hidden="true" /> : null}
+      <div className={cn("auth-input-shell", error && "auth-input-shell-error")}>
         <Input
           id={id}
           className={cn("auth-input", passwordToggle && "pr-11", className)}
-          placeholder={placeholder ?? label}
+          placeholder={placeholder ?? PLACEHOLDERS[label] ?? label}
           type={resolvedType}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
@@ -71,7 +80,7 @@ export function AuthInputField({ id, label, icon: Icon, error, passwordToggle = 
       ) : capsLock ? (
         <p className="auth-field-hint">Caps Lock is on</p>
       ) : null}
-      {labelAction ? <div className="flex justify-end">{labelAction}</div> : null}
+      {labelAction ? <div className="flex">{labelAction}</div> : null}
     </div>
   );
 }

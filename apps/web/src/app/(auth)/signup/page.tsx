@@ -10,7 +10,7 @@ export default function SignupPage() {
         headerAction={{ prompt: "Already have an account?", label: "Sign in", href: "/login" }}
         icon={<UserPlus />}
         title="Create your account"
-        subtitle="Takes about a minute. You can invite your team afterwards."
+        subtitle="Free during beta. Invite your team once you're in."
         wide
       >
         <SignupForm />

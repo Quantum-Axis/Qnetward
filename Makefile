@@ -34,7 +34,7 @@ web-install: ## Install frontend dependencies
 	pnpm --dir $(WEB) install --frozen-lockfile
 
 web-dev: ## Next.js dev server on 127.0.0.1:3000
-	QNETWARD_BACKEND_URL=http://127.0.0.1:8080 pnpm --dir $(WEB) dev --hostname 127.0.0.1 --port 3000
+	QNETWARD_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_QNETWARD_WS_URL=ws://127.0.0.1:8080/ws pnpm --dir $(WEB) dev --hostname 127.0.0.1 --port 3000
 
 web-build: ## Production build of the frontend
 	pnpm --dir $(WEB) build

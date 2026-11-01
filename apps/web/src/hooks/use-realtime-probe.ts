@@ -183,7 +183,28 @@ export function useRealtimeProbe<TRequest extends Record<string, unknown>>(confi
 
       setRunState("connecting");
 
+      // A proxy that never answers the upgrade would leave the run stuck on "Connecting".
+      const connectTimer = window.setTimeout(() => {
+        if (ws.readyState !== WebSocket.CONNECTING || fallbackStarted || runTokenRef.current !== runToken) {
+          return;
+        }
+        fallbackStarted = true;
+        socketRef.current = null;
+        ws.close();
+        if (isContinuousRequest(request)) {
+          setFormError("Continuous mode requires realtime streaming, and the live connection could not be opened.");
+          setRunState("error");
+          return;
+        }
+        void runViaHTTP(request, initialReport, runToken);
+      }, 4000);
+
       ws.addEventListener("open", () => {
+        window.clearTimeout(connectTimer);
+        if (fallbackStarted) {
+          ws.close();
+          return;
+        }
         setRunState("running");
         try {
           ws.send(JSON.stringify({ type, ...request }));
@@ -242,6 +263,7 @@ export function useRealtimeProbe<TRequest extends Record<string, unknown>>(confi
       });
 
       ws.addEventListener("error", () => {
+        window.clearTimeout(connectTimer);
         if (!mountedRef.current || runTokenRef.current !== runToken) {
           return;
         }

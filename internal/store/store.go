@@ -16,6 +16,8 @@ import (
 const (
 	DriverPostgres    = "postgres"
 	schemaSetupLockID = int64(64442024091357)
+	// queryTimeout bounds history reads that don't take a context.
+	queryTimeout = 10 * time.Second
 )
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -283,7 +285,15 @@ func (s *Store) QueryHistory(workspaceID int64, protocol, target string, port in
 	}
 	args = append(args, limit)
 
-	rows, err := s.db.Query(query, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	tx, err := s.beginWorkspaceTx(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +352,15 @@ func (s *Store) QueryRecentHistoryTargets(workspaceID int64, limit int) ([]Recen
 		ORDER BY MAX(ts) DESC
 		LIMIT $2`, s.tableRef())
 
-	rows, err := s.db.Query(query, workspaceID, limit)
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	tx, err := s.beginWorkspaceTx(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, query, workspaceID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -457,6 +475,9 @@ func ensureResultsTable(ctx context.Context, conn *sql.Conn, tableName string, t
 	}
 	if err := scopeResultsToWorkspaces(ctx, conn, tableName); err != nil {
 		return err
+	}
+	if err := enableWorkspaceRLS(ctx, conn, table, "workspace_isolation"); err != nil {
+		return fmt.Errorf("enable results row-level security: %w", err)
 	}
 	if timescale {
 		if _, err := conn.ExecContext(ctx, fmt.Sprintf(`

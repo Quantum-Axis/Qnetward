@@ -58,9 +58,15 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 		return AlertRule{}, err
 	}
 
+	tx, err := s.beginWorkspaceTx(ctx, rule.WorkspaceID)
+	if err != nil {
+		return AlertRule{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	if rule.ID == 0 {
 		var saved AlertRule
-		row := s.db.QueryRowContext(ctx, `
+		row := tx.QueryRowContext(ctx, `
 			INSERT INTO alert_rules (
 				workspace_id, user_id, name, protocol, target, port, recipient_email,
 				latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
@@ -90,11 +96,11 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 		if err := scanAlertRule(row, &saved); err != nil {
 			return AlertRule{}, err
 		}
-		return saved, nil
+		return saved, tx.Commit()
 	}
 
 	var saved AlertRule
-	row := s.db.QueryRowContext(ctx, `
+	row := tx.QueryRowContext(ctx, `
 		UPDATE alert_rules
 		SET
 			name = $3,
@@ -129,14 +135,14 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 		rule.NotifyOnRecovery,
 		rule.Enabled,
 	)
-	err := scanAlertRule(row, &saved)
+	err = scanAlertRule(row, &saved)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AlertRule{}, ErrAlertRuleNotFound
 	}
 	if err != nil {
 		return AlertRule{}, err
 	}
-	return saved, nil
+	return saved, tx.Commit()
 }
 
 // ListAlertRules returns every rule in the workspace, newest first.
@@ -145,7 +151,13 @@ func (s *Store) ListAlertRules(ctx context.Context, workspaceID int64) ([]AlertR
 		return nil, errors.New("store is not available")
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	tx, err := s.beginWorkspaceTx(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, `
 		SELECT id, workspace_id, COALESCE(user_id, 0), name, protocol, target, port, recipient_email,
 			latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
 			cooldown_minutes, notify_on_recovery, enabled, last_state,
@@ -175,7 +187,13 @@ func (s *Store) DeleteAlertRule(ctx context.Context, workspaceID, ruleID int64) 
 	if s == nil {
 		return errors.New("store is not available")
 	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM alert_rules WHERE id = $1 AND workspace_id = $2`, ruleID, workspaceID)
+	tx, err := s.beginWorkspaceTx(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM alert_rules WHERE id = $1 AND workspace_id = $2`, ruleID, workspaceID)
 	if err != nil {
 		return err
 	}
@@ -186,7 +204,7 @@ func (s *Store) DeleteAlertRule(ctx context.Context, workspaceID, ruleID int64) 
 	if rows == 0 {
 		return ErrAlertRuleNotFound
 	}
-	return nil
+	return tx.Commit()
 }
 
 // EvaluateAlertRules applies one probe summary to the workspace's matching rules.
@@ -196,7 +214,7 @@ func (s *Store) EvaluateAlertRules(ctx context.Context, workspaceID int64, proto
 	}
 
 	now := time.Now().UTC()
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWorkspaceTx(ctx, workspaceID)
 	if err != nil {
 		return nil, err
 	}

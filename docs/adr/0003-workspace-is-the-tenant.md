@@ -24,10 +24,9 @@ between them; the active workspace is stored on the session.
 Projects and environments, if needed later, will live inside a workspace
 rather than above it.
 
-Isolation is enforced in application queries today. Moving the most sensitive
-tables to PostgreSQL Row-Level Security is planned for Phase 1; it requires
-the application's database role to not be a superuser, because superusers
-bypass RLS.
+Isolation is enforced in application queries, with PostgreSQL row-level
+security underneath for workspace-owned tables (see
+[ADR 0009](0009-row-level-security-via-tenant-role.md)).
 
 ## Consequences
 

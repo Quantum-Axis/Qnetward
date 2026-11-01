@@ -131,3 +131,99 @@ func mustOwnedWorkspaceID(t *testing.T, st *Store, userID int64) int64 {
 	}
 	return id
 }
+
+// Row-level security is the backstop for a query that forgets its workspace
+// filter: inside a workspace transaction, other workspaces' rows don't exist.
+func TestRowLevelSecurityHidesOtherWorkspaces(t *testing.T) {
+	st := openTestStore(t, Config{BatchSize: 1, FlushInterval: 5 * time.Millisecond})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var workspaces [2]int64
+	for i := range workspaces {
+		user, err := st.CreateUser(ctx, "RLS Tester", testEmail(fmt.Sprintf("rls-%d", i)), "hash", false)
+		if err != nil {
+			t.Fatalf("CreateUser returned error: %v", err)
+		}
+		workspaces[i] = mustOwnedWorkspaceID(t, st, user.ID)
+		if _, err := st.SaveAlertRule(ctx, AlertRule{
+			WorkspaceID:         workspaces[i],
+			UserID:              user.ID,
+			Name:                "RLS rule",
+			Protocol:            "ping",
+			Target:              "rls.example",
+			RecipientEmail:      user.Email,
+			LatencyThresholdMs:  float64Ptr(50),
+			ConsecutiveBreaches: 1,
+			CooldownMinutes:     5,
+			Enabled:             true,
+		}); err != nil {
+			t.Fatalf("SaveAlertRule returned error: %v", err)
+		}
+		if _, err := st.db.ExecContext(ctx, fmt.Sprintf(`
+			INSERT INTO %s (workspace_id, user_id, ts, protocol, target, seq, rtt_ms)
+			VALUES ($1, $2, NOW(), 'ping', 'rls.example', 1, 10)
+		`, st.tableRef()), workspaces[i], user.ID); err != nil {
+			t.Fatalf("insert result: %v", err)
+		}
+	}
+	mine, theirs := workspaces[0], workspaces[1]
+
+	tx, err := st.beginWorkspaceTx(ctx, mine)
+	if err != nil {
+		t.Fatalf("beginWorkspaceTx returned error: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// No workspace filter on purpose: the policy has to do the filtering.
+	for _, table := range []string{"alert_rules", st.tableRef()} {
+		var other int
+		if err := tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE workspace_id = $1`, table), theirs).Scan(&other); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if other != 0 {
+			t.Fatalf("%s: saw %d row(s) from another workspace", table, other)
+		}
+		var own int
+		if err := tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE target = 'rls.example'`, table)).Scan(&own); err != nil {
+			t.Fatalf("count own %s: %v", table, err)
+		}
+		if own != 1 {
+			t.Fatalf("%s: expected only this workspace's row, got %d", table, own)
+		}
+	}
+
+	if res, err := tx.ExecContext(ctx, `UPDATE alert_rules SET name = 'Hijacked' WHERE workspace_id = $1`, theirs); err != nil {
+		t.Fatalf("update: %v", err)
+	} else if n, _ := res.RowsAffected(); n != 0 {
+		t.Fatalf("updated %d rule(s) in another workspace", n)
+	}
+
+	_, err = tx.ExecContext(ctx, `SAVEPOINT before_insert`)
+	if err != nil {
+		t.Fatalf("savepoint: %v", err)
+	}
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO alert_rules (workspace_id, name, protocol, target, recipient_email)
+		VALUES ($1, 'Planted', 'ping', 'rls.example', 'x@example.com')
+	`, theirs)
+	if err == nil {
+		t.Fatal("expected the policy to reject a rule written into another workspace")
+	}
+	if _, err := tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT before_insert`); err != nil {
+		t.Fatalf("rollback to savepoint: %v", err)
+	}
+
+	// The settings end with the transaction, so the pooled connection is clean.
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	var role, setting string
+	if err := st.db.QueryRowContext(ctx, `SELECT current_user, COALESCE(current_setting('app.workspace_id', true), '')`).Scan(&role, &setting); err != nil {
+		t.Fatalf("read session state: %v", err)
+	}
+	if role == tenantRole || setting != "" {
+		t.Fatalf("connection kept tenant state after the transaction: role=%q workspace=%q", role, setting)
+	}
+}

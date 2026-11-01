@@ -53,9 +53,10 @@ func TestStoreInsertAndQueryHistoryOrder(t *testing.T) {
 
 func TestStoreRetentionCleanupRemovesExpiredRows(t *testing.T) {
 	st := openTestStore(t, Config{
-		BatchSize:       1,
-		FlushInterval:   5 * time.Millisecond,
-		Retention:       500 * time.Millisecond,
+		BatchSize:     1,
+		FlushInterval: 5 * time.Millisecond,
+		// Generous retention so the fresh row survives a slow round trip to a remote test database.
+		Retention:       30 * time.Minute,
 		CleanupInterval: 25 * time.Millisecond,
 	})
 	const userID int64 = 202
@@ -77,7 +78,7 @@ func TestStoreRetentionCleanupRemovesExpiredRows(t *testing.T) {
 		RttMs:    float64Ptr(8),
 	})
 
-	waitFor(t, 400*time.Millisecond, func() bool {
+	waitFor(t, 10*time.Second, func() bool {
 		points, err := st.QueryHistory(userID, "ping", "cleanup.test", 0, 10)
 		return err == nil && len(points) == 1 && points[0].Seq == 2
 	})

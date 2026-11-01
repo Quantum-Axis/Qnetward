@@ -4,7 +4,7 @@
 WEB := apps/web
 BIN := .tmp/qnetward
 
-.PHONY: help build run test test-db vet fmt lint web-install web-dev web-build web-lint web-e2e check clean
+.PHONY: help build run migrate migrate-status test test-db vet fmt lint web-install web-dev web-build web-lint web-e2e check clean
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -13,14 +13,19 @@ build: ## Build the qnetward binary into .tmp/
 	go build -o $(BIN) ./cmd/qnetward
 
 run: build ## Run the API server on 127.0.0.1:8080 using .env
-	set -a && . ./.env && set +a && $(BIN) serve -listen 127.0.0.1:8080
+	scripts/with-env.sh $(BIN) serve -listen 127.0.0.1:8080
+
+migrate: build ## Apply database migrations to QNETWARD_DB_DSN from .env
+	scripts/with-env.sh $(BIN) migrate
+
+migrate-status: build ## List migrations and whether each is applied
+	scripts/with-env.sh $(BIN) migrate -status
 
 test: ## Go unit tests (Postgres-backed tests skip without QNETWARD_TEST_POSTGRES_DSN)
 	go test ./...
 
-test-db: ## Go tests including Postgres-backed ones (needs QNETWARD_TEST_POSTGRES_DSN)
-	@test -n "$$QNETWARD_TEST_POSTGRES_DSN" || (echo "QNETWARD_TEST_POSTGRES_DSN is not set" && exit 1)
-	go test -race -p 1 ./...
+test-db: ## Go tests including Postgres-backed ones (QNETWARD_TEST_POSTGRES_DSN from env or .env)
+	scripts/with-env.sh sh -c 'test -n "$$QNETWARD_TEST_POSTGRES_DSN" || { echo "QNETWARD_TEST_POSTGRES_DSN is not set"; exit 1; }; go test -race -p 1 ./...'
 
 vet: ## go vet
 	go vet ./...

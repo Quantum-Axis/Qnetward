@@ -68,6 +68,8 @@ func main() {
 		runDNSLookup(os.Args[2:])
 	case "serve":
 		runServe(os.Args[2:])
+	case "migrate":
+		runMigrate(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -86,6 +88,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  qnetward portscan [flags] <host>")
 	fmt.Fprintln(os.Stderr, "  qnetward dns [flags] <host-or-ip>")
 	fmt.Fprintln(os.Stderr, "  qnetward serve [flags]")
+	fmt.Fprintln(os.Stderr, "  qnetward migrate [-status]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  ping     ICMP echo (requires root or CAP_NET_RAW)")
@@ -93,6 +96,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  portscan TCP connect port scan")
 	fmt.Fprintln(os.Stderr, "  dns      DNS lookup / reverse DNS")
 	fmt.Fprintln(os.Stderr, "  serve    Web UI + REST API")
+	fmt.Fprintln(os.Stderr, "  migrate  Apply database schema migrations")
 }
 
 func normalizeArgs(fs *flag.FlagSet, args []string) []string {

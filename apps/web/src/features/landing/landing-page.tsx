@@ -199,10 +199,11 @@ export function LandingPage() {
                 <span className="hidden sm:inline">See how it works</span>
               </a>
             </div>
-            <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-[var(--lp-subtle)]">
+            {/* One row on every width: tighter spacing and type on phones. */}
+            <ul className="mt-5 flex flex-nowrap items-center justify-center gap-x-3 whitespace-nowrap text-[12px] text-[var(--lp-subtle)] sm:gap-x-6 sm:text-[13px]">
               {["Free to start", "No credit card", "Self-host ready"].map((item) => (
-                <li key={item} className="flex items-center gap-2">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <li key={item} className="flex items-center gap-1.5 sm:gap-2">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5">
                     <path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="var(--lp-green)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   {item}

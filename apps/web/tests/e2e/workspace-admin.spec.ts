@@ -66,7 +66,7 @@ test("workspace owner can revoke pending invites and switch active workspace", a
   await expect(page.getByText(`Revoked invitation for ${revokeEmail}.`)).toBeVisible();
 
   await page.goto("/profile");
-  await expect(page.getByRole("heading", { name: "Incoming Workspace Invites" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Invitations" })).toBeVisible();
   const acceptResponse = page.waitForResponse((response) => response.url().includes("/api/workspace/invitations") && response.request().method() === "POST");
   await page.getByRole("button", { name: /join workspace/i }).click();
   expect((await acceptResponse).ok()).toBeTruthy();

@@ -1,37 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { ReactNode, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowUpRight, BellRing, Check, CreditCard, KeyRound, Mail, Shield, Users } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
 import {
   AlertRule,
   AuthMessageResponse,
   RecentHistoryTarget,
-  RuntimeHealthDependency,
-  RuntimeHealthResponse,
   SessionResponse,
   WorkspaceInvitationsResponse,
-  WorkspaceTeamResponse,
+  WorkspaceListResponse,
 } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-
-function subscribeToOrigin() {
-  return () => {};
-}
-
-function getOriginSnapshot() {
-  return typeof window === "undefined" ? "-" : window.location.origin;
-}
-
-function getOriginServerSnapshot() {
-  return "-";
-}
+import { cn, formatDateTime } from "@/lib/utils";
+import { DefinitionList, PageHeader, RunStatus } from "@/components/tools/probe-ui";
 
 function buildInitials(name?: string | null, email?: string | null) {
-  const source = (name || email || "NW").trim();
+  const source = (name || email || "QN").trim();
   const parts = source.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
     return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
@@ -39,164 +25,121 @@ function buildInitials(name?: string | null, email?: string | null) {
   return source.slice(0, 2).toUpperCase();
 }
 
-function sessionModeLabel(session?: SessionResponse) {
-  if (!session?.authenticated) {
-    return "Locked";
-  }
-  return session.mode === "demo" ? "Demo Session" : "Authenticated";
-}
-
-function fallbackAccountRole(session?: SessionResponse) {
-  if (!session?.authenticated) {
-    return "Locked";
-  }
-  return session.mode === "demo" ? "Demo Contributor" : "Workspace Admin";
-}
-
-function accessLabel(session?: SessionResponse) {
-  if (!session?.authenticated) {
-    return "No access";
-  }
-  return session.read_only ? "Read only" : "Full access";
-}
-
-function accessTone(session?: SessionResponse) {
-  if (!session?.authenticated) {
-    return "dashboard-chip dashboard-chip-danger";
-  }
-  return session.read_only ? "dashboard-chip dashboard-chip-muted" : "dashboard-chip dashboard-chip-success";
-}
-
-function dependencyLabel(dependency?: RuntimeHealthDependency) {
-  if (!dependency?.enabled) {
-    return "Not configured";
-  }
-  return dependency.healthy ? "Healthy" : "Degraded";
-}
-
-function dependencyTone(dependency?: RuntimeHealthDependency) {
-  if (!dependency?.enabled) {
-    return "text-slate-400";
-  }
-  return dependency.healthy ? "text-emerald-300" : "text-rose-300";
-}
-
-function latestActivity(targets: RecentHistoryTarget[] | undefined) {
-  if (!targets || targets.length === 0) {
-    return null;
-  }
-  return [...targets].sort((a, b) => b.last_sample_at - a.last_sample_at)[0];
-}
-
-function notificationState(verified: boolean, enabledRules: number) {
-  if (!verified) {
-    return "Verification pending";
-  }
-  return enabledRules > 0 ? "Alert delivery active" : "No active alert rules";
-}
-
-function invitationTone(status: string) {
-  switch (status) {
-    case "accepted":
-      return "dashboard-chip dashboard-chip-success";
-    case "expired":
-      return "dashboard-chip dashboard-chip-danger";
-    default:
-      return "dashboard-chip dashboard-chip-muted";
-  }
-}
-
-function workspaceRoleLabel(role: string) {
+function roleLabel(role?: string) {
   switch (role) {
     case "owner":
-      return "Workspace Owner";
+      return "Owner";
     case "admin":
-      return "Workspace Admin";
+      return "Admin";
     case "viewer":
-      return "Workspace Viewer";
+      return "Viewer";
     case "member":
-      return "Workspace Member";
+      return "Member";
     default:
-      return role;
+      return role ?? "—";
   }
 }
 
-function canManageWorkspaceMember(actorRole: string, isDemo: boolean, isCurrent: boolean, targetRole: string) {
-  if (isDemo || isCurrent) {
-    return false;
-  }
-  if (actorRole === "owner") {
-    return targetRole !== "owner";
-  }
-  if (actorRole === "admin") {
-    return targetRole === "member" || targetRole === "viewer";
-  }
-  return false;
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
 }
 
-function memberRoleOptions(actorRole: string) {
-  if (actorRole === "owner") {
-    return ["admin", "member", "viewer"];
-  }
-  if (actorRole === "admin") {
-    return ["member", "viewer"];
-  }
-  return [];
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** A settings block: what it is on the left, the controls on the right, actions in a footer bar. */
+function Section({
+  title,
+  description,
+  children,
+  footer,
+  id,
+}: {
+  title: string;
+  description: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  id?: string;
+}) {
+  return (
+    <section id={id} className="rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f]" aria-labelledby={id ? `${id}-title` : undefined}>
+      <div className="grid gap-4 p-5 md:grid-cols-[220px_minmax(0,1fr)] md:gap-8">
+        <div>
+          <h2 id={id ? `${id}-title` : undefined} className="text-[14px] font-medium">
+            {title}
+          </h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--lp-muted)]">{description}</p>
+        </div>
+        <div className="min-w-0">{children}</div>
+      </div>
+      {footer ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-[var(--lp-border)] bg-white/[0.015] px-5 py-3">{footer}</div>
+      ) : null}
+    </section>
+  );
 }
 
-function invitationRoleOptions(actorRole: string) {
-  if (actorRole === "owner") {
-    return ["owner", "admin", "member", "viewer"];
-  }
-  if (actorRole === "admin") {
-    return ["member", "viewer"];
-  }
-  return [];
+function Notice({ tone, children }: { tone: "success" | "error" | "info"; children: ReactNode }) {
+  const styles = {
+    success: "border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] text-[#86efac]",
+    error: "border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] text-[#ff8fb3]",
+    info: "border-[rgba(251,191,36,0.3)] bg-[rgba(251,191,36,0.08)] text-[#fcd34d]",
+  };
+  return (
+    <p role={tone === "error" ? "alert" : "status"} className={cn("rounded-lg border px-3 py-2.5 text-[13px]", styles[tone])}>
+      {children}
+    </p>
+  );
 }
 
-function canManageInvitations(actorRole: string, isDemo: boolean) {
-  return !isDemo && (actorRole === "owner" || actorRole === "admin");
+function ShortcutLink({ href, icon: Icon, label, hint }: { href: string; icon: typeof Shield; label: string; hint: string }) {
+  return (
+    <Link href={href} className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-[var(--lp-border-strong)] bg-white/[0.03]">
+        <Icon className="h-3.5 w-3.5 text-[var(--lp-muted)]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] text-[var(--lp-text)]">{label}</span>
+        <span className="block truncate text-[12px] text-[var(--lp-subtle)]">{hint}</span>
+      </span>
+      <ArrowUpRight className="h-3.5 w-3.5 text-[var(--lp-subtle)] transition-colors group-hover:text-[var(--lp-text)]" />
+    </Link>
+  );
 }
 
 export function ProfileWorkspace() {
-  const origin = useSyncExternalStore(subscribeToOrigin, getOriginSnapshot, getOriginServerSnapshot);
   const queryClient = useQueryClient();
   const [draftValues, setDraftValues] = useState<{ name: string; email: string } | null>(null);
-  const [inviteValues, setInviteValues] = useState({ email: "", role: "member" });
-  const [memberRoleDrafts, setMemberRoleDrafts] = useState<Record<number, string>>({});
 
   const sessionQuery = useQuery({
     queryKey: ["session"],
     queryFn: () => apiRequest<SessionResponse>("/api/auth/session"),
   });
+  const authenticated = sessionQuery.data?.authenticated === true;
 
-  const workspaceTeamQuery = useQuery({
-    queryKey: ["workspace-team"],
-    queryFn: () => apiRequest<WorkspaceTeamResponse>("/api/workspace/team"),
-    enabled: sessionQuery.data?.authenticated === true,
+  const workspacesQuery = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => apiRequest<WorkspaceListResponse>("/api/workspaces"),
+    enabled: authenticated,
   });
 
   const incomingInvitationsQuery = useQuery({
     queryKey: ["incoming-workspace-invitations"],
     queryFn: () => apiRequest<WorkspaceInvitationsResponse>("/api/workspace/invitations"),
-    enabled: sessionQuery.data?.authenticated === true,
-  });
-
-  const runtimeHealthQuery = useQuery({
-    queryKey: ["runtime-health"],
-    queryFn: () => apiRequest<RuntimeHealthResponse>("/api/healthz"),
+    enabled: authenticated,
   });
 
   const recentTargetsQuery = useQuery({
     queryKey: ["recent-history-targets", 6],
     queryFn: () => apiRequest<RecentHistoryTarget[]>("/api/history/recent-targets?limit=6"),
-    enabled: sessionQuery.data?.authenticated === true,
+    enabled: authenticated,
   });
 
   const alertRulesQuery = useQuery({
     queryKey: ["alert-rules"],
     queryFn: () => apiRequest<AlertRule[]>("/api/alerts/rules"),
-    enabled: sessionQuery.data?.authenticated === true,
+    enabled: authenticated,
   });
 
   const sendResetEmail = useMutation({
@@ -223,27 +166,15 @@ export function ProfileWorkspace() {
       }),
     onSuccess: async (response) => {
       if (response.user) {
-        setDraftValues({ name: response.user.name, email: response.user.email });
+        setDraftValues(null);
         queryClient.setQueryData<SessionResponse>(["session"], (current) => ({
+          ...current,
           authenticated: true,
           user: response.user,
           mode: current?.mode ?? "authenticated",
-          read_only: current?.read_only,
         }));
       }
       await queryClient.invalidateQueries({ queryKey: ["session"] });
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
-    },
-  });
-
-  const inviteMember = useMutation({
-    mutationFn: (values: { email: string; role: string }) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "POST",
-        body: JSON.stringify(values),
-      }),
-    onSuccess: async () => {
-      setInviteValues({ email: "", role: "member" });
       await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
     },
   });
@@ -256,75 +187,31 @@ export function ProfileWorkspace() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["incoming-workspace-invitations"] });
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
-    },
-  });
-
-  const updateMemberRole = useMutation({
-    mutationFn: (values: { userID: number; role: string }) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "PATCH",
-        body: JSON.stringify({ user_id: values.userID, role: values.role }),
-      }),
-    onSuccess: async (_, variables) => {
-      setMemberRoleDrafts((current) => {
-        const next = { ...current };
-        delete next[variables.userID];
-        return next;
-      });
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
-    },
-  });
-
-  const removeMember = useMutation({
-    mutationFn: (userID: number) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "DELETE",
-        body: JSON.stringify({ user_id: userID }),
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
-    },
-  });
-
-  const revokeInvitation = useMutation({
-    mutationFn: (invitationID: number) =>
-      apiRequest<AuthMessageResponse>("/api/workspace/team", {
-        method: "DELETE",
-        body: JSON.stringify({ invitation_id: invitationID }),
-      }),
-    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       await queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
     },
   });
 
   const session = sessionQuery.data;
   const user = session?.user;
-  const workspace = workspaceTeamQuery.data?.workspace;
-  const members = workspaceTeamQuery.data?.members ?? [];
-  const invitations = workspaceTeamQuery.data?.invitations ?? [];
-  const incomingInvitations = incomingInvitationsQuery.data?.invitations ?? [];
-  const verified = Boolean(user?.email_verified_at);
   const isDemo = session?.mode === "demo";
-  const initials = buildInitials(user?.name, user?.email);
-  const alertRules = alertRulesQuery.data ?? [];
-  const recentTargets = recentTargetsQuery.data ?? [];
-  const latestTarget = latestActivity(recentTargets);
-  const enabledRules = alertRules.filter((rule) => rule.enabled).length;
-  const pingTargets = recentTargets.filter((target) => target.protocol === "ping").length;
-  const tcpTargets = recentTargets.filter((target) => target.protocol === "tcpping").length;
-  const runtimeHealth = runtimeHealthQuery.data;
+  const verified = Boolean(user?.email_verified_at);
+  const workspaces = workspacesQuery.data?.workspaces ?? [];
+  const activeWorkspaceId = workspacesQuery.data?.active_workspace_id ?? session?.active_workspace_id;
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
+  const incomingInvitations = incomingInvitationsQuery.data?.invitations ?? [];
+  const pendingInvitations = incomingInvitations.filter((invitation) => invitation.status === "pending");
+  const enabledRules = (alertRulesQuery.data ?? []).filter((rule) => rule.enabled && rule.recipient_email === user?.email).length;
+  const latestTarget = [...(recentTargetsQuery.data ?? [])].sort((a, b) => b.last_sample_at - a.last_sample_at)[0];
+
   const formValues = draftValues ?? { name: user?.name ?? "", email: user?.email ?? "" };
   const trimmedName = formValues.name.trim();
   const trimmedEmail = formValues.email.trim();
-  const trimmedInviteEmail = inviteValues.email.trim();
-  const profileChanged = trimmedName !== (user?.name ?? "") || trimmedEmail !== (user?.email ?? "");
-  const workspaceRole = workspace?.role ?? fallbackAccountRole(session);
-  const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
-  const availableRoleOptions = memberRoleOptions(workspaceRole);
-  const availableInvitationRoles = invitationRoleOptions(workspaceRole);
-  const selectedInviteRole = availableInvitationRoles.includes(inviteValues.role) ? inviteValues.role : (availableInvitationRoles[0] ?? "member");
-  const canManageWorkspaceInvitations = canManageInvitations(workspaceRole, isDemo);
+  const nameChanged = trimmedName !== (user?.name ?? "");
+  const emailChanged = trimmedEmail.toLowerCase() !== (user?.email ?? "").toLowerCase();
+  const profileChanged = nameChanged || emailChanged;
+  const emailInvalid = trimmedEmail !== "" && !EMAIL_PATTERN.test(trimmedEmail);
+  const canSave = !isDemo && profileChanged && trimmedName !== "" && trimmedEmail !== "" && !emailInvalid && !updateProfile.isPending;
 
   function updateField(field: "name" | "email", value: string) {
     if (updateProfile.isError || updateProfile.isSuccess) {
@@ -336,670 +223,343 @@ export function ProfileWorkspace() {
     }));
   }
 
-  function updateInviteField(field: "email" | "role", value: string) {
-    if (inviteMember.isError || inviteMember.isSuccess) {
-      inviteMember.reset();
-    }
-    setInviteValues((current) => ({ ...current, [field]: value }));
-  }
-
-  function updateMemberRoleDraft(userID: number, role: string) {
-    if (updateMemberRole.isError || updateMemberRole.isSuccess) {
-      updateMemberRole.reset();
-    }
-    setMemberRoleDrafts((current) => ({ ...current, [userID]: role }));
-  }
-
   if (sessionQuery.isLoading) {
-    return <div className="dashboard-panel rounded-[1.5rem] p-6 text-sm text-slate-400">Loading account settings.</div>;
+    return <p className="text-[13px] text-[var(--lp-subtle)]">Loading your profile…</p>;
   }
 
   if (sessionQuery.isError) {
-    return (
-      <div className="rounded-[1.5rem] border border-rose-500/30 bg-rose-500/10 px-5 py-6 text-sm text-rose-200">
-        {(sessionQuery.error as ApiError).message || "Unable to load account settings."}
-      </div>
-    );
+    return <Notice tone="error">{(sessionQuery.error as ApiError).message || "Unable to load your profile."}</Notice>;
   }
 
   return (
-    <div className="grid gap-6">
-      <section className="dashboard-hero-panel rounded-[1.7rem] p-5 md:p-6">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(135deg,rgba(68,212,200,0.96),rgba(56,189,248,0.92),rgba(245,158,11,0.88))] text-lg font-bold text-slate-950 shadow-[0_18px_40px_rgba(2,6,12,0.26)]">
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Account Settings</p>
-              <h2 className="mt-1.5 font-space text-[1.9rem] font-bold leading-tight text-white">{user?.name || "Qnetward Operator"}</h2>
-              <p className="mt-1 max-w-3xl break-all text-sm text-slate-400">
-                Manage identity, security, team access, workspace membership, and SaaS account operations from one place.
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className={verified ? "dashboard-chip dashboard-chip-success" : "dashboard-chip dashboard-chip-danger"}>
-                  {verified ? "Email Verified" : "Verification Pending"}
-                </span>
-                <span className={accessTone(session)}>{accessLabel(session)}</span>
-                <span className="dashboard-subtle-chip">{workspaceRole}</span>
-                <span className="dashboard-subtle-chip">{workspace?.name ?? "Workspace loading"}</span>
-                <span className="dashboard-subtle-chip">Member since {user?.created_at ? formatDateTime(user.created_at) : "-"}</span>
-              </div>
-            </div>
-          </div>
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <PageHeader
+        title="Profile"
+        description="Your name, email, and sign-in details. Team members and billing are managed under Workspace."
+        status={
+          isDemo ? (
+            <RunStatus tone="idle" label="Demo session" />
+          ) : verified ? (
+            <RunStatus tone="done" label="Email verified" />
+          ) : (
+            <RunStatus tone="error" label="Email not verified" />
+          )
+        }
+      />
 
-          <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[340px]">
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Workspace Role</p>
-              <p className="mt-2 text-lg font-semibold text-white">{workspaceRoleLabel(workspaceRole)}</p>
-              <p className="mt-1.5 text-sm text-slate-400">Resolved from the active workspace membership record.</p>
-            </div>
-            <div className="dashboard-panel-muted rounded-2xl p-4">
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Notification State</p>
-              <p className="mt-2 text-lg font-semibold text-white">{notificationState(verified, enabledRules)}</p>
-              <p className="mt-1.5 text-sm text-slate-400">Primary channel: {user?.email || "-"}</p>
+      <section className="relative overflow-hidden rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f] p-5">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{ background: "radial-gradient(ellipse 45% 120% at 0% 0%, rgba(255,61,127,0.08), transparent 70%)" }}
+        />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div
+            className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-[20px] font-medium text-white"
+            style={{ background: "linear-gradient(135deg, #ff3d7f 0%, #a855f7 100%)" }}
+            aria-hidden="true"
+          >
+            {buildInitials(user?.name, user?.email)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[18px] font-medium tracking-[-0.01em]">{user?.name || "Qnetward user"}</p>
+            <p className="lp-mono mt-0.5 truncate text-[13px] text-[var(--lp-muted)]">{user?.email}</p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[12px]">
+              {activeWorkspace ? (
+                <span className="rounded-md border border-[var(--lp-border)] bg-white/[0.03] px-2 py-0.5 text-[var(--lp-muted)]">
+                  {roleLabel(activeWorkspace.role)} · {activeWorkspace.name}
+                </span>
+              ) : null}
+              {session?.platform_role === "admin" ? (
+                <span className="rounded-md border border-[rgba(167,139,250,0.3)] bg-[rgba(167,139,250,0.1)] px-2 py-0.5 text-[#c4b5fd]">Platform admin</span>
+              ) : null}
+              {session?.read_only ? (
+                <span className="rounded-md border border-[var(--lp-border)] bg-white/[0.03] px-2 py-0.5 text-[var(--lp-muted)]">Read only</span>
+              ) : null}
+              <span className="px-1 text-[var(--lp-subtle)]">Joined {formatDate(user?.created_at)}</span>
             </div>
           </div>
         </div>
       </section>
 
       {isDemo ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Demo mode is active. Personal edits, workspace invitations, billing actions, and delivery changes are disabled for the shared contributor session.
-        </div>
+        <Notice tone="info">This is the shared demo account. Name, email, and password changes are turned off so the next visitor finds it the same way.</Notice>
       ) : null}
 
-      {sendResetEmail.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(sendResetEmail.error as ApiError).message || "Unable to send reset email."}
-        </div>
-      ) : null}
-      {sendResetEmail.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {sendResetEmail.data.message || "Password reset email issued."}
-        </div>
-      ) : null}
-      {resendVerification.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(resendVerification.error as ApiError).message || "Unable to issue a new verification code."}
-        </div>
-      ) : null}
-      {resendVerification.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {resendVerification.data.message || "A new verification code has been issued."}
-          {resendVerification.data.preview_code ? ` OTP: ${resendVerification.data.preview_code}` : ""}
-        </div>
-      ) : null}
-      {updateProfile.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(updateProfile.error as ApiError).message || "Unable to update profile."}
-        </div>
-      ) : null}
-      {updateProfile.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {updateProfile.data.message}
-          {updateProfile.data.preview_code ? ` OTP: ${updateProfile.data.preview_code}` : ""}
-        </div>
-      ) : null}
-      {inviteMember.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(inviteMember.error as ApiError).message || "Unable to create workspace invitation."}
-        </div>
-      ) : null}
-      {inviteMember.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {inviteMember.data.message || "Workspace invitation queued."}
-        </div>
-      ) : null}
-      {acceptInvitation.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(acceptInvitation.error as ApiError).message || "Unable to accept workspace invitation."}
-        </div>
-      ) : null}
-      {acceptInvitation.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {acceptInvitation.data.message || "Workspace invitation accepted."}
-        </div>
-      ) : null}
-      {updateMemberRole.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(updateMemberRole.error as ApiError).message || "Unable to update workspace member role."}
-        </div>
-      ) : null}
-      {updateMemberRole.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {updateMemberRole.data.message || "Workspace member role updated."}
-        </div>
-      ) : null}
-      {removeMember.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(removeMember.error as ApiError).message || "Unable to remove workspace member."}
-        </div>
-      ) : null}
-      {removeMember.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {removeMember.data.message || "Workspace member removed."}
-        </div>
-      ) : null}
-      {revokeInvitation.isError ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {(revokeInvitation.error as ApiError).message || "Unable to revoke workspace invitation."}
-        </div>
-      ) : null}
-      {revokeInvitation.isSuccess ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {revokeInvitation.data.message || "Workspace invitation revoked."}
-        </div>
-      ) : null}
-
-      <section className="grid gap-6 2xl:grid-cols-[minmax(0,1.22fr)_minmax(360px,0.78fr)]">
-        <div className="grid gap-6">
-          <Card className="rounded-[1.5rem]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Profile</p>
-                <h3 className="mt-1.5 font-space text-[1.65rem] font-bold text-white">Personal Info</h3>
-              </div>
-              <span className="dashboard-subtle-chip">{sessionModeLabel(session)}</span>
-            </div>
-
-            <form
-              className="mt-5 grid gap-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!isDemo) {
-                  updateProfile.mutate({ name: trimmedName, email: trimmedEmail });
-                }
-              }}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px] [&>*]:min-w-0">
+        <div className="grid gap-5">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canSave) updateProfile.mutate({ name: trimmedName, email: trimmedEmail });
+            }}
+          >
+            <Section
+              id="personal"
+              title="Personal info"
+              description="Shown to teammates in your workspaces and used on alert and invitation emails."
+              footer={
+                <>
+                  <span className="text-[12px] text-[var(--lp-subtle)]">
+                    {updateProfile.isSuccess ? (
+                      <span className="inline-flex items-center gap-1.5 text-[#86efac]">
+                        <Check className="h-3.5 w-3.5" /> {updateProfile.data?.message || "Saved."}
+                      </span>
+                    ) : profileChanged ? (
+                      "You have unsaved changes."
+                    ) : (
+                      "Up to date."
+                    )}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="console-btn console-btn-secondary"
+                      disabled={!profileChanged || updateProfile.isPending}
+                      onClick={() => {
+                        updateProfile.reset();
+                        setDraftValues(null);
+                      }}
+                    >
+                      Discard
+                    </button>
+                    <button type="submit" className="console-btn console-btn-primary" disabled={!canSave}>
+                      {updateProfile.isPending ? "Saving" : "Save changes"}
+                    </button>
+                  </div>
+                </>
+              }
             >
-              <div className="grid gap-4 lg:grid-cols-2">
-                <label className="grid gap-2">
-                  <span className="field-label mb-0">Display Name</span>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">Name</span>
                   <input
+                    id="profile-name"
                     aria-label="Display Name"
-                    className="field-input"
+                    className="h-9 w-full px-3"
+                    autoComplete="name"
+                    maxLength={80}
                     disabled={isDemo || updateProfile.isPending}
                     value={formValues.name}
                     onChange={(event) => updateField("name", event.target.value)}
                   />
+                  {trimmedName === "" && draftValues ? <span className="mt-1 block text-[12px] text-[#ff8fb3]">Name can&apos;t be empty.</span> : null}
                 </label>
-                <label className="grid gap-2">
-                  <span className="field-label mb-0">Profile Email</span>
+                <label className="block">
+                  <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">Email</span>
                   <input
+                    id="profile-email"
                     aria-label="Profile Email"
-                    className="field-input"
-                    disabled={isDemo || updateProfile.isPending}
+                    className="h-9 w-full px-3"
                     type="email"
+                    autoComplete="email"
+                    disabled={isDemo || updateProfile.isPending}
                     value={formValues.email}
                     onChange={(event) => updateField("email", event.target.value)}
                   />
+                  {emailInvalid ? <span className="mt-1 block text-[12px] text-[#ff8fb3]">Enter a valid email address.</span> : null}
                 </label>
               </div>
-
-              <div className="dashboard-note-panel p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Email Change Policy</p>
-                <p className="mt-2 text-sm text-slate-300">
-                  Changing the email address keeps the active session, but the account returns to a pending verification state until the new OTP is completed.
+              {emailChanged && !emailInvalid && trimmedEmail ? (
+                <p className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-[var(--lp-muted)]">
+                  <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#fcd34d]" />
+                  We&apos;ll send a code to {trimmedEmail}. You stay signed in, but the account counts as unverified until you enter it.
                 </p>
-              </div>
+              ) : null}
+              {updateProfile.isError ? (
+                <div className="mt-3">
+                  <Notice tone="error">{(updateProfile.error as ApiError).message || "Couldn't save your profile."}</Notice>
+                </div>
+              ) : null}
+            </Section>
+          </form>
 
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  type="submit"
-                  className="h-11 rounded-2xl px-5"
-                  disabled={isDemo || updateProfile.isPending || trimmedName === "" || trimmedEmail === "" || !profileChanged}
+          <Section
+            id="verification"
+            title="Email verification"
+            description="A verified address is required for alert emails and invitations to reach you."
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--lp-border)] bg-white/[0.02] px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", verified ? "bg-[rgba(74,222,128,0.12)]" : "bg-[rgba(251,191,36,0.12)]")}
                 >
-                  {updateProfile.isPending ? "Saving..." : "Save Changes"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-11 rounded-2xl px-5"
-                  disabled={updateProfile.isPending || !profileChanged}
-                  onClick={() => {
-                    updateProfile.reset();
-                    setDraftValues(null);
-                  }}
-                >
-                  Reset Form
-                </Button>
-              </div>
-            </form>
-          </Card>
-
-          <Card className="rounded-[1.5rem]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Security</p>
-                <h3 className="mt-1.5 font-space text-[1.65rem] font-bold text-white">Security & Access</h3>
-              </div>
-              <span className={accessTone(session)}>{accessLabel(session)}</span>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Verification State</p>
-                <p className="mt-2 text-lg font-semibold text-white">{verified ? "Verified" : "Pending"}</p>
-                <p className="mt-1.5 text-sm text-slate-400">
-                  {verified
-                    ? `Verified on ${formatDateTime(user?.email_verified_at ?? "")}`
-                    : "This email must be verified before the workspace can be treated as fully trusted."}
-                </p>
-              </div>
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Session Mode</p>
-                <p className="mt-2 text-lg font-semibold text-white">{sessionModeLabel(session)}</p>
-                <p className="mt-1.5 text-sm text-slate-400">
-                  {isDemo ? "Shared contributor access is active." : "This account is signed in with a normal SaaS session."}
-                </p>
-              </div>
-              <div className="dashboard-panel-muted rounded-2xl p-4 sm:col-span-2">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Recovery Actions</p>
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {!isDemo && !verified && user?.email ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-11 rounded-2xl px-5"
-                      disabled={resendVerification.isPending}
-                      onClick={() => resendVerification.mutate(user.email)}
-                    >
-                      {resendVerification.isPending ? "Sending..." : "Resend Verification"}
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-11 rounded-2xl px-5"
-                    disabled={!user?.email || isDemo || sendResetEmail.isPending}
-                    onClick={() => {
-                      if (user?.email && !isDemo) {
-                        sendResetEmail.mutate(user.email);
-                      }
-                    }}
-                  >
-                    {sendResetEmail.isPending ? "Sending..." : "Send Reset Email"}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="rounded-[1.5rem]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Notifications</p>
-                <h3 className="mt-1.5 font-space text-[1.65rem] font-bold text-white">Notification Delivery</h3>
-              </div>
-              <Link href="/alerts" className="dashboard-subtle-chip">
-                Open Alerts
-              </Link>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Primary Channel</p>
-                <p className="mt-2 break-all text-lg font-semibold text-white">{user?.email || "-"}</p>
-                <p className="mt-1.5 text-sm text-slate-400">Default destination for verification, recovery, and alert delivery.</p>
-              </div>
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Alert Rules</p>
-                <p className="mt-2 text-lg font-semibold text-white">{enabledRules}</p>
-                <p className="mt-1.5 text-sm text-slate-400">Enabled rules currently targeting this account.</p>
-              </div>
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Latest Monitored Target</p>
-                <p className="mt-2 text-lg font-semibold text-white">{latestTarget?.target || "No telemetry yet"}</p>
-                <p className="mt-1.5 text-sm text-slate-400">
-                  {latestTarget ? formatDateTime(latestTarget.last_sample_at) : "Run a probe to establish recent activity."}
-                </p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <div className="grid gap-6">
-          <Card className="rounded-[1.5rem]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Workspace</p>
-                <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Workspace & Team</h3>
-              </div>
-              <span className="dashboard-subtle-chip">{members.length} active members</span>
-            </div>
-
-            {workspaceTeamQuery.isError ? (
-              <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                {(workspaceTeamQuery.error as ApiError).message || "Unable to load workspace context."}
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-3">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="dashboard-panel-muted rounded-2xl p-4">
-                    <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Workspace Name</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{workspace?.name ?? "Workspace loading"}</p>
-                    <p className="mt-1.5 text-sm text-slate-400">Current SaaS workspace bound to this session.</p>
-                  </div>
-                  <div className="dashboard-panel-muted rounded-2xl p-4">
-                    <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Role</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{workspaceRoleLabel(workspaceRole)}</p>
-                    <p className="mt-1.5 text-sm text-slate-400">Workspace permission level for this operator.</p>
-                  </div>
-                  <div className="dashboard-panel-muted rounded-2xl p-4">
-                    <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Pending Invites</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{pendingInvitations.length}</p>
-                    <p className="mt-1.5 text-sm text-slate-400">Queued invitations awaiting acceptance.</p>
-                  </div>
-                </div>
-
-                <div className="dashboard-panel-muted rounded-2xl p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Team Members</p>
-                      <p className="mt-1.5 text-sm text-slate-400">Live roster for the active workspace membership set.</p>
-                    </div>
-                    {workspaceTeamQuery.isLoading ? <span className="dashboard-subtle-chip">Loading</span> : null}
-                  </div>
-                  <div className="mt-4 grid gap-3">
-                    {members.length === 0 ? (
-                      <div className="rounded-2xl border border-slate-800/80 bg-slate-950/50 px-4 py-3 text-sm text-slate-400">
-                        No workspace members found yet.
-                      </div>
-                    ) : (
-                      members.map((member) => (
-                        <div key={`${member.user_id}-${member.email}`} className="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-4">
-                          <div className="flex flex-col gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900/90 text-sm font-semibold text-cyan-100 ring-1 ring-cyan-400/20">
-                                {buildInitials(member.name, member.email)}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-white">{member.name}</p>
-                                <p className="truncate text-sm text-slate-400">{member.email}</p>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {member.is_current ? <span className="dashboard-chip dashboard-chip-success">Current session</span> : null}
-                              <span className="dashboard-subtle-chip">{workspaceRoleLabel(member.role)}</span>
-                              <span className="dashboard-subtle-chip">Joined {formatDateTime(member.joined_at)}</span>
-                            </div>
-                          </div>
-                          {canManageWorkspaceMember(workspaceRole, isDemo, member.is_current, member.role) ? (
-                            <div className="flex flex-col gap-3 border-t border-slate-800/80 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <label className="field-label mb-0">Member Role</label>
-                                <select
-                                  aria-label={`Role for ${member.email}`}
-                                  className="field-input h-10 min-w-[180px] px-3 py-2"
-                                  disabled={updateMemberRole.isPending || removeMember.isPending}
-                                  value={memberRoleDrafts[member.user_id] ?? member.role}
-                                  onChange={(event) => updateMemberRoleDraft(member.user_id, event.target.value)}
-                                >
-                                  {availableRoleOptions.map((role) => (
-                                    <option key={`${member.user_id}-${role}`} value={role}>
-                                      {workspaceRoleLabel(role)}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  className="h-10 rounded-2xl px-4"
-                                  disabled={
-                                    updateMemberRole.isPending ||
-                                    removeMember.isPending ||
-                                    (memberRoleDrafts[member.user_id] ?? member.role) === member.role
-                                  }
-                                  onClick={() =>
-                                    updateMemberRole.mutate({
-                                      userID: member.user_id,
-                                      role: memberRoleDrafts[member.user_id] ?? member.role,
-                                    })
-                                  }
-                                >
-                                  {updateMemberRole.isPending ? "Updating..." : "Update Role"}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  className="h-10 rounded-2xl border-rose-500/30 bg-rose-500/10 px-4 text-rose-200 hover:bg-rose-500/20"
-                                  disabled={updateMemberRole.isPending || removeMember.isPending}
-                                  onClick={() => removeMember.mutate(member.user_id)}
-                                >
-                                  {removeMember.isPending ? "Removing..." : "Remove Member"}
-                                </Button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                  <div className="dashboard-panel-muted rounded-2xl p-4">
-                    <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Invite Teammate</p>
-                    <p className="mt-1.5 text-sm text-slate-400">
-                      Send a pending invitation into this workspace. Roles currently supported: owner, admin, member, viewer.
-                    </p>
-
-                    <form
-                      className="mt-4 grid gap-3"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        if (!isDemo) {
-                          inviteMember.mutate({ email: trimmedInviteEmail, role: selectedInviteRole });
-                        }
-                      }}
-                    >
-                      <label className="grid gap-2">
-                        <span className="field-label mb-0">Invite Email</span>
-                        <input
-                          aria-label="Invite Email"
-                          className="field-input"
-                          type="email"
-                          disabled={!canManageWorkspaceInvitations || inviteMember.isPending}
-                          value={inviteValues.email}
-                          onChange={(event) => updateInviteField("email", event.target.value)}
-                        />
-                      </label>
-                      <label className="grid gap-2">
-                        <span className="field-label mb-0">Role</span>
-                        <select
-                          aria-label="Invite Role"
-                          className="field-input"
-                          disabled={!canManageWorkspaceInvitations || inviteMember.isPending || availableInvitationRoles.length === 0}
-                          value={selectedInviteRole}
-                          onChange={(event) => updateInviteField("role", event.target.value)}
-                        >
-                          {availableInvitationRoles.map((role) => (
-                            <option key={`invite-${role}`} value={role}>
-                              {workspaceRoleLabel(role)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="flex gap-3">
-                        <Button
-                          type="submit"
-                          className="h-11 rounded-2xl px-5"
-                          disabled={!canManageWorkspaceInvitations || inviteMember.isPending || trimmedInviteEmail === "" || availableInvitationRoles.length === 0}
-                        >
-                          {inviteMember.isPending ? "Sending..." : "Send Invite"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-11 rounded-2xl px-5"
-                          disabled={inviteMember.isPending || (inviteValues.email === "" && inviteValues.role === "member")}
-                          onClick={() => {
-                            inviteMember.reset();
-                            setInviteValues({ email: "", role: "member" });
-                          }}
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    </form>
-                  </div>
-
-                  <div className="dashboard-panel-muted rounded-2xl p-4">
-                    <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Pending Invitations</p>
-                    <p className="mt-1.5 text-sm text-slate-400">Issued invites are tracked here until they expire or are accepted.</p>
-                    <div className="mt-4 grid gap-3">
-                      {invitations.length === 0 ? (
-                        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/50 px-4 py-3 text-sm text-slate-400">
-                          No invitations have been issued for this workspace.
-                        </div>
-                      ) : (
-                        invitations.map((invitation) => (
-                          <div key={invitation.id} className="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-4">
-                            <div className="flex flex-col gap-2">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="break-all text-sm font-semibold text-white">{invitation.email}</p>
-                                <span className={invitationTone(invitation.status)}>{invitation.status}</span>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                                <span className="dashboard-subtle-chip">{workspaceRoleLabel(invitation.role)}</span>
-                                <span className="dashboard-subtle-chip">Expires {formatDateTime(invitation.expires_at)}</span>
-                              </div>
-                              <p className="text-xs text-slate-500">Invited by {invitation.inviter_name} on {formatDateTime(invitation.created_at)}</p>
-                              {invitation.status === "pending" && canManageWorkspaceInvitations ? (
-                                <div className="border-t border-slate-800/80 pt-3">
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    className="h-10 rounded-2xl border-rose-500/30 bg-rose-500/10 px-4 text-rose-200 hover:bg-rose-500/20"
-                                    disabled={revokeInvitation.isPending}
-                                    onClick={() => revokeInvitation.mutate(invitation.id)}
-                                  >
-                                    {revokeInvitation.isPending ? "Revoking..." : "Revoke Invite"}
-                                  </Button>
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Card>
-
-          <Card className="rounded-[1.5rem]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Invitations</p>
-                <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Incoming Workspace Invites</h3>
-              </div>
-              <span className="dashboard-subtle-chip">{incomingInvitations.length} open</span>
-            </div>
-
-            {incomingInvitationsQuery.isError ? (
-              <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                {(incomingInvitationsQuery.error as ApiError).message || "Unable to load incoming workspace invitations."}
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-3">
-                {incomingInvitations.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/50 px-4 py-3 text-sm text-slate-400">
-                    No incoming workspace invitations for this account.
-                  </div>
-                ) : (
-                  incomingInvitations.map((invitation) => (
-                    <div key={`incoming-${invitation.id}`} className="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-4">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white">{invitation.workspace_name || "Workspace"}</p>
-                          <p className="mt-1 text-sm text-slate-400">
-                            {workspaceRoleLabel(invitation.role)} invited by {invitation.inviter_name}
-                          </p>
-                          <p className="mt-2 text-xs text-slate-500">
-                            Expires {formatDateTime(invitation.expires_at)} - Issued {formatDateTime(invitation.created_at)}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={invitationTone(invitation.status)}>{invitation.status}</span>
-                          <Button
-                            type="button"
-                            className="h-10 rounded-2xl px-4"
-                            disabled={isDemo || invitation.status !== "pending" || acceptInvitation.isPending}
-                            onClick={() => acceptInvitation.mutate(invitation.id)}
-                          >
-                            {acceptInvitation.isPending ? "Joining..." : "Join Workspace"}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </Card>
-
-          <Card className="rounded-[1.5rem]">
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Plan & Billing</p>
-            <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Subscription & Usage</h3>
-
-            <div className="mt-5 grid gap-3">
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Billing State</p>
-                <p className="mt-2 text-lg font-semibold text-white">{workspace?.billing_status ?? "trial"}</p>
-                <p className="mt-1.5 text-sm text-slate-400">Current subscription billing state for the active workspace.</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="dashboard-panel-muted rounded-2xl p-4">
-                  <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Tracked Targets</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{recentTargets.length}</p>
-                  <p className="mt-1.5 text-sm text-slate-400">{pingTargets} ICMP / {tcpTargets} TCP</p>
-                </div>
-                <div className="dashboard-panel-muted rounded-2xl p-4">
-                  <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Current Plan</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{workspace?.plan ?? "starter"}</p>
-                  <p className="mt-1.5 text-sm text-slate-400">{members.length} members, {alertRules.length} rules configured</p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="rounded-[1.5rem]">
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">Platform Health</p>
-            <h3 className="mt-1.5 font-space text-[1.55rem] font-bold text-white">Runtime Health</h3>
-
-            {runtimeHealthQuery.isError ? (
-              <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                {(runtimeHealthQuery.error as ApiError).message || "Unable to load runtime health."}
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-3">
-                {[
-                  { label: "Database", value: dependencyLabel(runtimeHealth?.database), tone: dependencyTone(runtimeHealth?.database) },
-                  { label: "Redis Cache", value: dependencyLabel(runtimeHealth?.redis), tone: dependencyTone(runtimeHealth?.redis) },
-                  { label: "Object Storage", value: dependencyLabel(runtimeHealth?.object_storage), tone: dependencyTone(runtimeHealth?.object_storage) },
-                ].map((item) => (
-                  <div key={item.label} className="dashboard-panel-muted rounded-2xl p-4">
-                    <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
-                    <p className={`mt-2 text-lg font-semibold ${item.tone}`}>{item.value}</p>
-                  </div>
-                ))}
-                <div className="dashboard-note-panel p-4">
-                  <p className="text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Workspace Origin</p>
-                  <p className="mt-2 break-all text-sm text-slate-300">{origin}</p>
-                  <p className="mt-3 text-[0.68rem] uppercase tracking-[0.2em] text-slate-500">Last Health Check</p>
-                  <p className="mt-2 text-sm text-slate-300">
-                    {runtimeHealth?.time ? formatDateTime(runtimeHealth.time) : "Waiting for runtime health response."}
+                  {verified ? <Check className="h-4 w-4 text-[#4ade80]" /> : <Mail className="h-4 w-4 text-[#fbbf24]" />}
+                </span>
+                <div className="min-w-0">
+                  <p className="lp-mono truncate text-[13px]">{user?.email}</p>
+                  <p className="text-[12px] text-[var(--lp-subtle)]">
+                    {verified ? `Verified ${formatDateTime(user?.email_verified_at ?? "")}` : "Not verified yet"}
                   </p>
                 </div>
               </div>
+              {!verified && !isDemo && user?.email ? (
+                <button
+                  type="button"
+                  className="console-btn console-btn-secondary"
+                  disabled={resendVerification.isPending}
+                  onClick={() => resendVerification.mutate(user.email)}
+                >
+                  {resendVerification.isPending ? "Sending" : "Resend code"}
+                </button>
+              ) : null}
+            </div>
+            {resendVerification.isSuccess ? (
+              <div className="mt-3">
+                <Notice tone="success">{resendVerification.data.message || "Verification code sent."}</Notice>
+              </div>
+            ) : null}
+            {resendVerification.isError ? (
+              <div className="mt-3">
+                <Notice tone="error">{(resendVerification.error as ApiError).message || "Couldn't send the code."}</Notice>
+              </div>
+            ) : null}
+          </Section>
+
+          <Section
+            id="password"
+            title="Password"
+            description={
+              <>
+                Reset it by email. Active sessions and sign-in details are on the{" "}
+                <Link href="/security" className="text-[var(--lp-accent)] hover:underline">
+                  Security
+                </Link>{" "}
+                page.
+              </>
+            }
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[13px] text-[var(--lp-muted)]">
+                We&apos;ll email a reset link to <span className="lp-mono text-[var(--lp-text)]">{user?.email}</span>. It expires after 30 minutes.
+              </p>
+              <button
+                type="button"
+                className="console-btn console-btn-secondary"
+                disabled={!user?.email || isDemo || sendResetEmail.isPending}
+                onClick={() => user?.email && !isDemo && sendResetEmail.mutate(user.email)}
+              >
+                <KeyRound className="h-3.5 w-3.5" /> {sendResetEmail.isPending ? "Sending" : "Send reset email"}
+              </button>
+            </div>
+            {sendResetEmail.isSuccess ? (
+              <div className="mt-3">
+                <Notice tone="success">{sendResetEmail.data.message || "Check your inbox for the reset link."}</Notice>
+              </div>
+            ) : null}
+            {sendResetEmail.isError ? (
+              <div className="mt-3">
+                <Notice tone="error">{(sendResetEmail.error as ApiError).message || "Couldn't send the reset email."}</Notice>
+              </div>
+            ) : null}
+          </Section>
+
+          <Section id="notifications" title="Notifications" description="Where Qnetward reaches you. Slack, Telegram, and webhooks come with Integrations.">
+            <ul className="divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[13px]">Alert emails</p>
+                  <p className="text-[12px] text-[var(--lp-subtle)]">
+                    {alertRulesQuery.isLoading ? "Checking your rules…" : `${enabledRules} active ${enabledRules === 1 ? "rule sends" : "rules send"} to ${user?.email}`}
+                  </p>
+                </div>
+                <Link href="/alerts" className="console-btn console-btn-secondary shrink-0">
+                  <BellRing className="h-3.5 w-3.5" /> Alert rules
+                </Link>
+              </li>
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[13px]">Account emails</p>
+                  <p className="text-[12px] text-[var(--lp-subtle)]">Verification codes, password resets, and invitations. Always on.</p>
+                </div>
+                <span className="shrink-0 rounded-md border border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] px-2 py-0.5 text-[12px] text-[#86efac]">On</span>
+              </li>
+            </ul>
+          </Section>
+
+          <Section
+            id="invitations"
+            title="Invitations"
+            description="Workspaces that invited this email address. Joining adds the workspace to your switcher."
+          >
+            {incomingInvitationsQuery.isError ? (
+              <Notice tone="error">{(incomingInvitationsQuery.error as ApiError).message || "Couldn't load invitations."}</Notice>
+            ) : incomingInvitations.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-[var(--lp-border)] px-4 py-6 text-center text-[13px] text-[var(--lp-subtle)]">No invitations right now.</p>
+            ) : (
+              <ul className="divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
+                {incomingInvitations.map((invitation) => {
+                  const pending = invitation.status === "pending";
+                  return (
+                    <li key={invitation.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px]">{invitation.workspace_name || "Workspace"}</p>
+                        <p className="text-[12px] text-[var(--lp-subtle)]">
+                          {roleLabel(invitation.role)} · invited by {invitation.inviter_name} ·{" "}
+                          {pending ? `expires ${formatDate(invitation.expires_at)}` : invitation.status}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="console-btn console-btn-primary"
+                        disabled={isDemo || !pending || acceptInvitation.isPending}
+                        onClick={() => acceptInvitation.mutate(invitation.id)}
+                      >
+                        {acceptInvitation.isPending && acceptInvitation.variables === invitation.id ? "Joining" : "Join workspace"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </Card>
+            {acceptInvitation.isError ? (
+              <div className="mt-3">
+                <Notice tone="error">{(acceptInvitation.error as ApiError).message || "Couldn't join the workspace."}</Notice>
+              </div>
+            ) : null}
+          </Section>
         </div>
-      </section>
+
+        <aside className="grid gap-5 xl:sticky xl:top-20">
+          <section className="rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f] p-4">
+            <h2 className="mb-3 text-[14px] font-medium">Account</h2>
+            <DefinitionList
+              items={[
+                { label: "Session", value: isDemo ? "Demo" : "Signed in" },
+                { label: "Access", value: session?.read_only ? "Read only" : "Full" },
+                { label: "Workspaces", value: workspacesQuery.isLoading ? "…" : String(workspaces.length) },
+                { label: "Invitations", value: String(pendingInvitations.length) },
+                { label: "Last probe", value: latestTarget ? latestTarget.target : "—" },
+                { label: "Account ID", value: user?.id ? `#${user.id}` : "—" },
+              ]}
+            />
+          </section>
+
+          <section className="rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f] p-2">
+            <h2 className="px-2 pb-1 pt-2 text-[14px] font-medium">Workspaces</h2>
+            {workspaces.length ? (
+              <ul className="px-2 pb-1">
+                {workspaces.map((w) => (
+                  <li key={w.id} className="flex items-center justify-between gap-2 py-1.5 text-[13px]">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", w.id === activeWorkspace?.id ? "bg-[#4ade80]" : "bg-white/20")} />
+                      <span className="truncate">{w.name}</span>
+                    </span>
+                    <span className="shrink-0 text-[12px] text-[var(--lp-subtle)]">{roleLabel(w.role)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-2 pb-2 text-[12px] text-[var(--lp-subtle)]">{workspacesQuery.isLoading ? "Loading…" : "No workspaces."}</p>
+            )}
+            <div className="mt-1 border-t border-[var(--lp-border)] pt-1">
+              <ShortcutLink href="/workspace/team" icon={Users} label="Team" hint="Members, roles, and invites" />
+              <ShortcutLink href="/workspace/billing" icon={CreditCard} label="Billing" hint="Plan and usage" />
+              <ShortcutLink href="/security" icon={Shield} label="Security" hint="Sessions and sign-in" />
+            </div>
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

@@ -10,10 +10,10 @@ test("settings and profile pages render runtime and operator details", async ({ 
   await expect(page.getByText("Redis Cache")).toBeVisible();
 
   await page.goto("/profile");
-  await expect(page.getByText("Account Settings")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Personal Info" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Security & Access" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Workspace & Team" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Personal info" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Email verification" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Password" })).toBeVisible();
   await expect(page.getByText("Contributor Demo Workspace").first()).toBeVisible();
   await expect(page.getByText("demo@qnetward.local").first()).toBeVisible();
   await expect(page.getByLabel("Display Name")).toBeVisible();

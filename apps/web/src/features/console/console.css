@@ -291,6 +291,9 @@
  */
 @layer components {
   .lp-console input[type="text"]:not(.auth-input),
+  .lp-console input[type="email"]:not(.auth-input),
+  .lp-console input[type="password"]:not(.auth-input),
+  .lp-console input[type="url"],
   .lp-console input[type="number"],
   .lp-console input[type="search"],
   .lp-console input:not([type]):not(.auth-input),
@@ -317,6 +320,14 @@
 
   .lp-console select option {
     background: #1d1d22;
+  }
+
+  .lp-console input:disabled,
+  .lp-console select:disabled,
+  .lp-console textarea:disabled {
+    cursor: not-allowed;
+    color: var(--lp-muted);
+    background-color: rgba(255, 255, 255, 0.015);
   }
 
   /* Brand buttons used by the new shell and redesigned screens. */

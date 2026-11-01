@@ -212,9 +212,94 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 -Base
 
 **Planned**　Multi-target monitoring · HTTP/HTTPS checks · Expanded DNS tooling (DNSSEC and propagation)
 
-## Contributors
+## ◉ Our Team
 
-MOPARA PAIR AYAT · MONABBER EAMAN
+<table width="100%">
+<tr>
+<td align="center" width="25%">
+  <a href="https://github.com/Fatemabintemariam">
+    <img src="https://avatars.githubusercontent.com/u/270080358?v=4" width="180" height="180" alt="Fatema Binte Mariam's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/Fatemabintemariam">Fatema Binte Mariam</a></strong><br />
+  Qnetward contributor
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/Moparapairayat">
+    <img src="https://avatars.githubusercontent.com/u/83800319?v=4" width="180" height="180" alt="Mopara Pair Ayat's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/Moparapairayat">Mopara Pair Ayat</a></strong><br />
+  Organization member
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/halitsever">
+    <img src="https://avatars.githubusercontent.com/u/34791459?v=4" width="180" height="180" alt="Halit Sever's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/halitsever">Halit Sever</a></strong><br />
+  Qnetward contributor
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/monabber444">
+    <img src="https://avatars.githubusercontent.com/u/185014085?v=4" width="180" height="180" alt="Monabber Eaman's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/monabber444">Monabber Eaman</a></strong><br />
+  Qnetward contributor
+</td>
+</tr>
+<tr>
+<td align="center" width="25%">
+  <a href="https://github.com/OrhanAsantr">
+    <img src="https://avatars.githubusercontent.com/u/247149651?v=4" width="180" height="180" alt="Orhan Asan's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/OrhanAsantr">Orhan Asan</a></strong><br />
+  Qnetward contributor
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/NurhayatYurtaslan">
+    <img src="https://avatars.githubusercontent.com/u/80510115?v=4" width="180" height="180" alt="Nurhayat Yurtaslan's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/NurhayatYurtaslan">Nurhayat Yurtaslan</a></strong><br />
+  Qnetward contributor
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/needim">
+    <img src="https://avatars.githubusercontent.com/u/271912?v=4" width="180" height="180" alt="Nedim Arabacı's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/needim">Nedim Arabacı</a></strong><br />
+  Qnetward contributor
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/CodeByPinar">
+    <img src="https://avatars.githubusercontent.com/u/107423523?v=4" width="180" height="180" alt="Pınar's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/CodeByPinar">Pınar</a></strong><br />
+  Qnetward contributor
+</td>
+</tr>
+<tr>
+<td align="center" width="25%">
+  <a href="https://github.com/edayavuz6">
+    <img src="https://avatars.githubusercontent.com/u/249468949?v=4" width="180" height="180" alt="Eda Yavuz's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/edayavuz6">Eda Yavuz</a></strong><br />
+  Qnetward contributor
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/zeynepecekiris">
+    <img src="https://avatars.githubusercontent.com/u/174215159?v=4" width="180" height="180" alt="Zeynep Ece Kiris's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/zeynepecekiris">Zeynep Ece Kiris</a></strong><br />
+  Qnetward contributor
+</td>
+<td align="center" width="25%">
+  <a href="https://github.com/BerattCelikk">
+    <img src="https://avatars.githubusercontent.com/u/138959468?v=4" width="180" height="180" alt="Berat Erol ÇELİK's GitHub avatar" />
+  </a><br />
+  <strong><a href="https://github.com/BerattCelikk">Berat Erol ÇELİK</a></strong><br />
+  Qnetward contributor
+</td>
+<td width="25%"></td>
+</tr>
+</table>
 
 <div align="center">
 

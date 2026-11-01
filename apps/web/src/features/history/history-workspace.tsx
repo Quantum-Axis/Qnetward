@@ -1,18 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Download, History, RefreshCw, Search } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
-import { HistoryPoint } from "@/lib/types";
-import { formatDateTime, formatMs } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { HistoryPoint, RecentHistoryTarget } from "@/lib/types";
+import { cn, formatDateTime, formatMs } from "@/lib/utils";
+import { LiveSignalChart, type SignalPoint } from "@/components/charts/live-signal-chart";
+import { Field, PageHeader, Panel, RunStatus, StatStrip, Toggle } from "@/components/tools/probe-ui";
 
 const historyQuerySchema = z.object({
   type: z.enum(["ping", "tcpping"]),
@@ -57,16 +56,6 @@ function buildHistoryQueryString(selection: HistorySelection) {
   return params.toString();
 }
 
-function buildHistoryContextText(selection: HistorySelection | null) {
-  if (!selection) {
-    return "Enter a target to inspect stored probe history.";
-  }
-  if (selection.type === "tcpping") {
-    return `Showing recent TCP Ping history for ${selection.host}:${selection.port}.`;
-  }
-  return `Showing recent ICMP Ping history for ${selection.host}.`;
-}
-
 function exportHistoryFileName(format: "json" | "csv", selection: HistorySelection) {
   const safeHost = selection.host.replace(/[:/\\\s]+/g, "_");
   if (selection.type === "tcpping" && selection.port) {
@@ -85,24 +74,31 @@ function extractDownloadFileName(response: Response, fallback: string) {
 }
 
 function computeHistorySummary(points: HistoryPoint[]) {
-  let successfulPoints = 0;
-  let totalRttMs = 0;
-
-  for (const point of points) {
-    if (typeof point.rtt_ms === "number") {
-      successfulPoints += 1;
-      totalRttMs += point.rtt_ms;
-    }
-  }
-
+  const rtts = points.filter((point) => typeof point.rtt_ms === "number").map((point) => point.rtt_ms as number);
+  const sorted = [...rtts].sort((a, b) => a - b);
+  const errorPoints = points.filter((point) => Boolean(point.error)).length;
   return {
     totalPoints: points.length,
-    successfulPoints,
-    errorPoints: points.filter((point) => Boolean(point.error)).length,
-    averageRttMs: successfulPoints > 0 ? totalRttMs / successfulPoints : null,
-    latestPoint: points[0] ?? null,
+    successfulPoints: rtts.length,
+    errorPoints,
+    successRate: points.length ? (rtts.length / points.length) * 100 : null,
+    averageRttMs: rtts.length ? rtts.reduce((sum, v) => sum + v, 0) / rtts.length : null,
+    p95RttMs: sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] : null,
+    latestPoint: points.reduce<HistoryPoint | null>((latest, point) => (!latest || point.ts > latest.ts ? point : latest), null),
   };
 }
+
+function relativeTime(ts: number, now: number) {
+  const seconds = Math.max(0, Math.round((now - ts) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+}
+
+const LIMIT_OPTIONS = [50, 120, 500, 1000];
+const AUTO_REFRESH_MS = 10_000;
 
 function parseSelectionFromSearchParams(searchParams: URLSearchParams): HistorySelection | null {
   const type = searchParams.get("type");
@@ -121,109 +117,6 @@ function parseSelectionFromSearchParams(searchParams: URLSearchParams): HistoryS
     port: type === "tcpping" && Number.isFinite(portValue) && portValue > 0 ? portValue : undefined,
     limit,
   };
-}
-
-function HistoryMetricChart({ points }: { points: HistoryPoint[] }) {
-  const chartData = points
-    .filter((point) => typeof point.rtt_ms === "number")
-    .map((point, index) => ({
-      index: index + 1,
-      time: formatDateTime(point.ts),
-      rttMs: point.rtt_ms ?? null,
-    }));
-
-  if (chartData.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-10 text-sm text-slate-400">
-        No RTT samples available yet for charting.
-      </div>
-    );
-  }
-
-  return (
-    <div className="dashboard-note-panel h-64 p-4 sm:h-80">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData}>
-          <defs>
-            <linearGradient id="historyLatencyStroke" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#44d4c8" />
-              <stop offset="65%" stopColor="#2dd4bf" />
-              <stop offset="100%" stopColor="#f59e0b" />
-            </linearGradient>
-          </defs>
-          <CartesianGrid stroke="rgba(87,157,196,0.14)" vertical={false} />
-          <XAxis
-            dataKey="index"
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
-            tickLine={false}
-            axisLine={{ stroke: "rgba(87,157,196,0.18)" }}
-          />
-          <YAxis
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
-            tickFormatter={(value: number) => formatMs(value)}
-            tickLine={false}
-            axisLine={{ stroke: "rgba(87,157,196,0.18)" }}
-          />
-          <Tooltip
-            cursor={{ stroke: "rgba(68,212,200,0.25)", strokeWidth: 1 }}
-            contentStyle={{
-              background: "rgba(8,14,23,0.96)",
-              border: "1px solid rgba(87,157,196,0.22)",
-              borderRadius: "16px",
-              color: "#e8f0ff",
-            }}
-            formatter={(value) => [formatMs(typeof value === "number" ? value : null), "RTT"]}
-            labelFormatter={(_, payload) => payload?.[0]?.payload?.time ?? ""}
-          />
-          <Line
-            type="monotone"
-            dataKey="rttMs"
-            stroke="url(#historyLatencyStroke)"
-            strokeWidth={2.5}
-            dot={false}
-            activeDot={{ r: 4, fill: "#f59e0b", stroke: "#071019", strokeWidth: 2 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function HistoryResultsTable({ points }: { points: HistoryPoint[] }) {
-  if (points.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-10 text-sm text-slate-400">
-        No stored points found for this target yet.
-      </div>
-    );
-  }
-
-  return (
-    <div className="dashboard-table dashboard-table-shell">
-      <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Seq</th>
-              <th>RTT</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {points.map((point) => (
-              <tr key={`${point.ts}-${point.seq ?? 0}`}>
-                <td data-label="Time">{formatDateTime(point.ts)}</td>
-                <td data-label="Seq">{point.seq ?? "-"}</td>
-                <td data-label="RTT">{typeof point.rtt_ms === "number" ? formatMs(point.rtt_ms) : "-"}</td>
-                <td data-label="Status">{point.error ? `Error: ${point.error}` : "OK"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
 }
 
 export function HistoryWorkspace() {
@@ -398,132 +291,260 @@ export function HistoryWorkspace() {
     }
   }, [selection]);
 
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const isLoading = loadHistoryMutation.isPending;
+  const errors = form.formState.errors;
+
+  const recentTargetsQuery = useQuery({
+    queryKey: ["recent-history-targets"],
+    queryFn: () => apiRequest<RecentHistoryTarget[]>("/api/history/recent-targets?limit=12"),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const recentTargets = recentTargetsQuery.data ?? [];
+
+  // Keep "x ago" labels fresh and, when asked, re-pull the selection so new runs show up without reloading.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 5_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const mutateRef = useRef(loadHistoryMutation.mutate);
+  useEffect(() => {
+    mutateRef.current = loadHistoryMutation.mutate;
+  });
+  useEffect(() => {
+    if (!autoRefresh || !selection) return;
+    const id = window.setInterval(() => mutateRef.current(selection), AUTO_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [autoRefresh, selection]);
+
+  const pickRecent = (target: RecentHistoryTarget) => {
+    const values: HistoryQueryValues = {
+      type: target.protocol,
+      host: target.target,
+      port: target.protocol === "tcpping" ? target.port : undefined,
+      limit: Number(form.getValues("limit")) || 120,
+    };
+    form.reset({ ...values, port: values.port ?? 443 });
+    void loadHistory(values);
+  };
+
+  // Samples are spaced evenly rather than by wall clock: stored runs can be hours apart and would
+  // otherwise collapse into slivers joined by long flat bridges. The tooltip still shows the real time.
+  const signalPoints = useMemo<SignalPoint[]>(
+    () =>
+      [...points]
+        .sort((a, b) => a.ts - b.ts)
+        .map((point, index) => ({ t: index * 1000, v: point.error || typeof point.rtt_ms !== "number" ? null : point.rtt_ms, label: formatDateTime(point.ts) })),
+    [points],
+  );
+  const tablePoints = useMemo(() => {
+    const newestFirst = [...points].sort((a, b) => b.ts - a.ts);
+    return errorsOnly ? newestFirst.filter((point) => point.error) : newestFirst;
+  }, [errorsOnly, points]);
+
+  const selectionLabel = selection ? (selection.type === "tcpping" ? `${selection.host}:${selection.port}` : selection.host) : null;
+  const hasData = points.length > 0;
+  const exportDisabled = !selection || !hasData || exportingFormat !== null || isLoading;
+  const dash = (text: string) => (text === "-" ? "—" : text);
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,0.84fr)_minmax(0,1.16fr)]">
-      <Card>
-        <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Stored Telemetry</p>
-        <h2 className="mt-2 font-space text-3xl font-bold text-white">History Explorer</h2>
-        <p className="mt-3 text-sm leading-7 text-slate-400">
-          Query stored ICMP and TCP Ping results, then export the same dataset as JSON or CSV from the monitoring console.
-        </p>
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <PageHeader
+        title="History"
+        description="Stored ICMP and TCP ping results for a target, with the latency trend, failures, and raw samples to export."
+        status={
+          selection ? (
+            <RunStatus
+              tone={requestError ? "error" : autoRefresh ? "live" : "done"}
+              label={requestError ? "Failed" : autoRefresh ? "Auto-refreshing" : `${points.length} samples`}
+            />
+          ) : null
+        }
+      />
 
-        <form className="mt-8 grid gap-4" onSubmit={form.handleSubmit((values) => void loadHistory(values))}>
-          <div>
-            <label className="field-label" htmlFor="history-type">Protocol</label>
-            <select id="history-type" className="field-input" {...form.register("type")}>
-              <option value="ping">ICMP Ping</option>
-              <option value="tcpping">TCP Ping</option>
+      <form className="rounded-xl border border-[var(--lp-border)] bg-[#1b1b1f] p-4" onSubmit={form.handleSubmit((values) => void loadHistory(values))}>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="lg:w-auto">
+            <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">Protocol</span>
+            <div className="flex h-10 rounded-lg border border-[var(--lp-border-strong)] bg-white/[0.03] p-1" role="radiogroup" aria-label="Protocol">
+              {(["ping", "tcpping"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === value}
+                  onClick={() => form.setValue("type", value, { shouldValidate: form.formState.isSubmitted })}
+                  className={cn(
+                    "rounded-md px-3 text-[13px] transition-colors",
+                    mode === value ? "bg-white/[0.08] text-[var(--lp-text)]" : "text-[var(--lp-muted)] hover:text-[var(--lp-text)]",
+                  )}
+                >
+                  {value === "ping" ? "ICMP" : "TCP"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Field label="Target" error={fieldErrorText(errors.host) ?? undefined} className="min-w-0 flex-1">
+            <input id="history-host" className="h-10 w-full px-3" placeholder="example.com or 8.8.8.8" autoComplete="off" {...form.register("host")} />
+          </Field>
+          {mode === "tcpping" ? (
+            <Field label="Port" error={fieldErrorText(errors.port) ?? undefined} className="lg:w-28">
+              <input id="history-port" type="number" className="h-10 w-full px-3" placeholder="443" {...form.register("port", { valueAsNumber: true })} />
+            </Field>
+          ) : null}
+          <Field label="Samples" error={fieldErrorText(errors.limit) ?? undefined} className="lg:w-32">
+            <select id="history-limit" className="h-10 w-full px-2" {...form.register("limit", { valueAsNumber: true })}>
+              {LIMIT_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  Last {n}
+                </option>
+              ))}
             </select>
-            {fieldErrorText(form.formState.errors.type) && <p className="mt-2 text-sm text-rose-300">{fieldErrorText(form.formState.errors.type)}</p>}
-          </div>
-
-          <div>
-            <label className="field-label" htmlFor="history-host">Target</label>
-            <Input id="history-host" placeholder="example.com or 8.8.8.8" {...form.register("host")} />
-            {fieldErrorText(form.formState.errors.host) && <p className="mt-2 text-sm text-rose-300">{fieldErrorText(form.formState.errors.host)}</p>}
-          </div>
-
-          {mode === "tcpping" && (
-            <div>
-              <label className="field-label" htmlFor="history-port">Port</label>
-              <Input id="history-port" type="number" placeholder="443" {...form.register("port", { valueAsNumber: true })} />
-              {fieldErrorText(form.formState.errors.port) && <p className="mt-2 text-sm text-rose-300">{fieldErrorText(form.formState.errors.port)}</p>}
-            </div>
-          )}
-
-          <div>
-            <label className="field-label" htmlFor="history-limit">Limit</label>
-            <Input id="history-limit" type="number" placeholder="120" {...form.register("limit", { valueAsNumber: true })} />
-            {fieldErrorText(form.formState.errors.limit) && <p className="mt-2 text-sm text-rose-300">{fieldErrorText(form.formState.errors.limit)}</p>}
-          </div>
-
-          <Button type="submit" disabled={loadHistoryMutation.isPending}>{loadHistoryMutation.isPending ? "Loading..." : "Load History"}</Button>
-        </form>
-
-        <div className="dashboard-note-panel mt-6 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Selection Context</p>
-          <p className="mt-3 text-sm leading-7 text-slate-300">{buildHistoryContextText(selection)}</p>
-          {selection && (
-            <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-300">
-              <span className="rounded-full border border-teal-400/18 bg-slate-950/70 px-3 py-1">{selection.type === "tcpping" ? "TCP Ping" : "ICMP Ping"}</span>
-              <span className="rounded-full border border-teal-400/18 bg-slate-950/70 px-3 py-1">{selection.host}</span>
-              {selection.type === "tcpping" && selection.port && (
-                <span className="rounded-full border border-teal-400/18 bg-slate-950/70 px-3 py-1">Port {selection.port}</span>
-              )}
-              <span className="rounded-full border border-teal-400/18 bg-slate-950/70 px-3 py-1">Limit {selection.limit}</span>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      <Card>
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">History Output</p>
-            <h3 className="mt-2 font-space text-2xl font-bold text-white">Trend + Stored Points</h3>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="secondary" disabled={!selection || exportingFormat !== null || loadHistoryMutation.isPending} onClick={() => void handleExport("json")}>
-              {exportingFormat === "json" ? "Exporting JSON..." : "Export JSON"}
-            </Button>
-            <Button type="button" variant="secondary" disabled={!selection || exportingFormat !== null || loadHistoryMutation.isPending} onClick={() => void handleExport("csv")}>
-              {exportingFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
-            </Button>
-          </div>
+          </Field>
+          <button type="submit" className="console-btn console-btn-primary h-10 px-5" disabled={isLoading}>
+            <Search className="h-3.5 w-3.5" /> {isLoading ? "Loading" : "Load"}
+          </button>
         </div>
 
-        {requestError && (
-          <p className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            {requestError}
-          </p>
-        )}
+        {recentTargets.length ? (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[12px] text-[var(--lp-subtle)]">Recent</span>
+            {recentTargets.map((target) => {
+              const label = target.protocol === "tcpping" ? `${target.target}:${target.port}` : target.target;
+              const active =
+                selection?.type === target.protocol && selection.host === target.target && (target.protocol !== "tcpping" || selection.port === target.port);
+              return (
+                <button
+                  key={`${target.protocol}:${target.target}:${target.port ?? 0}`}
+                  type="button"
+                  onClick={() => pickRecent(target)}
+                  title={`Last sample ${relativeTime(target.last_sample_at, now)}`}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors",
+                    active
+                      ? "border-[rgba(255,61,127,0.45)] bg-[rgba(255,61,127,0.1)] text-[var(--lp-text)]"
+                      : "border-[var(--lp-border)] text-[var(--lp-muted)] hover:border-[var(--lp-border-strong)] hover:text-[var(--lp-text)]",
+                  )}
+                >
+                  <span className="text-[10px] text-[var(--lp-subtle)]">{target.protocol === "tcpping" ? "TCP" : "ICMP"}</span>
+                  <span className="lp-mono">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
-        {!selection && !loadHistoryMutation.isPending ? (
-          <p className="rounded-2xl border border-dashed border-slate-800 px-4 py-6 text-sm text-slate-400">
-            Load a target to inspect stored history and export the raw points.
-          </p>
+        {requestError ? (
+          <p className="mt-4 rounded-lg border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2.5 text-[13px] text-[#ff8fb3]">{requestError}</p>
+        ) : null}
+      </form>
+
+      <StatStrip
+        items={[
+          { label: "Samples", value: hasData ? String(summary.totalPoints) : "—" },
+          {
+            label: "Success rate",
+            value: summary.successRate === null ? "—" : `${summary.successRate.toFixed(summary.successRate === 100 ? 0 : 1)}%`,
+            tone: summary.successRate === null ? undefined : summary.successRate >= 99 ? "good" : summary.successRate >= 90 ? "warn" : "bad",
+            better: "higher",
+          },
+          { label: "Failures", value: hasData ? String(summary.errorPoints) : "—", tone: summary.errorPoints ? "bad" : undefined, better: "lower" },
+          { label: "Average", value: dash(formatMs(summary.averageRttMs)), better: "lower" },
+          { label: "p95", value: dash(formatMs(summary.p95RttMs)), better: "lower" },
+          { label: "Last sample", value: summary.latestPoint ? relativeTime(summary.latestPoint.ts, now) : "—" },
+        ]}
+      />
+
+      <Panel
+        title={selectionLabel ? `Latency · ${selectionLabel}` : "Latency"}
+        aside={
+          selection ? (
+            <div className="flex items-center gap-3">
+              <Toggle label="Auto-refresh" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+              <button
+                type="button"
+                className="console-btn console-btn-secondary h-8 w-8 px-0"
+                aria-label="Refresh now"
+                disabled={isLoading}
+                onClick={() => loadHistoryMutation.mutate(selection)}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        {selection || isLoading ? (
+          <LiveSignalChart points={signalPoints} live={false} emptyText={isLoading ? "Loading samples…" : "No stored samples for this target yet."} />
         ) : (
-          <div className="grid gap-6">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Points</p><p className="mt-3 text-lg font-semibold text-white">{summary.totalPoints}</p></div>
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Successful</p><p className="mt-3 text-lg font-semibold text-emerald-300">{summary.successfulPoints}</p></div>
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Errors</p><p className="mt-3 text-lg font-semibold text-white">{summary.errorPoints}</p></div>
-              <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Average RTT</p><p className="mt-3 text-lg font-semibold text-white">{summary.averageRttMs === null ? "-" : formatMs(summary.averageRttMs)}</p></div>
-            </div>
+          <div className="flex h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--lp-border)] text-center">
+            <History className="h-5 w-5 text-[var(--lp-subtle)]" />
+            <p className="mt-3 text-[13px] text-[var(--lp-muted)]">Pick a target to see its history</p>
+            <p className="mt-1 text-[12px] text-[var(--lp-subtle)]">Every ping and TCP ping you run is stored and shows up here.</p>
+          </div>
+        )}
+        {hasData ? <p className="mt-2 text-[12px] text-[var(--lp-subtle)]">Failures sit on the floor in red · hover to read a sample</p> : null}
+      </Panel>
 
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-              <HistoryMetricChart points={points} />
-              <div className="dashboard-panel-muted rounded-2xl p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Latest Point</p>
-                {summary.latestPoint ? (
-                  <div className="mt-4 grid gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Time</p>
-                      <p className="mt-1 text-sm text-slate-200">{formatDateTime(summary.latestPoint.ts)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Seq</p>
-                      <p className="mt-1 text-sm text-slate-200">{summary.latestPoint.seq ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">RTT</p>
-                      <p className="mt-1 text-sm text-slate-200">{typeof summary.latestPoint.rtt_ms === "number" ? formatMs(summary.latestPoint.rtt_ms) : "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</p>
-                      <p className="mt-1 text-sm text-slate-200">{summary.latestPoint.error ? `Error: ${summary.latestPoint.error}` : "OK"}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="mt-4 text-sm text-slate-400">No stored points yet for the selected target.</p>
-                )}
+      <Panel
+        title="Samples"
+        bodyClassName="p-0"
+        aside={
+          selection ? (
+            <div className="flex items-center gap-3">
+              <Toggle label="Failures only" checked={errorsOnly} onChange={(e) => setErrorsOnly(e.target.checked)} />
+              <div className="flex gap-1.5">
+                <button type="button" className="console-btn console-btn-secondary h-8" disabled={exportDisabled} onClick={() => void handleExport("csv")}>
+                  <Download className="h-3.5 w-3.5" /> {exportingFormat === "csv" ? "Exporting" : "CSV"}
+                </button>
+                <button type="button" className="console-btn console-btn-secondary h-8" disabled={exportDisabled} onClick={() => void handleExport("json")}>
+                  <Download className="h-3.5 w-3.5" /> {exportingFormat === "json" ? "Exporting" : "JSON"}
+                </button>
               </div>
             </div>
-
-            <HistoryResultsTable points={points} />
+          ) : null
+        }
+      >
+        {tablePoints.length ? (
+          <div className="max-h-[460px] overflow-y-auto border-t border-[var(--lp-border)]">
+            <table className="w-full text-[13px]">
+              <thead className="sticky top-0 bg-[#1b1b1f]">
+                <tr className="border-b border-[var(--lp-border)] text-left text-[12px] text-[var(--lp-subtle)]">
+                  <th className="px-4 py-2 font-medium">Time</th>
+                  <th className="px-4 py-2 font-medium">Seq</th>
+                  <th className="px-4 py-2 text-right font-medium">Latency</th>
+                  <th className="px-4 py-2 font-medium">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tablePoints.map((point) => (
+                  <tr key={`${point.ts}-${point.seq ?? 0}`} className="border-b border-[var(--lp-border)] last:border-0">
+                    <td className="px-4 py-2 text-[var(--lp-muted)]">{formatDateTime(point.ts)}</td>
+                    <td className="lp-mono px-4 py-2 text-[var(--lp-subtle)]">{point.seq ?? "—"}</td>
+                    <td className="lp-mono px-4 py-2 text-right">{typeof point.rtt_ms === "number" ? formatMs(point.rtt_ms) : "—"}</td>
+                    <td className="px-4 py-2">
+                      {point.error ? (
+                        <span className="text-[#ff8fb3]" title={point.error}>
+                          {point.error.length > 48 ? `${point.error.slice(0, 48)}…` : point.error}
+                        </span>
+                      ) : (
+                        <span className="text-[#86efac]">Reply</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        ) : (
+          <p className="px-4 pb-4 text-[13px] text-[var(--lp-subtle)]">
+            {hasData ? "No failures in these samples." : selection ? "No stored samples for this target yet." : "Samples appear here once you load a target."}
+          </p>
         )}
-      </Card>
+      </Panel>
     </div>
   );
 }

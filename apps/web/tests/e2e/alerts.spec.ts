@@ -26,5 +26,5 @@ test("alerts page can create and render a new rule", async ({ page, baseURL }) =
 
   await page.goto("/alerts");
   await expect(page.getByRole("heading", { name: "ICMP Localhost Alert" })).toBeVisible();
-  await expect(page.getByText("Latency >= 150ms")).toBeVisible();
+  await expect(page.getByText(/latency ≥ 150ms/i).first()).toBeVisible();
 });

@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { BellRing, Pencil, Plus, Trash2, X } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/api";
 import { AlertRule, AlertRulePayload, SessionResponse } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { cn, formatDateTime } from "@/lib/utils";
+import { Field, PageHeader, Panel, RunStatus, StatStrip, Toggle } from "@/components/tools/probe-ui";
 
 const optionalPositiveNumber = z.preprocess((value) => {
   if (value === "" || value === null || typeof value === "undefined") {
@@ -53,6 +51,7 @@ const alertRuleSchema = z.object({
 
 type AlertRuleFormInput = z.input<typeof alertRuleSchema>;
 type AlertRuleFormValues = z.output<typeof alertRuleSchema>;
+type RuleFilter = "all" | "firing" | "healthy" | "paused";
 
 function buildAlertRuleDefaultName(protocol: AlertRulePayload["protocol"], target: string, port?: number) {
   const base = protocol === "tcpping" ? "TCP" : "ICMP";
@@ -62,31 +61,38 @@ function buildAlertRuleDefaultName(protocol: AlertRulePayload["protocol"], targe
   return `${base} ${target}`;
 }
 
-function buildAlertRuleSubtitle(rule: AlertRule) {
-  if (rule.protocol === "tcpping" && rule.port) {
-    return `TCP Ping - ${rule.target}:${rule.port}`;
-  }
-  return `ICMP Ping - ${rule.target}`;
+function ruleTarget(rule: Pick<AlertRule, "protocol" | "target" | "port">) {
+  return rule.protocol === "tcpping" && rule.port ? `${rule.target}:${rule.port}` : rule.target;
 }
 
-function buildAlertRuleStatusTone(rule: AlertRule) {
-  if (!rule.enabled) {
-    return "border-slate-700/80 bg-slate-900/80 text-slate-300";
-  }
-  if (rule.last_state === "alert") {
-    return "border-rose-500/30 bg-rose-500/10 text-rose-200";
-  }
-  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+function ruleState(rule: AlertRule): Exclude<RuleFilter, "all"> {
+  if (!rule.enabled) return "paused";
+  return rule.last_state === "alert" ? "firing" : "healthy";
 }
 
-function buildAlertRuleStatusLabel(rule: AlertRule) {
-  if (!rule.enabled) {
-    return "Disabled";
-  }
-  if (rule.last_state === "alert") {
-    return "Alerting";
-  }
-  return "Healthy";
+const stateMeta = {
+  firing: { label: "Firing", dot: "#ff3d7f", pill: "border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.1)] text-[#ff8fb3]" },
+  healthy: { label: "Healthy", dot: "#4ade80", pill: "border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] text-[#86efac]" },
+  paused: { label: "Paused", dot: "#6c6c75", pill: "border-[var(--lp-border)] bg-white/[0.03] text-[var(--lp-muted)]" },
+} as const;
+
+function relativeTime(value?: string | null) {
+  if (!value) return null;
+  const ts = new Date(value).getTime();
+  if (Number.isNaN(ts)) return null;
+  const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+}
+
+function conditionText(latency?: number | null, loss?: number | null) {
+  const parts: string[] = [];
+  if (typeof latency === "number" && latency > 0) parts.push(`latency ≥ ${latency}ms`);
+  if (typeof loss === "number" && loss > 0) parts.push(`loss ≥ ${loss}%`);
+  return parts.join(" or ");
 }
 
 function fieldErrorText(error: unknown) {
@@ -131,6 +137,24 @@ function alertRuleDefaults(editingRule: AlertRule | null, defaultRecipientEmail:
   };
 }
 
+function rulePayload(rule: AlertRule, overrides: Partial<AlertRulePayload> = {}): AlertRulePayload {
+  return {
+    id: rule.id,
+    name: rule.name,
+    protocol: rule.protocol,
+    target: rule.target,
+    port: rule.protocol === "tcpping" ? rule.port ?? undefined : undefined,
+    recipient_email: rule.recipient_email,
+    latency_threshold_ms: rule.latency_threshold_ms ?? undefined,
+    loss_threshold_percent: rule.loss_threshold_percent ?? undefined,
+    consecutive_breaches: rule.consecutive_breaches,
+    cooldown_minutes: rule.cooldown_minutes,
+    notify_on_recovery: rule.notify_recovery,
+    enabled: rule.enabled,
+    ...overrides,
+  };
+}
+
 function AlertRuleForm({
   editingRule,
   defaultRecipientEmail,
@@ -149,17 +173,27 @@ function AlertRuleForm({
     defaultValues: alertRuleDefaults(editingRule, defaultRecipientEmail),
   });
 
-  useEffect(() => {
-    form.reset(alertRuleDefaults(editingRule, defaultRecipientEmail));
-  }, [defaultRecipientEmail, editingRule, form]);
+  const watched = useWatch({ control: form.control });
+  const notifyOnRecovery = useWatch({ control: form.control, name: "notify_on_recovery" });
+  const protocol = watched.protocol ?? "ping";
+  const errors = form.formState.errors;
 
-  const protocol = useWatch({ control: form.control, name: "protocol" });
+  // Plain-language read-back of the rule as it is being typed.
+  const preview = useMemo(() => {
+    const target = watched.target?.trim();
+    const condition = conditionText(Number(watched.latency_threshold_ms) || null, Number(watched.loss_threshold_percent) || null);
+    if (!target || !condition) return null;
+    const where = protocol === "tcpping" && watched.port ? `${target}:${watched.port}` : target;
+    const breaches = Number(watched.consecutive_breaches) || 1;
+    const who = watched.recipient_email?.trim() || defaultRecipientEmail || "the recipient";
+    return { who, where, condition, breaches, cooldown: Number(watched.cooldown_minutes) || 30, recovery: notifyOnRecovery === true };
+  }, [defaultRecipientEmail, notifyOnRecovery, protocol, watched]);
 
   return (
     <form
       className="grid gap-4"
       onSubmit={form.handleSubmit((values) => {
-        const payload: AlertRulePayload = {
+        onSubmitRule({
           id: values.id,
           name: values.name?.trim() || buildAlertRuleDefaultName(values.protocol, values.target, values.port),
           protocol: values.protocol,
@@ -172,158 +206,190 @@ function AlertRuleForm({
           cooldown_minutes: values.cooldown_minutes,
           notify_on_recovery: values.notify_on_recovery,
           enabled: values.enabled,
-        };
-        onSubmitRule(payload);
+        });
       })}
     >
       <div>
-        <label className="field-label" htmlFor="alert-name">Rule Name</label>
-        <Input id="alert-name" placeholder="ICMP example.com" {...form.register("name")} />
+        <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">Protocol</span>
+        <div className="grid h-9 grid-cols-2 rounded-lg border border-[var(--lp-border-strong)] bg-white/[0.03] p-1" role="radiogroup" aria-label="Protocol">
+          {(["ping", "tcpping"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={protocol === value}
+              onClick={() => form.setValue("protocol", value, { shouldValidate: form.formState.isSubmitted })}
+              className={cn(
+                "rounded-md text-[13px] transition-colors",
+                protocol === value ? "bg-white/[0.08] text-[var(--lp-text)]" : "text-[var(--lp-muted)] hover:text-[var(--lp-text)]",
+              )}
+            >
+              {value === "ping" ? "ICMP ping" : "TCP ping"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={cn("grid gap-3", protocol === "tcpping" && "grid-cols-[minmax(0,1fr)_96px]")}>
+        <Field label="Target" error={fieldErrorText(errors.target) ?? undefined}>
+          <input id="alert-target" className="h-9 w-full px-3" placeholder="example.com or 8.8.8.8" autoComplete="off" {...form.register("target")} />
+        </Field>
+        {protocol === "tcpping" ? (
+          <Field label="Port" error={fieldErrorText(errors.port) ?? undefined}>
+            <input id="alert-port" type="number" className="h-9 w-full px-3" placeholder="443" {...form.register("port", { valueAsNumber: true })} />
+          </Field>
+        ) : null}
       </div>
 
       <div>
-        <label className="field-label" htmlFor="alert-protocol">Protocol</label>
-        <select id="alert-protocol" className="field-input" {...form.register("protocol")}>
-          <option value="ping">ICMP Ping</option>
-          <option value="tcpping">TCP Ping</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="field-label" htmlFor="alert-target">Target</label>
-        <Input id="alert-target" placeholder="example.com or 8.8.8.8" {...form.register("target")} />
-        {fieldErrorText(form.formState.errors.target) && <p className="mt-2 text-sm text-rose-300">{fieldErrorText(form.formState.errors.target)}</p>}
-      </div>
-
-      {protocol === "tcpping" && (
-        <div>
-          <label className="field-label" htmlFor="alert-port">Port</label>
-          <Input id="alert-port" type="number" placeholder="443" {...form.register("port", { valueAsNumber: true })} />
-          {fieldErrorText(form.formState.errors.port) && <p className="mt-2 text-sm text-rose-300">{fieldErrorText(form.formState.errors.port)}</p>}
+        <span className="mb-1.5 block text-[12px] text-[var(--lp-muted)]">Fire when</span>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="relative block">
+            <span className="sr-only">Latency threshold in milliseconds</span>
+            <input id="alert-latency" type="number" className="h-9 w-full pl-3 pr-16" placeholder="200" {...form.register("latency_threshold_ms", { valueAsNumber: true })} />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[var(--lp-subtle)]">ms latency</span>
+          </label>
+          <label className="relative block">
+            <span className="sr-only">Loss threshold in percent</span>
+            <input id="alert-loss" type="number" className="h-9 w-full pl-3 pr-12" placeholder="25" {...form.register("loss_threshold_percent", { valueAsNumber: true })} />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[var(--lp-subtle)]">% loss</span>
+          </label>
         </div>
-      )}
-
-      <div>
-        <label className="field-label" htmlFor="alert-email">Recipient Email</label>
-        <Input id="alert-email" placeholder="ops@example.com" {...form.register("recipient_email")} />
-        {fieldErrorText(form.formState.errors.recipient_email) && <p className="mt-2 text-sm text-rose-300">{fieldErrorText(form.formState.errors.recipient_email)}</p>}
+        <span className={cn("mt-1 block text-[12px]", errors.latency_threshold_ms ? "text-[#ff8fb3]" : "text-[var(--lp-subtle)]")}>
+          {fieldErrorText(errors.latency_threshold_ms) ?? "Either one is enough. Leave a field empty to ignore it."}
+        </span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="field-label" htmlFor="alert-latency">Latency Threshold (ms)</label>
-          <Input id="alert-latency" type="number" placeholder="200" {...form.register("latency_threshold_ms", { valueAsNumber: true })} />
-        </div>
-        <div>
-          <label className="field-label" htmlFor="alert-loss">Loss Threshold (%)</label>
-          <Input id="alert-loss" type="number" placeholder="25" {...form.register("loss_threshold_percent", { valueAsNumber: true })} />
-        </div>
-      </div>
-      {fieldErrorText(form.formState.errors.latency_threshold_ms) && (
-        <p className="text-sm text-rose-300">{fieldErrorText(form.formState.errors.latency_threshold_ms)}</p>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="field-label" htmlFor="alert-breaches">Consecutive Breaches</label>
-          <Input id="alert-breaches" type="number" {...form.register("consecutive_breaches", { valueAsNumber: true })} />
-        </div>
-        <div>
-          <label className="field-label" htmlFor="alert-cooldown">Cooldown (minutes)</label>
-          <Input id="alert-cooldown" type="number" {...form.register("cooldown_minutes", { valueAsNumber: true })} />
-        </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Runs in a row" hint="1 to 20">
+          <input id="alert-breaches" type="number" className="h-9 w-full px-3" {...form.register("consecutive_breaches", { valueAsNumber: true })} />
+        </Field>
+        <Field label="Cooldown (minutes)" hint="Quiet time between emails">
+          <input id="alert-cooldown" type="number" className="h-9 w-full px-3" {...form.register("cooldown_minutes", { valueAsNumber: true })} />
+        </Field>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="dashboard-toggle-panel inline-flex items-center gap-3 px-4 py-3 text-sm text-slate-200">
-          <input type="checkbox" {...form.register("notify_on_recovery")} />
-          Notify on recovery
-        </label>
-        <label className="dashboard-toggle-panel inline-flex items-center gap-3 px-4 py-3 text-sm text-slate-200">
-          <input type="checkbox" {...form.register("enabled")} />
-          Rule enabled
-        </label>
+      <Field label="Send to" error={fieldErrorText(errors.recipient_email) ?? undefined}>
+        <input id="alert-email" className="h-9 w-full px-3" placeholder="ops@example.com" {...form.register("recipient_email")} />
+      </Field>
+
+      <Field label="Name" hint="Optional. Defaults to the protocol and target.">
+        <input id="alert-name" className="h-9 w-full px-3" placeholder={buildAlertRuleDefaultName(protocol, watched.target?.trim() || "example.com", watched.port ? Number(watched.port) : undefined)} {...form.register("name")} />
+      </Field>
+
+      <div className="grid gap-2.5">
+        <Toggle label="Email when it recovers" {...form.register("notify_on_recovery")} />
+        <Toggle label="Rule enabled" {...form.register("enabled")} />
       </div>
 
-      <div className="flex flex-wrap gap-3 pt-2">
-        <Button type="submit" disabled={isBusy}>{isBusy ? "Saving..." : editingRule ? "Update Rule" : "Create Rule"}</Button>
-        {editingRule && (
-          <Button type="button" variant="secondary" onClick={onCancelEdit} disabled={isBusy}>
-            Cancel Edit
-          </Button>
+      <div className="rounded-lg border border-[var(--lp-border)] bg-white/[0.02] px-3 py-2.5 text-[12px] leading-relaxed text-[var(--lp-muted)]">
+        {preview ? (
+          <>
+            Email <span className="text-[var(--lp-text)]">{preview.who}</span> when{" "}
+            <span className="lp-mono text-[var(--lp-text)]">{preview.where}</span> has <span className="text-[var(--lp-text)]">{preview.condition}</span>
+            {preview.breaches > 1 ? ` for ${preview.breaches} runs in a row` : " on any run"}, at most once every {preview.cooldown} minutes
+            {preview.recovery ? ", and again when it recovers." : "."}
+          </>
+        ) : (
+          "Add a target and a threshold to see what this rule will do."
         )}
+      </div>
+
+      <div className="flex gap-2">
+        <button type="submit" className="console-btn console-btn-primary h-9 flex-1" disabled={isBusy}>
+          {isBusy ? "Saving" : editingRule ? "Save changes" : "Create rule"}
+        </button>
+        {editingRule ? (
+          <button type="button" className="console-btn console-btn-secondary h-9" onClick={onCancelEdit} disabled={isBusy}>
+            Cancel
+          </button>
+        ) : null}
       </div>
     </form>
   );
 }
 
-function AlertRuleList({
-  rules,
+function RuleRow({
+  rule,
+  editing,
+  busy,
+  deleting,
   onEdit,
+  onToggle,
   onDelete,
-  deletingRuleId,
 }: {
-  rules: AlertRule[];
-  onEdit: (rule: AlertRule) => void;
-  onDelete: (rule: AlertRule) => void;
-  deletingRuleId?: number | null;
+  rule: AlertRule;
+  editing: boolean;
+  busy: boolean;
+  deleting: boolean;
+  onEdit: () => void;
+  onToggle: (enabled: boolean) => void;
+  onDelete: () => void;
 }) {
-  if (rules.length === 0) {
-    return (
-      <div className="rounded-3xl border border-dashed border-slate-800 px-4 py-10 text-sm text-slate-400">
-        No alert rules yet. Create one to evaluate latency and loss thresholds automatically after probe runs.
-      </div>
-    );
-  }
+  const [confirming, setConfirming] = useState(false);
+  const state = ruleState(rule);
+  const meta = stateMeta[state];
+  const triggered = relativeTime(rule.last_triggered_at);
+  const recovered = relativeTime(rule.last_recovered_at);
+  const evaluated = relativeTime(rule.last_evaluated_at);
 
   return (
-    <div className="grid gap-4">
-      {rules.map((rule) => (
-        <article key={rule.id} className="dashboard-panel-muted rounded-3xl p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="font-space text-xl font-semibold text-white">{rule.name || buildAlertRuleSubtitle(rule)}</h3>
-              <p className="mt-2 text-sm text-slate-400">{buildAlertRuleSubtitle(rule)}</p>
-            </div>
-            <Badge className={buildAlertRuleStatusTone(rule)}>{buildAlertRuleStatusLabel(rule)}</Badge>
+    <li className={cn("px-4 py-4 transition-colors", editing ? "bg-[rgba(255,61,127,0.05)]" : "hover:bg-white/[0.015]")}>
+      <div className="flex items-start gap-3">
+        <span className="relative mt-1.5 inline-flex h-2 w-2 shrink-0">
+          {state === "firing" ? <span className="absolute inset-0 animate-ping rounded-full opacity-60 motion-reduce:animate-none" style={{ background: meta.dot }} /> : null}
+          <span className="relative h-2 w-2 rounded-full" style={{ background: meta.dot }} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-[14px] font-medium">{rule.name || buildAlertRuleDefaultName(rule.protocol, rule.target, rule.port ?? undefined)}</h3>
+            <span className={cn("rounded-md border px-1.5 py-px text-[11px]", meta.pill)}>{meta.label}</span>
+            {state === "firing" && rule.current_breach_streak > 0 ? (
+              <span className="text-[12px] text-[#ff8fb3]">{rule.current_breach_streak} breach{rule.current_breach_streak === 1 ? "" : "es"} in a row</span>
+            ) : null}
           </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {typeof rule.latency_threshold_ms === "number" && <Badge>{`Latency >= ${rule.latency_threshold_ms}ms`}</Badge>}
-            {typeof rule.loss_threshold_percent === "number" && <Badge>{`Loss >= ${rule.loss_threshold_percent}%`}</Badge>}
-            <Badge>{rule.consecutive_breaches}x breach</Badge>
-            <Badge>{rule.cooldown_minutes}m cooldown</Badge>
-            <Badge>{rule.notify_recovery ? "Recovery on" : "Recovery off"}</Badge>
-          </div>
-
-          <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Recipient</p>
-              <p className="mt-1">{rule.recipient_email}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Last Triggered</p>
-              <p className="mt-1">{rule.last_triggered_at ? formatDateTime(rule.last_triggered_at) : "No alert fired yet"}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Last Recovered</p>
-              <p className="mt-1">{rule.last_recovered_at ? formatDateTime(rule.last_recovered_at) : "No recovery yet"}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Created</p>
-              <p className="mt-1">{formatDateTime(rule.created_at)}</p>
-            </div>
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button type="button" variant="secondary" onClick={() => onEdit(rule)}>Edit</Button>
-            <Button type="button" variant="danger" disabled={deletingRuleId === rule.id} onClick={() => onDelete(rule)}>
-              {deletingRuleId === rule.id ? "Deleting..." : "Delete"}
-            </Button>
-          </div>
-        </article>
-      ))}
-    </div>
+          <p className="mt-1 text-[13px] text-[var(--lp-muted)]">
+            <span className="text-[var(--lp-subtle)]">{rule.protocol === "tcpping" ? "TCP" : "ICMP"}</span>{" "}
+            <span className="lp-mono text-[var(--lp-text)]">{ruleTarget(rule)}</span>
+            <span className="text-[var(--lp-subtle)]"> · </span>
+            {conditionText(rule.latency_threshold_ms, rule.loss_threshold_percent).replace(/^./, (c) => c.toUpperCase())}
+            {rule.consecutive_breaches > 1 ? <span className="text-[var(--lp-subtle)]"> · {rule.consecutive_breaches} runs in a row</span> : null}
+          </p>
+          <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-[var(--lp-subtle)]">
+            <span>To {rule.recipient_email}</span>
+            <span>{rule.cooldown_minutes}m cooldown</span>
+            <span>{rule.notify_recovery ? "Recovery email on" : "Recovery email off"}</span>
+            <span title={rule.last_triggered_at ? formatDateTime(rule.last_triggered_at) : undefined}>{triggered ? `Fired ${triggered}` : "Never fired"}</span>
+            {recovered ? <span title={formatDateTime(rule.last_recovered_at)}>Recovered {recovered}</span> : null}
+            {evaluated ? <span title={formatDateTime(rule.last_evaluated_at)}>Checked {evaluated}</span> : null}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="mr-1" title={rule.enabled ? "Pause rule" : "Resume rule"}>
+            <Toggle label="" aria-label={rule.enabled ? `Pause ${rule.name}` : `Resume ${rule.name}`} checked={rule.enabled} disabled={busy} onChange={(e) => onToggle(e.target.checked)} />
+          </span>
+          {confirming ? (
+            <>
+              <button type="button" className="console-btn h-8 bg-[rgba(255,61,127,0.15)] px-2.5 text-[#ff8fb3] hover:bg-[rgba(255,61,127,0.25)]" disabled={deleting} onClick={onDelete}>
+                {deleting ? "Deleting" : "Delete"}
+              </button>
+              <button type="button" className="console-btn console-btn-secondary h-8 w-8 px-0" aria-label="Keep rule" onClick={() => setConfirming(false)}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="console-btn h-8 w-8 px-0 text-[var(--lp-muted)] hover:bg-white/[0.05] hover:text-[var(--lp-text)]" aria-label={`Edit ${rule.name}`} onClick={onEdit}>
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button type="button" className="console-btn h-8 w-8 px-0 text-[var(--lp-muted)] hover:bg-[rgba(255,61,127,0.1)] hover:text-[#ff8fb3]" aria-label={`Delete ${rule.name}`} onClick={() => setConfirming(true)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -332,6 +398,8 @@ export function AlertRulesWorkspace() {
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
+  const [togglingRuleId, setTogglingRuleId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<RuleFilter>("all");
 
   const sessionQuery = useQuery({
     queryKey: ["session"],
@@ -341,6 +409,7 @@ export function AlertRulesWorkspace() {
   const alertRulesQuery = useQuery({
     queryKey: ["alert-rules"],
     queryFn: () => apiRequest<AlertRule[]>("/api/alerts/rules"),
+    refetchInterval: 15_000,
   });
 
   const saveAlertRuleMutation = useMutation({
@@ -352,13 +421,33 @@ export function AlertRulesWorkspace() {
     onSuccess: async (savedRule, payload) => {
       setNotice({
         type: "success",
-        message: payload.id ? `Rule updated for ${savedRule.target}.` : `Rule saved for ${savedRule.target}.`,
+        message: payload.id ? `Saved changes to ${savedRule.name || savedRule.target}.` : `Created a rule for ${savedRule.target}.`,
       });
       setEditingRule(null);
       await queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
     },
     onError: (error: ApiError) => {
       setNotice({ type: "error", message: error.message });
+    },
+  });
+
+  const toggleRuleMutation = useMutation({
+    mutationFn: ({ rule, enabled }: { rule: AlertRule; enabled: boolean }) => {
+      setTogglingRuleId(rule.id);
+      return apiRequest<AlertRule>("/api/alerts/rules", {
+        method: "POST",
+        body: JSON.stringify(rulePayload(rule, { enabled })),
+      });
+    },
+    onSuccess: async (savedRule) => {
+      setNotice({ type: "success", message: `${savedRule.name || savedRule.target} ${savedRule.enabled ? "resumed" : "paused"}.` });
+      await queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
+    },
+    onError: (error: ApiError) => {
+      setNotice({ type: "error", message: error.message });
+    },
+    onSettled: () => {
+      setTogglingRuleId(null);
     },
   });
 
@@ -369,9 +458,9 @@ export function AlertRulesWorkspace() {
         method: "DELETE",
       });
     },
-    onSuccess: async () => {
-      setNotice({ type: "success", message: "Rule deleted." });
-      if (editingRule && deletingRuleId === editingRule.id) {
+    onSuccess: async (_, rule) => {
+      setNotice({ type: "success", message: `Deleted ${rule.name || rule.target}.` });
+      if (editingRule?.id === rule.id) {
         setEditingRule(null);
       }
       await queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
@@ -384,47 +473,154 @@ export function AlertRulesWorkspace() {
     },
   });
 
-  const ruleSummary = useMemo(() => {
-    const rules = alertRulesQuery.data ?? [];
-    return {
-      total: rules.length,
-      alerting: rules.filter((rule) => rule.last_state === "alert").length,
-      healthy: rules.filter((rule) => rule.last_state !== "alert" && rule.enabled).length,
-      disabled: rules.filter((rule) => !rule.enabled).length,
-    };
-  }, [alertRulesQuery.data]);
+  const rules = useMemo(() => alertRulesQuery.data ?? [], [alertRulesQuery.data]);
+  const counts = useMemo(() => {
+    const byState = { firing: 0, healthy: 0, paused: 0 };
+    rules.forEach((rule) => {
+      byState[ruleState(rule)] += 1;
+    });
+    return byState;
+  }, [rules]);
+  const lastFiredAt = useMemo(
+    () => rules.map((rule) => rule.last_triggered_at).filter((v): v is string => Boolean(v)).sort().at(-1) ?? null,
+    [rules],
+  );
+  // Firing rules first, then healthy, then paused; newest first within each group.
+  const visibleRules = useMemo(() => {
+    const order = { firing: 0, healthy: 1, paused: 2 };
+    return rules
+      .filter((rule) => filter === "all" || ruleState(rule) === filter)
+      .sort((a, b) => order[ruleState(a)] - order[ruleState(b)] || b.id - a.id);
+  }, [filter, rules]);
+
+  const filters: { id: RuleFilter; label: string; count: number }[] = [
+    { id: "all", label: "All", count: rules.length },
+    { id: "firing", label: "Firing", count: counts.firing },
+    { id: "healthy", label: "Healthy", count: counts.healthy },
+    { id: "paused", label: "Paused", count: counts.paused },
+  ];
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,0.84fr)_minmax(0,1.16fr)]">
-      <Card>
-        <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Threshold Automation</p>
-        <h2 className="mt-2 font-space text-3xl font-bold text-white">Alert Rules</h2>
-        <p className="mt-3 text-sm leading-7 text-slate-400">
-          Create latency and loss thresholds that the monitoring stack evaluates automatically after each ICMP Ping or TCP Ping run.
+    <div className="grid grid-cols-1 gap-5 [&>*]:min-w-0">
+      <PageHeader
+        title="Alert rules"
+        description="Latency and loss thresholds checked after every ICMP and TCP ping run. Breaches send an email, with a cooldown so one incident is one message."
+        status={
+          rules.length ? (
+            <RunStatus tone={counts.firing ? "error" : "live"} label={counts.firing ? `${counts.firing} firing` : "All clear"} />
+          ) : null
+        }
+      />
+
+      <StatStrip
+        items={[
+          { label: "Rules", value: alertRulesQuery.isLoading ? "—" : String(rules.length) },
+          { label: "Firing", value: alertRulesQuery.isLoading ? "—" : String(counts.firing), tone: counts.firing ? "bad" : undefined, better: "lower" },
+          { label: "Healthy", value: alertRulesQuery.isLoading ? "—" : String(counts.healthy), tone: counts.healthy ? "good" : undefined, better: "higher" },
+          { label: "Paused", value: alertRulesQuery.isLoading ? "—" : String(counts.paused) },
+          { label: "Last fired", value: relativeTime(lastFiredAt) ?? "—" },
+          { label: "Recipients", value: rules.length ? String(new Set(rules.map((rule) => rule.recipient_email)).size) : "—" },
+        ]}
+      />
+
+      {notice ? (
+        <p
+          role="status"
+          className={cn(
+            "flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-[13px]",
+            notice.type === "success"
+              ? "border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] text-[#86efac]"
+              : "border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] text-[#ff8fb3]",
+          )}
+        >
+          {notice.message}
+          <button type="button" aria-label="Dismiss" className="opacity-70 hover:opacity-100" onClick={() => setNotice(null)}>
+            <X className="h-3.5 w-3.5" />
+          </button>
         </p>
+      ) : null}
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Rules</p><p className="mt-3 text-lg font-semibold text-white">{ruleSummary.total}</p></div>
-          <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Alerting</p><p className="mt-3 text-lg font-semibold text-rose-300">{ruleSummary.alerting}</p></div>
-          <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Healthy</p><p className="mt-3 text-lg font-semibold text-emerald-300">{ruleSummary.healthy}</p></div>
-          <div className="dashboard-panel-muted rounded-2xl p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Disabled</p><p className="mt-3 text-lg font-semibold text-white">{ruleSummary.disabled}</p></div>
-        </div>
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)] [&>*]:min-w-0">
+        <Panel
+          title="Rules"
+          bodyClassName="p-0"
+          aside={
+            rules.length ? (
+              <div className="flex rounded-lg border border-[var(--lp-border)] p-0.5" role="tablist" aria-label="Filter rules">
+                {filters.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === f.id}
+                    onClick={() => setFilter(f.id)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-[12px] transition-colors",
+                      filter === f.id ? "bg-white/[0.08] text-[var(--lp-text)]" : "text-[var(--lp-muted)] hover:text-[var(--lp-text)]",
+                    )}
+                  >
+                    {f.label} <span className="text-[var(--lp-subtle)]">{f.count}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null
+          }
+        >
+          {alertRulesQuery.isLoading ? (
+            <p className="px-4 pb-4 text-[13px] text-[var(--lp-subtle)]">Loading rules…</p>
+          ) : alertRulesQuery.isError ? (
+            <p className="mx-4 mb-4 rounded-lg border border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] px-3 py-2.5 text-[13px] text-[#ff8fb3]">
+              {(alertRulesQuery.error as ApiError).message || "Unable to load alert rules."}
+            </p>
+          ) : rules.length === 0 ? (
+            <div className="mx-4 mb-4 flex flex-col items-center rounded-lg border border-dashed border-[var(--lp-border)] px-6 py-12 text-center">
+              <BellRing className="h-5 w-5 text-[var(--lp-subtle)]" />
+              <p className="mt-3 text-[13px] text-[var(--lp-muted)]">No alert rules yet</p>
+              <p className="mt-1 max-w-sm text-[12px] text-[var(--lp-subtle)]">Create one on the right. It is checked after every ping or TCP ping run against the same target.</p>
+            </div>
+          ) : visibleRules.length === 0 ? (
+            <p className="px-4 pb-4 text-[13px] text-[var(--lp-subtle)]">No {filter} rules.</p>
+          ) : (
+            <ul className="divide-y divide-[var(--lp-border)] border-t border-[var(--lp-border)]">
+              {visibleRules.map((rule) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  editing={editingRule?.id === rule.id}
+                  busy={togglingRuleId === rule.id}
+                  deleting={deletingRuleId === rule.id}
+                  onEdit={() => {
+                    setNotice(null);
+                    setEditingRule(rule);
+                  }}
+                  onToggle={(enabled) => {
+                    setNotice(null);
+                    toggleRuleMutation.mutate({ rule, enabled });
+                  }}
+                  onDelete={() => {
+                    setNotice(null);
+                    deleteAlertRuleMutation.mutate(rule);
+                  }}
+                />
+              ))}
+            </ul>
+          )}
+        </Panel>
 
-        {notice && (
-          <p
-            className={[
-              "mt-6 rounded-2xl px-4 py-3 text-sm",
-              notice.type === "success"
-                ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                : "border border-rose-500/30 bg-rose-500/10 text-rose-200",
-            ].join(" ")}
-          >
-            {notice.message}
-          </p>
-        )}
-
-        <div className="mt-6">
+        <Panel
+          className="xl:sticky xl:top-20"
+          title={editingRule ? "Edit rule" : "New rule"}
+          aside={
+            editingRule ? (
+              <button type="button" className="inline-flex items-center gap-1 text-[12px] text-[var(--lp-muted)] hover:text-[var(--lp-text)]" onClick={() => setEditingRule(null)}>
+                <Plus className="h-3.5 w-3.5" /> New instead
+              </button>
+            ) : null
+          }
+        >
+          {/* Remount per rule so defaultValues land in the inputs; reset() left the uncontrolled fields stale. */}
           <AlertRuleForm
+            key={`${editingRule?.id ?? "new"}:${sessionQuery.data?.user?.email ?? ""}`}
             editingRule={editingRule}
             defaultRecipientEmail={sessionQuery.data?.user?.email ?? ""}
             isBusy={saveAlertRuleMutation.isPending}
@@ -434,46 +630,8 @@ export function AlertRulesWorkspace() {
               saveAlertRuleMutation.mutate(payload);
             }}
           />
-        </div>
-      </Card>
-
-      <Card>
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Rule Inventory</p>
-            <h3 className="mt-2 font-space text-2xl font-bold text-white">Saved Rules</h3>
-          </div>
-          {alertRulesQuery.data && alertRulesQuery.data.length > 0 && (
-            <div className="text-right text-sm text-slate-400">
-              <p>{alertRulesQuery.data.length} rule{alertRulesQuery.data.length === 1 ? "" : "s"}</p>
-              <p>Updated {formatDateTime(alertRulesQuery.dataUpdatedAt)}</p>
-            </div>
-          )}
-        </div>
-
-        {alertRulesQuery.isLoading ? (
-          <div className="rounded-3xl border border-dashed border-slate-800 px-4 py-10 text-sm text-slate-400">
-            Loading alert rules.
-          </div>
-        ) : alertRulesQuery.isError ? (
-          <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-4 py-10 text-sm text-rose-200">
-            {(alertRulesQuery.error as ApiError).message || "Unable to load alert rules."}
-          </div>
-        ) : (
-          <AlertRuleList
-            rules={alertRulesQuery.data ?? []}
-            deletingRuleId={deletingRuleId}
-            onEdit={(rule) => {
-              setNotice(null);
-              setEditingRule(rule);
-            }}
-            onDelete={(rule) => {
-              setNotice(null);
-              deleteAlertRuleMutation.mutate(rule);
-            }}
-          />
-        )}
-      </Card>
+        </Panel>
+      </div>
     </div>
   );
 }

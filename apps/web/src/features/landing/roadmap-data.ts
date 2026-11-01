@@ -44,7 +44,8 @@ export const roadmap: RoadmapTheme[] = [
     items: [
       { name: "Alert rules", body: "Latency and loss thresholds with cooldowns, delivered by email.", horizon: "now" },
       { name: "History and export", body: "Stored results you can chart, filter, and export as CSV or JSON.", horizon: "now" },
-      { name: "Uptime monitors", body: "HTTP, TLS, and ping checks on a schedule, from several regions.", horizon: "next" },
+      { name: "Uptime monitors", body: "Ping and TCP checks every minute to every hour, with an email when a target goes down and when it's back.", horizon: "now" },
+      { name: "HTTP and TLS monitors", body: "Status codes, response times, and certificate expiry, checked from several regions.", horizon: "next" },
       { name: "Chat and webhook alerts", body: "Slack, Telegram, Discord, and your own webhooks.", horizon: "next" },
       { name: "Status pages", body: "A public page your customers can check during an incident.", horizon: "next" },
       { name: "Incidents and on-call", body: "Group related alerts into one incident and page whoever is on call.", horizon: "later" },

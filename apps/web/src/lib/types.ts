@@ -360,7 +360,7 @@ export type AlertRule = {
   loss_threshold_percent?: number | null;
   consecutive_breaches: number;
   cooldown_minutes: number;
-  notify_recovery: boolean;
+  notify_on_recovery: boolean;
   enabled: boolean;
   last_state: string;
   current_breach_streak: number;
@@ -382,6 +382,45 @@ export type AlertRulePayload = {
   consecutive_breaches: number;
   cooldown_minutes: number;
   notify_on_recovery: boolean;
+  enabled: boolean;
+};
+
+export type MonitorCheck = {
+  checked_at: string;
+  ok: boolean;
+  rtt_ms?: number | null;
+  loss_percent: number;
+  error?: string;
+};
+
+export type Monitor = {
+  id: number;
+  name: string;
+  protocol: "ping" | "tcpping";
+  target: string;
+  port?: number | null;
+  interval_seconds: number;
+  notify_email: string;
+  enabled: boolean;
+  status: "pending" | "up" | "down";
+  last_checked_at?: string | null;
+  last_status_change_at?: string | null;
+  last_rtt_ms?: number | null;
+  last_error?: string;
+  next_run_at: string;
+  created_at: string;
+  uptime_24h?: number | null;
+  recent_checks: MonitorCheck[];
+};
+
+export type MonitorPayload = {
+  id?: number;
+  name: string;
+  protocol: "ping" | "tcpping";
+  target: string;
+  port?: number;
+  interval_seconds: number;
+  notify_email: string;
   enabled: boolean;
 };
 

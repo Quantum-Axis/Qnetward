@@ -53,6 +53,7 @@ func runServe(args []string) {
 	demoName := fs.String("demo-name", envString("QNETWARD_DEMO_NAME", "Contributor Demo"), "display name for demo access")
 	demoEmail := fs.String("demo-email", envString("QNETWARD_DEMO_EMAIL", "demo@qnetward.local"), "display email for demo access")
 	allowPrivateTargets := fs.Bool("allow-private-targets", envBool("QNETWARD_ALLOW_PRIVATE_TARGETS", false), "allow probes to loopback, private, and link-local addresses (self-hosted LAN monitoring); cloud metadata endpoints stay blocked")
+	runMonitors := fs.Bool("monitors", envBool("QNETWARD_MONITORS", true), "run scheduled uptime monitor checks in this process")
 	adminEmailsRaw := fs.String("admin-emails", envString("QNETWARD_ADMIN_EMAILS", ""), "comma-separated platform admin emails")
 
 	fs.Usage = func() {
@@ -174,6 +175,13 @@ func runServe(args []string) {
 		fmt.Printf("Email delivery: Resend from=%s\n", *emailFrom)
 	}
 
+	monitorsCtx, stopMonitors := context.WithCancel(context.Background())
+	defer stopMonitors()
+	if *runMonitors {
+		go apiServer.RunMonitors(monitorsCtx)
+		fmt.Println("Uptime monitors: running")
+	}
+
 	// Handle graceful shutdown on SIGINT/SIGTERM
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -181,6 +189,7 @@ func runServe(args []string) {
 	go func() {
 		<-sigChan
 		fmt.Println("\nShutting down gracefully...")
+		stopMonitors()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {

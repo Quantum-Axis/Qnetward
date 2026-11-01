@@ -116,7 +116,7 @@ function alertRuleDefaults(editingRule: AlertRule | null, defaultRecipientEmail:
       loss_threshold_percent: editingRule.loss_threshold_percent ?? undefined,
       consecutive_breaches: editingRule.consecutive_breaches,
       cooldown_minutes: editingRule.cooldown_minutes,
-      notify_on_recovery: editingRule.notify_recovery,
+      notify_on_recovery: editingRule.notify_on_recovery,
       enabled: editingRule.enabled,
     };
   }
@@ -149,7 +149,7 @@ function rulePayload(rule: AlertRule, overrides: Partial<AlertRulePayload> = {})
     loss_threshold_percent: rule.loss_threshold_percent ?? undefined,
     consecutive_breaches: rule.consecutive_breaches,
     cooldown_minutes: rule.cooldown_minutes,
-    notify_on_recovery: rule.notify_recovery,
+    notify_on_recovery: rule.notify_on_recovery,
     enabled: rule.enabled,
     ...overrides,
   };
@@ -359,7 +359,7 @@ function RuleRow({
           <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-[var(--lp-subtle)]">
             <span>To {rule.recipient_email}</span>
             <span>{rule.cooldown_minutes}m cooldown</span>
-            <span>{rule.notify_recovery ? "Recovery email on" : "Recovery email off"}</span>
+            <span>{rule.notify_on_recovery ? "Recovery email on" : "Recovery email off"}</span>
             <span title={rule.last_triggered_at ? formatDateTime(rule.last_triggered_at) : undefined}>{triggered ? `Fired ${triggered}` : "Never fired"}</span>
             {recovered ? <span title={formatDateTime(rule.last_recovered_at)}>Recovered {recovered}</span> : null}
             {evaluated ? <span title={formatDateTime(rule.last_evaluated_at)}>Checked {evaluated}</span> : null}

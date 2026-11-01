@@ -23,3 +23,4 @@ patterns don't.
 | [0007](0007-versioned-schema-migrations.md) | Versioned, embedded schema migrations | Accepted |
 | [0008](0008-http-layer-in-internal-api.md) | One HTTP package, domain packages on demand | Accepted |
 | [0009](0009-row-level-security-via-tenant-role.md) | Row-level security through a restricted tenant role | Accepted |
+| [0010](0010-uptime-monitors-run-in-process.md) | Uptime monitors run inside the API process | Accepted |

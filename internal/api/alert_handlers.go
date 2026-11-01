@@ -220,6 +220,8 @@ func dashboardRoutePath(panel string) string {
 		return "/history"
 	case "alerts":
 		return "/alerts"
+	case "monitors":
+		return "/monitors"
 	case "settings":
 		return "/settings"
 	case "profile":

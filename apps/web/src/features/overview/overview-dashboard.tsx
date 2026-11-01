@@ -105,7 +105,7 @@ export function WelcomeHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Link
-          href="/settings"
+          href="/status"
           className="mr-1 hidden items-center gap-2 text-[12px] text-[var(--lp-muted)] hover:text-[var(--lp-text)] sm:flex"
           title="Database, cache, and object storage status"
         >

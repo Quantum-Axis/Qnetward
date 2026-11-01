@@ -124,7 +124,7 @@ function Notifications({ session }: { session: SessionResponse }) {
                     >
                       <Check className="h-3 w-3" /> Accept
                     </button>
-                    <Link href="/profile" onClick={() => setOpen(false)} className="console-btn console-btn-secondary h-7 px-2.5 text-[12px]">
+                    <Link href="/settings/workspaces" onClick={() => setOpen(false)} className="console-btn console-btn-secondary h-7 px-2.5 text-[12px]">
                       Review
                     </Link>
                   </div>

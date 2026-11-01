@@ -6,6 +6,20 @@ export type AuthUser = {
   created_at: string;
 };
 
+export type UserProfile = {
+  bio: string;
+  pronouns: string;
+  website: string;
+  /** IANA zone such as Asia/Dhaka; empty means the browser's zone. */
+  timezone: string;
+  social_links: string[];
+  updated_at?: string;
+};
+
+export type UserProfileResponse = {
+  profile: UserProfile;
+};
+
 export type SessionResponse = {
   authenticated: boolean;
   user?: AuthUser | null;

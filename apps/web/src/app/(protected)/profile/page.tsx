@@ -1,5 +1,5 @@
-import { ProfileWorkspace } from "@/features/profile/profile-workspace";
+import { redirect } from "next/navigation";
 
-export default function ProfilePage() {
-  return <ProfileWorkspace />;
+export default function ProfileRedirect() {
+  redirect("/settings/profile");
 }

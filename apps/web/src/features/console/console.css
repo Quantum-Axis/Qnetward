@@ -322,6 +322,12 @@
     background: #1d1d22;
   }
 
+  .lp-console input::placeholder,
+  .lp-console textarea::placeholder {
+    color: var(--lp-subtle);
+    opacity: 1;
+  }
+
   .lp-console input:disabled,
   .lp-console select:disabled,
   .lp-console textarea:disabled {

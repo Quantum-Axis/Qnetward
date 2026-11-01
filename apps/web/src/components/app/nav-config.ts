@@ -117,15 +117,18 @@ export const navSections: NavSection[] = [
       { href: "/audit-log", label: "Audit log", icon: FileClock, keywords: "activity history who what when", soon: true },
       { href: "/workspace/billing", label: "Billing", icon: CreditCard, keywords: "plan subscription usage" },
       { href: "/sso", label: "SSO & SCIM", icon: Bot, keywords: "saml oidc enterprise", soon: true },
-      { href: "/settings", label: "Settings", icon: Settings, keywords: "deployment status runtime" },
+      { href: "/status", label: "System status", icon: Settings, keywords: "deployment status runtime database redis storage" },
     ],
   },
   {
     label: "Account",
     hiddenInSidebar: true,
     items: [
-      { href: "/profile", label: "Profile", icon: User, keywords: "name email" },
-      { href: "/security", label: "Security", icon: Shield, keywords: "password sessions" },
+      { href: "/settings/profile", label: "Profile", icon: User, keywords: "settings name bio avatar timezone" },
+      { href: "/settings/account", label: "Account", icon: User, keywords: "settings email verification" },
+      { href: "/settings/notifications", label: "Notifications", icon: User, keywords: "settings alerts email channels" },
+      { href: "/settings/security", label: "Password and sessions", icon: Shield, keywords: "settings security password sign out" },
+      { href: "/settings/workspaces", label: "Your workspaces", icon: User, keywords: "settings invitations join switch" },
     ],
   },
   {

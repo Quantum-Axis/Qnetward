@@ -1,5 +1,5 @@
-import { SettingsWorkspace } from "@/features/settings/settings-workspace";
+import { redirect } from "next/navigation";
 
-export default function SettingsPage() {
-  return <SettingsWorkspace />;
+export default function SettingsIndex() {
+  redirect("/settings/profile");
 }

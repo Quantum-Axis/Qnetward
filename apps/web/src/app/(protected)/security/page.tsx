@@ -1,5 +1,5 @@
-import { SecurityWorkspace } from "@/features/account/security-workspace";
+import { redirect } from "next/navigation";
 
-export default function SecurityPage() {
-  return <SecurityWorkspace />;
+export default function SecurityRedirect() {
+  redirect("/settings/security");
 }

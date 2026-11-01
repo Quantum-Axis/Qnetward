@@ -169,8 +169,8 @@ function UserMenu({ session, collapsed }: { session: SessionResponse; collapsed:
           </div>
           <div className="my-1 h-px bg-[var(--lp-border)]" />
           {[
-            { href: "/profile", label: "Profile", icon: User },
-            { href: "/security", label: "Security", icon: Shield },
+            { href: "/settings/profile", label: "Settings", icon: User },
+            { href: "/settings/security", label: "Password and sessions", icon: Shield },
           ].map((item) => (
             <Link
               key={item.href}

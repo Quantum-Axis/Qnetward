@@ -51,7 +51,7 @@ export function OverviewHeader({ health }: { health?: RuntimeHealthResponse }) {
         <h1 className="text-[24px] font-medium tracking-[-0.02em]">Overview</h1>
         <p className="mt-1 text-[14px] text-[var(--lp-muted)]">Health of the targets your workspace probes. Refreshes every 20 seconds.</p>
       </div>
-      <Link href="/settings" className="flex items-center gap-2 text-[13px] text-[var(--lp-muted)] hover:text-[var(--lp-text)]">
+      <Link href="/status" className="flex items-center gap-2 text-[13px] text-[var(--lp-muted)] hover:text-[var(--lp-text)]">
         <span className="h-2 w-2 rounded-full" style={{ background: color }} />
         {label}
       </Link>

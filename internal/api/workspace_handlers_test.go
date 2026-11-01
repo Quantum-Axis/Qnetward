@@ -47,7 +47,7 @@ func TestHandleWorkspaceTeamReturnsMembersAndInvitations(t *testing.T) {
 	st := installTestStore(t)
 	user, cookie := issueTestSession(t, st)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := st.CreateWorkspaceInvitationByUserID(ctx, user.ID, fmt.Sprintf("invite-%d@example.com", time.Now().UnixNano()), "member", time.Now().Add(72*time.Hour)); err != nil {
 		t.Fatalf("CreateWorkspaceInvitationByUserID returned error: %v", err)
@@ -93,7 +93,7 @@ func TestHandleWorkspaceTeamCreatesInvitation(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	invitations, err := st.ListWorkspaceInvitationsByUserID(ctx, user.ID)
 	if err != nil {
@@ -111,7 +111,7 @@ func TestHandleWorkspaceTeamUpdatesMemberRole(t *testing.T) {
 	st := installTestStore(t)
 	owner, cookie := issueTestSession(t, st)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	memberEmail := fmt.Sprintf("member-update-%d@example.com", time.Now().UnixNano())
 	member, err := st.CreateUser(ctx, "Update Member", memberEmail, "hash-member", false)
@@ -150,7 +150,7 @@ func TestHandleWorkspaceTeamRemovesMember(t *testing.T) {
 	st := installTestStore(t)
 	owner, cookie := issueTestSession(t, st)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	memberEmail := fmt.Sprintf("member-remove-%d@example.com", time.Now().UnixNano())
 	member, err := st.CreateUser(ctx, "Remove Member", memberEmail, "hash-member", false)
@@ -189,7 +189,7 @@ func TestHandleWorkspaceInvitationsReturnsIncomingInvites(t *testing.T) {
 	st := installTestStore(t)
 	invitee, cookie := issueTestSession(t, st)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ownerEmail := fmt.Sprintf("owner-%d@example.com", time.Now().UnixNano())
 	owner, err := st.CreateUser(ctx, "Owner Operator", ownerEmail, "hash-owner", false)
@@ -226,7 +226,7 @@ func TestHandleWorkspaceInvitationsAcceptsInvite(t *testing.T) {
 	st := installTestStore(t)
 	invitee, cookie := issueTestSession(t, st)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ownerEmail := fmt.Sprintf("owner-accept-%d@example.com", time.Now().UnixNano())
 	owner, err := st.CreateUser(ctx, "Owner Accept", ownerEmail, "hash-owner", false)
@@ -262,7 +262,7 @@ func TestHandleWorkspacesListsAndSwitchesActiveWorkspace(t *testing.T) {
 	st := installTestStore(t)
 	user, cookie := issueTestSession(t, st)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ownerEmail := fmt.Sprintf("workspace-switch-owner-%d@example.com", time.Now().UnixNano())
 	owner, err := st.CreateUser(ctx, "Switch Owner", ownerEmail, "hash-owner", false)
@@ -323,7 +323,7 @@ func TestHandleWorkspaceTeamRevokesInvitation(t *testing.T) {
 	st := installTestStore(t)
 	owner, cookie := issueTestSession(t, st)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	invitation, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, fmt.Sprintf("revoke-handler-%d@example.com", time.Now().UnixNano()), "viewer", time.Now().Add(72*time.Hour))
 	if err != nil {

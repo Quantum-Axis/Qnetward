@@ -32,7 +32,7 @@ function DeleteAccountCard({ email, disabled }: { email?: string; disabled: bool
       id="delete-account"
       tone="danger"
       title="Delete account"
-      description="Permanently removes your account, probe history, alert rules, and the workspaces only you belong to. This can't be undone."
+      description="Permanently removes your account and the workspaces only you belong to, with their probe history and alert rules. What you added to other teams' workspaces stays with them. This can't be undone."
       onSubmit={open ? () => matches && password && remove.mutate() : undefined}
       hint={remove.isError ? <span className="text-[#ff8fb3]">{(remove.error as ApiError).message}</span> : "If you own a workspace with other members, transfer it or remove them first."}
       action={

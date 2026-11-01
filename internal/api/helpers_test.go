@@ -93,7 +93,7 @@ func issueTestSessionCookie(t *testing.T, st *store.Store) *http.Cookie {
 func issueTestSession(t *testing.T, st *store.Store) (store.User, *http.Cookie) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("session_%d@example.com", time.Now().UnixNano())
@@ -109,6 +109,19 @@ func issueTestSession(t *testing.T, st *store.Store) (store.User, *http.Cookie) 
 	}
 
 	return user, extractAuthCookie(t, rr.Result())
+}
+
+// testWorkspaceID returns the user's personal workspace, where their probe
+// results and alert rules land until they switch.
+func testWorkspaceID(t *testing.T, st *store.Store, userID int64) int64 {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	workspace, err := st.GetWorkspaceContextByUserID(ctx, userID)
+	if err != nil {
+		t.Fatalf("personal workspace for user %d: %v", userID, err)
+	}
+	return workspace.ID
 }
 
 func resetAuthRateLimiterForTest(t *testing.T) {

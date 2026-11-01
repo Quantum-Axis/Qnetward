@@ -32,7 +32,7 @@ type alertRuleRequest struct {
 }
 
 func (srv *Server) handleAlertRules(w http.ResponseWriter, r *http.Request) {
-	user, ok := srv.requireAuthenticatedUser(w, r)
+	user, ok := srv.requireActor(w, r)
 	if !ok {
 		return
 	}
@@ -46,7 +46,7 @@ func (srv *Server) handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		rules, err := srv.store.ListAlertRules(ctx, user.ID)
+		rules, err := srv.store.ListAlertRules(ctx, user.WorkspaceID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 			return
@@ -62,11 +62,12 @@ func (srv *Server) handleAlertRules(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
 		}
-		rule, err := normalizeAlertRuleRequest(user, req)
+		rule, err := normalizeAlertRuleRequest(user.User, req)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
 		}
+		rule.WorkspaceID = user.WorkspaceID
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
@@ -97,7 +98,7 @@ func (srv *Server) handleAlertRules(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
-		if err := srv.store.DeleteAlertRule(ctx, user.ID, ruleID); err != nil {
+		if err := srv.store.DeleteAlertRule(ctx, user.WorkspaceID, ruleID); err != nil {
 			switch {
 			case errors.Is(err, store.ErrAlertRuleNotFound):
 				writeJSON(w, http.StatusNotFound, apiError{Error: "alert rule not found"})
@@ -228,7 +229,7 @@ func dashboardRoutePath(panel string) string {
 	}
 }
 
-func (srv *Server) enqueueAlertEvaluation(user store.User, protocol, target string, port int, summary report.Summary, dashboardURL string) {
+func (srv *Server) enqueueAlertEvaluation(user actor, protocol, target string, port int, summary report.Summary, dashboardURL string) {
 	if srv.store == nil {
 		return
 	}
@@ -247,7 +248,7 @@ func (srv *Server) enqueueAlertEvaluation(user store.User, protocol, target stri
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		decisions, err := srv.store.EvaluateAlertRules(ctx, user.ID, protocol, target, port, sample)
+		decisions, err := srv.store.EvaluateAlertRules(ctx, user.WorkspaceID, protocol, target, port, sample)
 		if err != nil {
 			log.Printf("alert evaluation failed for %s/%s: %v", protocol, target, err)
 			return

@@ -175,7 +175,7 @@ func TestHandleTCPPingStoresPerProbeTimestamps(t *testing.T) {
 	var points []store.HistoryPoint
 	waitFor(t, 2*time.Second, func() bool {
 		var err error
-		points, err = st.QueryHistory(user.ID, "tcpping", "127.0.0.1", port, 10)
+		points, err = st.QueryHistory(testWorkspaceID(t, st, user.ID), "tcpping", "127.0.0.1", port, 10)
 		return err == nil && len(points) == 2
 	})
 

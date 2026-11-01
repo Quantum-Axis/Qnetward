@@ -13,33 +13,35 @@ func TestStoreInsertAndQueryHistoryOrder(t *testing.T) {
 		BatchSize:     1,
 		FlushInterval: 5 * time.Millisecond,
 	})
-	const userID int64 = 101
+	const workspaceID int64 = 101
 
 	olderTs := time.Now().Add(-time.Minute)
 	newerTs := time.Now()
 	st.InsertAsync(ResultRecord{
-		UserID:   userID,
-		Ts:       olderTs,
-		Protocol: "ping",
-		Target:   "example.com",
-		Addr:     "93.184.216.34",
-		Seq:      1,
-		RttMs:    float64Ptr(10),
+		WorkspaceID: workspaceID,
+		UserID:      1,
+		Ts:          olderTs,
+		Protocol:    "ping",
+		Target:      "example.com",
+		Addr:        "93.184.216.34",
+		Seq:         1,
+		RttMs:       float64Ptr(10),
 	})
 	st.InsertAsync(ResultRecord{
-		UserID:   userID,
-		Ts:       newerTs,
-		Protocol: "ping",
-		Target:   "example.com",
-		Addr:     "93.184.216.34",
-		Seq:      2,
-		RttMs:    float64Ptr(20),
+		WorkspaceID: workspaceID,
+		UserID:      1,
+		Ts:          newerTs,
+		Protocol:    "ping",
+		Target:      "example.com",
+		Addr:        "93.184.216.34",
+		Seq:         2,
+		RttMs:       float64Ptr(20),
 	})
 
 	var points []HistoryPoint
 	waitFor(t, 10*time.Second, func() bool {
 		var err error
-		points, err = st.QueryHistory(userID, "ping", "example.com", 0, 10)
+		points, err = st.QueryHistory(workspaceID, "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 2
 	})
 
@@ -59,27 +61,29 @@ func TestStoreRetentionCleanupRemovesExpiredRows(t *testing.T) {
 		Retention:       30 * time.Minute,
 		CleanupInterval: 25 * time.Millisecond,
 	})
-	const userID int64 = 202
+	const workspaceID int64 = 202
 
 	st.InsertAsync(ResultRecord{
-		UserID:   userID,
-		Ts:       time.Now().Add(-time.Hour),
-		Protocol: "ping",
-		Target:   "cleanup.test",
-		Seq:      1,
-		RttMs:    float64Ptr(5),
+		WorkspaceID: workspaceID,
+		UserID:      1,
+		Ts:          time.Now().Add(-time.Hour),
+		Protocol:    "ping",
+		Target:      "cleanup.test",
+		Seq:         1,
+		RttMs:       float64Ptr(5),
 	})
 	st.InsertAsync(ResultRecord{
-		UserID:   userID,
-		Ts:       time.Now(),
-		Protocol: "ping",
-		Target:   "cleanup.test",
-		Seq:      2,
-		RttMs:    float64Ptr(8),
+		WorkspaceID: workspaceID,
+		UserID:      1,
+		Ts:          time.Now(),
+		Protocol:    "ping",
+		Target:      "cleanup.test",
+		Seq:         2,
+		RttMs:       float64Ptr(8),
 	})
 
 	waitFor(t, 10*time.Second, func() bool {
-		points, err := st.QueryHistory(userID, "ping", "cleanup.test", 0, 10)
+		points, err := st.QueryHistory(workspaceID, "ping", "cleanup.test", 0, 10)
 		return err == nil && len(points) == 1 && points[0].Seq == 2
 	})
 }
@@ -89,31 +93,33 @@ func TestStoreQueryRecentHistoryTargets(t *testing.T) {
 		BatchSize:     1,
 		FlushInterval: 5 * time.Millisecond,
 	})
-	const userID int64 = 303
+	const workspaceID int64 = 303
 
 	now := time.Now()
 	st.InsertAsync(ResultRecord{
-		UserID:   userID,
-		Ts:       now.Add(-2 * time.Minute),
-		Protocol: "ping",
-		Target:   "one.example",
-		Seq:      1,
-		RttMs:    float64Ptr(9),
+		WorkspaceID: workspaceID,
+		UserID:      1,
+		Ts:          now.Add(-2 * time.Minute),
+		Protocol:    "ping",
+		Target:      "one.example",
+		Seq:         1,
+		RttMs:       float64Ptr(9),
 	})
 	st.InsertAsync(ResultRecord{
-		UserID:   userID,
-		Ts:       now.Add(-time.Minute),
-		Protocol: "tcpping",
-		Target:   "two.example",
-		Port:     443,
-		Seq:      1,
-		RttMs:    float64Ptr(14),
+		WorkspaceID: workspaceID,
+		UserID:      1,
+		Ts:          now.Add(-time.Minute),
+		Protocol:    "tcpping",
+		Target:      "two.example",
+		Port:        443,
+		Seq:         1,
+		RttMs:       float64Ptr(14),
 	})
 
 	var targets []RecentHistoryTarget
 	waitFor(t, 10*time.Second, func() bool {
 		var err error
-		targets, err = st.QueryRecentHistoryTargets(userID, 10)
+		targets, err = st.QueryRecentHistoryTargets(workspaceID, 10)
 		return err == nil && len(targets) == 2
 	})
 

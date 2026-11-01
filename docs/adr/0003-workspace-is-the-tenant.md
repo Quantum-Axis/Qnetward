@@ -33,7 +33,12 @@ bypass RLS.
 
 - Every new table that holds customer data needs a workspace reference and
   scoped queries from day one.
-- Probe results and alert rules are still scoped by user, not workspace. They
-  need migrating before shared team history is possible.
+- Probe results and alert rules belong to the workspace they were created in
+  (migration 0004 and `scopeResultsToWorkspaces`). Rows from before that move
+  to their author's personal workspace. Each row still records the user who
+  created it; alert rules keep the row with no author if that user deletes
+  their account.
+- An open WebSocket keeps the workspace it connected with. The console opens a
+  new connection per run, so a switch applies from the next run.
 - Store helpers named `...ByUserID` pick the user's own workspace implicitly.
   They exist for tests only; handlers must pass an explicit workspace ID.

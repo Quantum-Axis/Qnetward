@@ -33,6 +33,39 @@ func (srv *Server) requireAuthenticatedUser(w http.ResponseWriter, r *http.Reque
 	return user, true
 }
 
+// actor is a signed-in user acting inside their active workspace. Data they
+// create (probe results, alert rules) belongs to that workspace.
+type actor struct {
+	store.User
+	WorkspaceID int64
+}
+
+// requireActor authenticates the request and resolves the session's active
+// workspace, falling back to the user's personal workspace.
+func (srv *Server) requireActor(w http.ResponseWriter, r *http.Request) (actor, bool) {
+	if srv.store == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "storage not available"})
+		return actor{}, false
+	}
+	user, _, activeWorkspaceID, err := srv.currentSessionState(r)
+	if err != nil {
+		if errors.Is(err, store.ErrSessionNotFound) || errors.Is(err, http.ErrNoCookie) {
+			writeJSON(w, http.StatusUnauthorized, apiError{Error: "authentication required"})
+			return actor{}, false
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return actor{}, false
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	workspace, err := srv.resolveActiveWorkspace(ctx, user, activeWorkspaceID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return actor{}, false
+	}
+	return actor{User: user, WorkspaceID: workspace.ID}, true
+}
+
 func (srv *Server) requirePlatformAdmin(w http.ResponseWriter, r *http.Request) (store.User, bool) {
 	user, ok := srv.requireAuthenticatedUser(w, r)
 	if !ok {

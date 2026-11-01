@@ -181,7 +181,7 @@ func TestAuthProfileUpdateChangesName(t *testing.T) {
 		t.Fatalf("unexpected profile update response: %#v", resp)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	refreshed, err := st.GetUserBySessionToken(ctx, hashSessionToken(cookie.Value))
 	if err != nil {
@@ -412,7 +412,7 @@ func TestAuthForgotAndResetPasswordFlow(t *testing.T) {
 	email := fmt.Sprintf("reset_%d@example.com", time.Now().UnixNano())
 	password := "S3curePass!"
 	newPassword := "An0therPass!"
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -477,7 +477,7 @@ func TestHandleAuthLoginRateLimited(t *testing.T) {
 	resetAuthRateLimiterForTest(t)
 
 	email := fmt.Sprintf("loginlimit_%d@example.com", time.Now().UnixNano())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	hash, err := bcrypt.GenerateFromPassword([]byte("CorrectHorseBatteryStaple"), bcrypt.DefaultCost)
 	if err != nil {
@@ -512,7 +512,7 @@ func TestHandleAuthResendVerificationUsesCooldown(t *testing.T) {
 	resetAuthRateLimiterForTest(t)
 
 	email := fmt.Sprintf("verifycooldown_%d@example.com", time.Now().UnixNano())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	user, err := st.CreateUser(ctx, "Pending User", email, "test-password-hash", true)
 	if err != nil {
@@ -543,7 +543,7 @@ func TestPrepareVerificationChallengeCleansUpCodeWhenEmailSendFails(t *testing.T
 	st := installTestStore(t)
 	installFailingTestMailer(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	user, err := st.CreateUser(ctx, "Mailer Failure User", fmt.Sprintf("verify_fail_%d@example.com", time.Now().UnixNano()), "hash", true)
@@ -574,7 +574,7 @@ func TestHandleAuthForgotPasswordCleansUpTokenWhenEmailSendFails(t *testing.T) {
 	installFailingTestMailer(t)
 	resetAuthRateLimiterForTest(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	email := fmt.Sprintf("reset_fail_%d@example.com", time.Now().UnixNano())

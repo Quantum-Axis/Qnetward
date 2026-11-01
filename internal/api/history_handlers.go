@@ -110,8 +110,8 @@ func parseHistoryExportRequest(req historyExportRequest) (string, string, int, i
 	return reqType, host, port, limit, format, destination, nil
 }
 
-func historyCacheKey(userID int64, reqType, host string, port, limit int) string {
-	return fmt.Sprintf("history:%d:%s:%s:%d:%d", userID, reqType, host, port, limit)
+func historyCacheKey(workspaceID int64, reqType, host string, port, limit int) string {
+	return fmt.Sprintf("history:w%d:%s:%s:%d:%d", workspaceID, reqType, host, port, limit)
 }
 
 func exportFileName(reqType, host string, port int, format string) string {
@@ -158,7 +158,7 @@ func (srv *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := srv.requireAuthenticatedUser(w, r)
+	user, ok := srv.requireActor(w, r)
 	if !ok {
 		return
 	}
@@ -173,7 +173,7 @@ func (srv *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cacheKey := historyCacheKey(user.ID, reqType, host, port, limit)
+	cacheKey := historyCacheKey(user.WorkspaceID, reqType, host, port, limit)
 	if srv.cache != nil {
 		var cached []store.HistoryPoint
 		ctx, cancel := context.WithTimeout(r.Context(), 250*time.Millisecond)
@@ -185,7 +185,7 @@ func (srv *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	points, err := srv.store.QueryHistory(user.ID, reqType, host, port, limit)
+	points, err := srv.store.QueryHistory(user.WorkspaceID, reqType, host, port, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -203,7 +203,7 @@ func (srv *Server) handleRecentHistoryTargets(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := srv.requireAuthenticatedUser(w, r)
+	user, ok := srv.requireActor(w, r)
 	if !ok {
 		return
 	}
@@ -214,7 +214,7 @@ func (srv *Server) handleRecentHistoryTargets(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	targets, err := srv.store.QueryRecentHistoryTargets(user.ID, limit)
+	targets, err := srv.store.QueryRecentHistoryTargets(user.WorkspaceID, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -228,7 +228,7 @@ func (srv *Server) handleHistoryExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := srv.requireAuthenticatedUser(w, r)
+	user, ok := srv.requireActor(w, r)
 	if !ok {
 		return
 	}
@@ -253,7 +253,7 @@ func (srv *Server) handleHistoryExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	points, err := srv.store.QueryHistory(user.ID, reqType, host, port, limit)
+	points, err := srv.store.QueryHistory(user.WorkspaceID, reqType, host, port, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return

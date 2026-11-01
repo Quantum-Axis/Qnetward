@@ -17,17 +17,18 @@ func TestHandleHistoryReturnsStoredPoints(t *testing.T) {
 
 	now := time.Now()
 	st.InsertAsync(store.ResultRecord{
-		UserID:   user.ID,
-		Ts:       now,
-		Protocol: "ping",
-		Target:   "example.com",
-		Addr:     "93.184.216.34",
-		Seq:      1,
-		RttMs:    float64Ptr(12.5),
+		WorkspaceID: testWorkspaceID(t, st, user.ID),
+		UserID:      user.ID,
+		Ts:          now,
+		Protocol:    "ping",
+		Target:      "example.com",
+		Addr:        "93.184.216.34",
+		Seq:         1,
+		RttMs:       float64Ptr(12.5),
 	})
 
 	waitFor(t, 10*time.Second, func() bool {
-		points, err := st.QueryHistory(user.ID, "ping", "example.com", 0, 10)
+		points, err := st.QueryHistory(testWorkspaceID(t, st, user.ID), "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 1
 	})
 
@@ -53,23 +54,24 @@ func TestHandleHistoryReturnsStoredPoints(t *testing.T) {
 	}
 }
 
-func TestHandleHistoryIsUserScoped(t *testing.T) {
+func TestHandleHistoryIsWorkspaceScoped(t *testing.T) {
 	st := installTestStore(t)
 	userA, _ := issueTestSession(t, st)
 	_, cookieB := issueTestSession(t, st)
 
 	st.InsertAsync(store.ResultRecord{
-		UserID:   userA.ID,
-		Ts:       time.Now(),
-		Protocol: "ping",
-		Target:   "example.com",
-		Addr:     "93.184.216.34",
-		Seq:      1,
-		RttMs:    float64Ptr(8.5),
+		WorkspaceID: testWorkspaceID(t, st, userA.ID),
+		UserID:      userA.ID,
+		Ts:          time.Now(),
+		Protocol:    "ping",
+		Target:      "example.com",
+		Addr:        "93.184.216.34",
+		Seq:         1,
+		RttMs:       float64Ptr(8.5),
 	})
 
 	waitFor(t, 10*time.Second, func() bool {
-		points, err := st.QueryHistory(userA.ID, "ping", "example.com", 0, 10)
+		points, err := st.QueryHistory(testWorkspaceID(t, st, userA.ID), "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 1
 	})
 
@@ -86,7 +88,7 @@ func TestHandleHistoryIsUserScoped(t *testing.T) {
 		t.Fatalf("decode history response: %v", err)
 	}
 	if len(points) != 0 {
-		t.Fatalf("expected no cross-user history leakage, got %d point(s)", len(points))
+		t.Fatalf("expected no cross-workspace history leakage, got %d point(s)", len(points))
 	}
 }
 
@@ -96,25 +98,27 @@ func TestHandleRecentHistoryTargetsReturnsStoredTargets(t *testing.T) {
 
 	now := time.Now()
 	st.InsertAsync(store.ResultRecord{
-		UserID:   user.ID,
-		Ts:       now.Add(-2 * time.Minute),
-		Protocol: "ping",
-		Target:   "one.example",
-		Seq:      1,
-		RttMs:    float64Ptr(9.5),
+		WorkspaceID: testWorkspaceID(t, st, user.ID),
+		UserID:      user.ID,
+		Ts:          now.Add(-2 * time.Minute),
+		Protocol:    "ping",
+		Target:      "one.example",
+		Seq:         1,
+		RttMs:       float64Ptr(9.5),
 	})
 	st.InsertAsync(store.ResultRecord{
-		UserID:   user.ID,
-		Ts:       now.Add(-time.Minute),
-		Protocol: "tcpping",
-		Target:   "two.example",
-		Port:     443,
-		Seq:      1,
-		RttMs:    float64Ptr(13.2),
+		WorkspaceID: testWorkspaceID(t, st, user.ID),
+		UserID:      user.ID,
+		Ts:          now.Add(-time.Minute),
+		Protocol:    "tcpping",
+		Target:      "two.example",
+		Port:        443,
+		Seq:         1,
+		RttMs:       float64Ptr(13.2),
 	})
 
 	waitFor(t, 10*time.Second, func() bool {
-		targets, err := st.QueryRecentHistoryTargets(user.ID, 10)
+		targets, err := st.QueryRecentHistoryTargets(testWorkspaceID(t, st, user.ID), 10)
 		return err == nil && len(targets) == 2
 	})
 
@@ -146,18 +150,19 @@ func TestHandleHistoryNormalizesTCPHostPort(t *testing.T) {
 
 	now := time.Now()
 	st.InsertAsync(store.ResultRecord{
-		UserID:   user.ID,
-		Ts:       now,
-		Protocol: "tcpping",
-		Target:   "example.com",
-		Port:     443,
-		Addr:     "93.184.216.34",
-		Seq:      1,
-		RttMs:    float64Ptr(12.5),
+		WorkspaceID: testWorkspaceID(t, st, user.ID),
+		UserID:      user.ID,
+		Ts:          now,
+		Protocol:    "tcpping",
+		Target:      "example.com",
+		Port:        443,
+		Addr:        "93.184.216.34",
+		Seq:         1,
+		RttMs:       float64Ptr(12.5),
 	})
 
 	waitFor(t, 10*time.Second, func() bool {
-		points, err := st.QueryHistory(user.ID, "tcpping", "example.com", 443, 10)
+		points, err := st.QueryHistory(testWorkspaceID(t, st, user.ID), "tcpping", "example.com", 443, 10)
 		return err == nil && len(points) == 1
 	})
 
@@ -197,23 +202,24 @@ func TestHandleHistoryRejectsInvalidLimit(t *testing.T) {
 	}
 }
 
-func TestHandleHistoryExportRequiresPostAndIsUserScoped(t *testing.T) {
+func TestHandleHistoryExportRequiresPostAndIsWorkspaceScoped(t *testing.T) {
 	st := installTestStore(t)
 	userA, cookieA := issueTestSession(t, st)
 	_, cookieB := issueTestSession(t, st)
 
 	st.InsertAsync(store.ResultRecord{
-		UserID:   userA.ID,
-		Ts:       time.Now(),
-		Protocol: "ping",
-		Target:   "example.com",
-		Addr:     "93.184.216.34",
-		Seq:      1,
-		RttMs:    float64Ptr(15.5),
+		WorkspaceID: testWorkspaceID(t, st, userA.ID),
+		UserID:      userA.ID,
+		Ts:          time.Now(),
+		Protocol:    "ping",
+		Target:      "example.com",
+		Addr:        "93.184.216.34",
+		Seq:         1,
+		RttMs:       float64Ptr(15.5),
 	})
 
 	waitFor(t, 10*time.Second, func() bool {
-		points, err := st.QueryHistory(userA.ID, "ping", "example.com", 0, 10)
+		points, err := st.QueryHistory(testWorkspaceID(t, st, userA.ID), "ping", "example.com", 0, 10)
 		return err == nil && len(points) == 1
 	})
 
@@ -235,7 +241,7 @@ func TestHandleHistoryExportRequiresPostAndIsUserScoped(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", postRR.Code, postRR.Body.String())
 	}
 	if got := strings.TrimSpace(postRR.Body.String()); got != "[]" {
-		t.Fatalf("expected empty export for other user, got %s", got)
+		t.Fatalf("expected empty export for another workspace, got %s", got)
 	}
 }
 

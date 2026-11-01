@@ -56,7 +56,7 @@ func (srv *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := srv.requireAuthenticatedUser(w, r)
+	user, ok := srv.requireActor(w, r)
 	if !ok {
 		return
 	}
@@ -106,7 +106,7 @@ func (srv *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 
 	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := ping.RunStreamContext(r.Context(), req.Host, cfg, func(res report.Result) error {
-		srv.storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
+		srv.storeResult(user.WorkspaceID, user.ID, "ping", req.Host, res.Addr, 0, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -124,7 +124,7 @@ func (srv *Server) handleTCPPing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
 		return
 	}
-	user, ok := srv.requireAuthenticatedUser(w, r)
+	user, ok := srv.requireActor(w, r)
 	if !ok {
 		return
 	}
@@ -179,7 +179,7 @@ func (srv *Server) handleTCPPing(w http.ResponseWriter, r *http.Request) {
 
 	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := tcpping.RunStreamContext(r.Context(), host, port, cfg, func(res report.Result) error {
-		srv.storeResult(user.ID, "tcpping", host, res.Addr, port, res, time.Now())
+		srv.storeResult(user.WorkspaceID, user.ID, "tcpping", host, res.Addr, port, res, time.Now())
 		return nil
 	})
 	if err != nil {
@@ -310,19 +310,20 @@ func (srv *Server) tryAcquireProbeSlot() (func(), bool) {
 	}
 }
 
-func (srv *Server) storeResult(userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
+func (srv *Server) storeResult(workspaceID, userID int64, protocol, target, addr string, port int, res report.Result, ts time.Time) {
 	if srv.store == nil {
 		return
 	}
 	rec := store.ResultRecord{
-		UserID:   userID,
-		Ts:       ts,
-		Protocol: protocol,
-		Target:   target,
-		Addr:     addr,
-		Port:     port,
-		Seq:      res.Seq,
-		Error:    res.Error,
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+		Ts:          ts,
+		Protocol:    protocol,
+		Target:      target,
+		Addr:        addr,
+		Port:        port,
+		Seq:         res.Seq,
+		Error:       res.Error,
 	}
 	if res.Error == "" {
 		ms := float64(res.RTT) / float64(time.Millisecond)

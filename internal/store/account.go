@@ -155,9 +155,11 @@ func (s *Store) SharedWorkspacesOwnedBy(ctx context.Context, userID int64) ([]st
 	return names, rows.Err()
 }
 
-// DeleteUserAccount removes the user, their probe results, and everything that
-// cascades from the user row: sessions, tokens, alert rules, profile, and the
-// workspaces they own alone. It refuses while they own a workspace others use.
+// DeleteUserAccount removes the user and everything that cascades from the
+// user row: sessions, tokens, profile, and the workspaces they own alone, with
+// those workspaces' alert rules and probe results. Results and rules they added
+// to other teams' workspaces stay with those teams. It refuses while they own a
+// workspace others use.
 func (s *Store) DeleteUserAccount(ctx context.Context, userID int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -178,8 +180,13 @@ func (s *Store) DeleteUserAccount(ctx context.Context, userID int64) error {
 	if shared {
 		return ErrOwnsSharedWorkspace
 	}
-	// Results reference users by ID without a foreign key (the table may be a hypertable).
-	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE user_id = $1`, s.tableRef()), userID); err != nil {
+	// Results have no foreign keys (the table may be a hypertable), so the owned
+	// workspaces' rows are removed here before the cascade drops the workspaces.
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM %s
+		WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_user_id = $1)
+			OR (workspace_id IS NULL AND user_id = $1)
+	`, s.tableRef()), userID); err != nil {
 		return err
 	}
 	result, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID)

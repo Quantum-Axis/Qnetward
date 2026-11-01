@@ -13,7 +13,8 @@ var ErrAlertRuleNotFound = errors.New("alert rule not found")
 
 type AlertRule struct {
 	ID                   int64      `json:"id"`
-	UserID               int64      `json:"-"`
+	WorkspaceID          int64      `json:"-"`
+	UserID               int64      `json:"-"` // creator; 0 once their account is gone
 	Name                 string     `json:"name"`
 	Protocol             string     `json:"protocol"`
 	Target               string     `json:"target"`
@@ -61,18 +62,19 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 		var saved AlertRule
 		row := s.db.QueryRowContext(ctx, `
 			INSERT INTO alert_rules (
-				user_id, name, protocol, target, port, recipient_email,
+				workspace_id, user_id, name, protocol, target, port, recipient_email,
 				latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
 				cooldown_minutes, notify_on_recovery, enabled
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-			RETURNING id, user_id, name, protocol, target, port, recipient_email,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			RETURNING id, workspace_id, COALESCE(user_id, 0), name, protocol, target, port, recipient_email,
 				latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
 				cooldown_minutes, notify_on_recovery, enabled, last_state,
 				current_breach_streak, last_triggered_at, last_recovered_at,
 				last_evaluated_at, created_at
 		`,
-			rule.UserID,
+			rule.WorkspaceID,
+			nullableID(rule.UserID),
 			rule.Name,
 			rule.Protocol,
 			rule.Target,
@@ -106,15 +108,15 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 			cooldown_minutes = $11,
 			notify_on_recovery = $12,
 			enabled = $13
-		WHERE id = $1 AND user_id = $2
-		RETURNING id, user_id, name, protocol, target, port, recipient_email,
+		WHERE id = $1 AND workspace_id = $2
+		RETURNING id, workspace_id, COALESCE(user_id, 0), name, protocol, target, port, recipient_email,
 			latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
 			cooldown_minutes, notify_on_recovery, enabled, last_state,
 			current_breach_streak, last_triggered_at, last_recovered_at,
 			last_evaluated_at, created_at
 	`,
 		rule.ID,
-		rule.UserID,
+		rule.WorkspaceID,
 		rule.Name,
 		rule.Protocol,
 		rule.Target,
@@ -137,21 +139,22 @@ func (s *Store) SaveAlertRule(ctx context.Context, rule AlertRule) (AlertRule, e
 	return saved, nil
 }
 
-func (s *Store) ListAlertRules(ctx context.Context, userID int64) ([]AlertRule, error) {
+// ListAlertRules returns every rule in the workspace, newest first.
+func (s *Store) ListAlertRules(ctx context.Context, workspaceID int64) ([]AlertRule, error) {
 	if s == nil {
 		return nil, errors.New("store is not available")
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, user_id, name, protocol, target, port, recipient_email,
+		SELECT id, workspace_id, COALESCE(user_id, 0), name, protocol, target, port, recipient_email,
 			latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
 			cooldown_minutes, notify_on_recovery, enabled, last_state,
 			current_breach_streak, last_triggered_at, last_recovered_at,
 			last_evaluated_at, created_at
 		FROM alert_rules
-		WHERE user_id = $1
+		WHERE workspace_id = $1
 		ORDER BY created_at DESC, id DESC
-	`, userID)
+	`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,11 +171,11 @@ func (s *Store) ListAlertRules(ctx context.Context, userID int64) ([]AlertRule, 
 	return rules, rows.Err()
 }
 
-func (s *Store) DeleteAlertRule(ctx context.Context, userID, ruleID int64) error {
+func (s *Store) DeleteAlertRule(ctx context.Context, workspaceID, ruleID int64) error {
 	if s == nil {
 		return errors.New("store is not available")
 	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM alert_rules WHERE id = $1 AND user_id = $2`, ruleID, userID)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM alert_rules WHERE id = $1 AND workspace_id = $2`, ruleID, workspaceID)
 	if err != nil {
 		return err
 	}
@@ -186,7 +189,8 @@ func (s *Store) DeleteAlertRule(ctx context.Context, userID, ruleID int64) error
 	return nil
 }
 
-func (s *Store) EvaluateAlertRules(ctx context.Context, userID int64, protocol, target string, port int, sample AlertSample) ([]AlertDecision, error) {
+// EvaluateAlertRules applies one probe summary to the workspace's matching rules.
+func (s *Store) EvaluateAlertRules(ctx context.Context, workspaceID int64, protocol, target string, port int, sample AlertSample) ([]AlertDecision, error) {
 	if s == nil {
 		return nil, errors.New("store is not available")
 	}
@@ -201,13 +205,13 @@ func (s *Store) EvaluateAlertRules(ctx context.Context, userID int64, protocol, 
 	}()
 
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, user_id, name, protocol, target, port, recipient_email,
+		SELECT id, workspace_id, COALESCE(user_id, 0), name, protocol, target, port, recipient_email,
 			latency_threshold_ms, loss_threshold_percent, consecutive_breaches,
 			cooldown_minutes, notify_on_recovery, enabled, last_state,
 			current_breach_streak, last_triggered_at, last_recovered_at,
 			last_evaluated_at, created_at
 		FROM alert_rules
-		WHERE user_id = $1
+		WHERE workspace_id = $1
 			AND enabled = TRUE
 			AND protocol = $2
 			AND target = $3
@@ -216,7 +220,7 @@ func (s *Store) EvaluateAlertRules(ctx context.Context, userID int64, protocol, 
 			)
 		ORDER BY id
 		FOR UPDATE
-	`, userID, protocol, target, port)
+	`, workspaceID, protocol, target, port)
 	if err != nil {
 		return nil, err
 	}
@@ -324,8 +328,8 @@ func validateAlertRule(rule *AlertRule) error {
 	if rule.Target == "" {
 		return errors.New("target is required")
 	}
-	if rule.UserID <= 0 {
-		return errors.New("user is required")
+	if rule.WorkspaceID <= 0 {
+		return errors.New("workspace is required")
 	}
 	email, err := NormalizeEmail(rule.RecipientEmail)
 	if err != nil {
@@ -405,6 +409,7 @@ func scanAlertRule(scanner alertRuleScanner, rule *AlertRule) error {
 
 	if err := scanner.Scan(
 		&rule.ID,
+		&rule.WorkspaceID,
 		&rule.UserID,
 		&rule.Name,
 		&rule.Protocol,
@@ -456,4 +461,12 @@ func nullTimePtr(v sql.NullTime) *time.Time {
 	}
 	t := v.Time.UTC()
 	return &t
+}
+
+// nullableID stores a missing reference as NULL rather than 0.
+func nullableID(id int64) any {
+	if id <= 0 {
+		return nil
+	}
+	return id
 }

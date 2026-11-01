@@ -15,7 +15,6 @@ import (
 	"qnetward/internal/engine/report"
 	"qnetward/internal/engine/tcpping"
 	"qnetward/internal/probe"
-	"qnetward/internal/store"
 
 	"github.com/gorilla/websocket"
 )
@@ -70,7 +69,7 @@ func (w *wsWriter) WriteEvent(evt wsEvent) error {
 	return w.conn.WriteJSON(evt)
 }
 
-func (s *wsSession) start(user store.User, req wsRequest) bool {
+func (s *wsSession) start(user actor, req wsRequest) bool {
 	s.mu.Lock()
 	if s.cancel != nil {
 		s.mu.Unlock()
@@ -129,7 +128,7 @@ func (srv *Server) wsUpgrader() *websocket.Upgrader {
 }
 
 func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	user, ok := srv.requireAuthenticatedUser(w, r)
+	user, ok := srv.requireActor(w, r)
 	if !ok {
 		return
 	}
@@ -190,7 +189,7 @@ func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (srv *Server) runWSRequest(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
+func (srv *Server) runWSRequest(ctx context.Context, writer *wsWriter, user actor, req wsRequest) error {
 	switch req.Type {
 	case "ping":
 		return srv.streamPingWS(ctx, writer, user, req)
@@ -203,7 +202,7 @@ func (srv *Server) runWSRequest(ctx context.Context, writer *wsWriter, user stor
 	}
 }
 
-func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
+func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user actor, req wsRequest) error {
 	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: "server busy, try again"})
@@ -232,7 +231,7 @@ func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user stor
 	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := ping.RunStreamContext(ctx, req.Host, cfg, func(res report.Result) error {
 		ts := time.Now()
-		srv.storeResult(user.ID, "ping", req.Host, res.Addr, 0, res, ts)
+		srv.storeResult(user.WorkspaceID, user.ID, "ping", req.Host, res.Addr, 0, res, ts)
 		jr := probe.ToJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",
@@ -267,7 +266,7 @@ func (srv *Server) streamPingWS(ctx context.Context, writer *wsWriter, user stor
 	})
 }
 
-func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user store.User, req wsRequest) error {
+func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user actor, req wsRequest) error {
 	release, ok := srv.tryAcquireProbeSlot()
 	if !ok {
 		return writer.WriteEvent(wsEvent{Type: "error", Error: "server busy, try again"})
@@ -303,7 +302,7 @@ func (srv *Server) streamTCPPingWS(ctx context.Context, writer *wsWriter, user s
 	cfg.AddrCheck = srv.targetPolicy.CheckIP
 	rep, err := tcpping.RunStreamContext(ctx, host, port, cfg, func(res report.Result) error {
 		ts := time.Now()
-		srv.storeResult(user.ID, "tcpping", host, res.Addr, port, res, ts)
+		srv.storeResult(user.WorkspaceID, user.ID, "tcpping", host, res.Addr, port, res, ts)
 		jr := probe.ToJSONResult(res)
 		return writer.WriteEvent(wsEvent{
 			Type:     "result",

@@ -151,21 +151,21 @@ export function LandingPage() {
             <div className="lp-aurora lp-aurora-b" />
           </div>
           <NetworkCanvas className="absolute inset-x-0 top-0 h-[760px] w-full opacity-80 [mask-image:linear-gradient(to_bottom,black_55%,transparent)]" />
-          <div className="lp-container relative pb-20 pt-20 text-center sm:pt-28">
+          <div className="lp-container relative pb-16 pt-14 text-center sm:pt-20">
             <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--lp-border)] bg-white/[0.03] px-3 py-1 text-[12px] text-[var(--lp-muted)]">
               <span className="lp-pulse h-1.5 w-1.5 rounded-full bg-[var(--lp-green)]" />
               Network · Infrastructure · Security
             </div>
-            <h1 className="mx-auto mt-6 max-w-4xl text-[44px] font-normal leading-[1.08] tracking-[-0.035em] sm:text-[72px]">
+            <h1 className="mx-auto mt-5 max-w-4xl text-[44px] font-normal leading-[1.08] tracking-[-0.035em] sm:text-[72px]">
               <span className="lp-hero-text">See every network, server, and threat</span>
               <span className="lp-cursor" />
             </h1>
-            <p className="mx-auto mt-6 max-w-3xl text-[18px] leading-relaxed text-[var(--lp-muted)]">
+            <p className="mx-auto mt-5 max-w-3xl text-[18px] leading-relaxed text-[var(--lp-muted)]">
               Qnetward probes, monitors, and protects your infrastructure from one platform.{" "}
               <br className="hidden md:block" />
               Live diagnostics today, agents, device telemetry, and attack-surface scanning next.
             </p>
-            <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-6 text-[15px]">
                 Start monitoring free
               </Link>
@@ -173,7 +173,7 @@ export function LandingPage() {
                 See how it works
               </a>
             </div>
-            <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-[var(--lp-subtle)]">
+            <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-[var(--lp-subtle)]">
               {["Free to start", "No credit card", "Self-host ready"].map((item) => (
                 <li key={item} className="flex items-center gap-2">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -183,7 +183,7 @@ export function LandingPage() {
                 </li>
               ))}
             </ul>
-            <div className="lp-reveal mt-16 sm:mt-20">
+            <div className="lp-reveal mt-10 sm:mt-12">
               <HeroConsole />
             </div>
           </div>

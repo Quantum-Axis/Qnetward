@@ -588,3 +588,20 @@
     animation: none;
   }
 }
+
+.lp-auth .auth-provider-button {
+  gap: 10px;
+}
+
+.lp-auth .auth-soon-tag {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid var(--lp-border);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--lp-subtle);
+}

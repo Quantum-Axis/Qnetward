@@ -7,6 +7,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, ChevronLeft, ChevronRight, KeyRound, LockKeyhole, Mail, UserRound } from "lucide-react";
+import { AlternateSignIn } from "@/components/auth/alternate-sign-in";
 import { AuthInputField } from "@/components/auth/auth-input-field";
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
 import { apiRequest, ApiError } from "@/lib/api";
@@ -189,6 +190,7 @@ export function SignupForm() {
 
       {step === 1 ? (
         <div className="grid gap-3.5">
+          <AlternateSignIn mode="signup" />
           <div className="grid gap-3.5 sm:grid-cols-2">
             <AuthInputField
               id="signup-first-name"

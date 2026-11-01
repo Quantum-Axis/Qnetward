@@ -8,8 +8,8 @@ type HeaderAction = { prompt: string; label: string; href: string };
 
 /**
  * Split auth card: the form on the left, artwork on the right (hidden on small
- * screens). The other path (sign in / sign up) sits under the form, and the
- * terms line and wordmark sit under the card.
+ * screens). The logo heads the form, the other path (sign in / sign up) sits
+ * under it, and the terms line sits under the card.
  */
 export function AuthLayoutCard({
   title,
@@ -40,7 +40,7 @@ export function AuthLayoutCard({
         )}
       >
         <div className="flex flex-col px-6 py-9 sm:px-10 sm:py-11">
-          <Link href="/" className="mb-8 flex items-center gap-2 lg:hidden" aria-label="Qnetward home">
+          <Link href="/" className="mb-8 flex w-fit items-center gap-2" aria-label="Qnetward home">
             <QnetwardMark size={22} />
             <span className="text-[15px] font-semibold tracking-tight">Qnetward</span>
           </Link>
@@ -72,10 +72,6 @@ export function AuthLayoutCard({
         </Link>
         .
       </p>
-      <Link href="/" className="mt-10 flex items-center gap-2 opacity-90 transition-opacity hover:opacity-100" aria-label="Qnetward home">
-        <QnetwardMark size={24} />
-        <span className="text-[18px] font-semibold tracking-tight">Qnetward</span>
-      </Link>
     </div>
   );
 }

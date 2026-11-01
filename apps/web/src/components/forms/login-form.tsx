@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LockKeyhole, Mail } from "lucide-react";
+import { AlternateSignIn } from "@/components/auth/alternate-sign-in";
 import { AuthInputField } from "@/components/auth/auth-input-field";
 import { apiRequest, ApiError } from "@/lib/api";
 import { SessionResponse } from "@/lib/types";
@@ -53,6 +54,7 @@ export function LoginForm() {
 
   return (
     <form className="grid gap-3.5" noValidate onSubmit={form.handleSubmit((values) => login.mutate(values))}>
+      <AlternateSignIn mode="signin" />
       <AuthInputField
         id="login-email"
         label="Email"
@@ -61,7 +63,6 @@ export function LoginForm() {
         inputProps={{
           type: "email",
           autoComplete: "email",
-          autoFocus: true,
           ...form.register("email"),
         }}
       />
@@ -72,7 +73,7 @@ export function LoginForm() {
         passwordToggle
         labelAction={
           <Link className="auth-inline-link" href="/forgot-password">
-            Forgot password?
+            Forgot your password?
           </Link>
         }
         error={form.formState.errors.password?.message}
@@ -90,7 +91,7 @@ export function LoginForm() {
         {login.isPending ? "Signing in…" : "Sign in"}
       </button>
 
-      <div className="auth-divider">Or continue with</div>
+      <div className="auth-divider">Just looking?</div>
 
       <button className="auth-muted-button" type="button" disabled={demoLogin.isPending} onClick={() => demoLogin.mutate()}>
         {demoLogin.isPending ? "Opening demo…" : "Explore the demo workspace"}

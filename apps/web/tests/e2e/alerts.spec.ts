@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { loginAsDemoUser, resolveOrigin } from "./helpers/auth";
 
 test("alerts page can create and render a new rule", async ({ page, baseURL }) => {
+  const ruleName = `ICMP Localhost Alert ${Date.now()}`;
   const origin = resolveOrigin(baseURL);
   await loginAsDemoUser(page);
 
@@ -11,7 +12,7 @@ test("alerts page can create and render a new rule", async ({ page, baseURL }) =
       "Content-Type": "application/json",
     },
     data: {
-      name: "ICMP Localhost Alert",
+      name: ruleName,
       protocol: "ping",
       target: "127.0.0.1",
       recipient_email: "demo@qnetward.local",
@@ -25,6 +26,6 @@ test("alerts page can create and render a new rule", async ({ page, baseURL }) =
   expect(createRuleResponse.ok()).toBeTruthy();
 
   await page.goto("/alerts");
-  await expect(page.getByRole("heading", { name: "ICMP Localhost Alert" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: ruleName })).toBeVisible();
   await expect(page.getByText(/latency ≥ 150ms/i).first()).toBeVisible();
 });

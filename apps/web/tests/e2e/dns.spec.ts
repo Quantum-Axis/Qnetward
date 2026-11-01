@@ -19,6 +19,6 @@ test("dns inspector runs a lookup and renders record sections", async ({ page })
   expect(lookupResponse.ok()).toBeTruthy();
 
   await expect(page.getByText("8.8.8.8:53", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: /^MX/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^MX/ })).toBeVisible();
   await expect(page.getByText("example.com", { exact: false }).first()).toBeVisible();
 });

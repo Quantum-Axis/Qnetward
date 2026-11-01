@@ -24,7 +24,9 @@ export async function provisionVerifiedUser(request: APIRequestContext, origin: 
     },
     data: candidate,
   });
-  if (signupResponse.status() === 409) {
+  // A fixed email (the admin spec) already exists after the first run; repeated runs can also hit the
+  // per-email signup rate limit. Either way the account is there, and a missing one fails at sign-in.
+  if (signupResponse.status() === 409 || (user?.email && signupResponse.status() === 429)) {
     return candidate;
   }
   expect(signupResponse.ok()).toBeTruthy();
@@ -57,16 +59,20 @@ export async function loginAsVerifiedUser(page: Page, request: APIRequestContext
 }
 
 export async function loginWithCredentials(page: Page, user: Pick<E2EUser, "email" | "password">) {
-  await page.goto("/login");
+  // Wait for hydration: a click before the page is interactive does nothing.
+  await page.goto("/login", { waitUntil: "networkidle" });
   await page.getByLabel("Email").fill(user.email);
   await page.locator("#login-password").fill(user.password);
   await page.getByRole("button", { name: /^sign in$/i }).click();
 
-  await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible({ timeout: 20_000 });
 }
 
 export async function loginAsDemoUser(page: Page) {
-  await page.goto("/login");
+  // Wait for hydration: a click before the page is interactive does nothing.
+  await page.goto("/login", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /demo workspace/i }).click();
-  await expect(page.getByText("Network Operations Overview")).toBeVisible({ timeout: 20_000 });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible({ timeout: 20_000 });
 }

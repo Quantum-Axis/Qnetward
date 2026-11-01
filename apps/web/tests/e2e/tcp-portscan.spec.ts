@@ -21,7 +21,8 @@ test("demo user can run and stop TCP ping in continuous mode", async ({ page }) 
   await page.locator("#probe-port").fill("8080");
   await page.getByRole("button", { name: /options/i }).click();
   await page.locator('input[name="count"]').fill("101");
-  await page.getByLabel(/continuous/i).check();
+  await page.getByText("Continuous", { exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: /continuous/i })).toBeChecked();
 
   await expect(page.locator('input[name="count"]')).toHaveAttribute("readonly", "");
 
@@ -45,6 +46,7 @@ test("demo user can run port scan and receive streamed results", async ({ page }
   await expect(page.getByRole("heading", { name: "Port map" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("HTTP Alt").first()).toBeVisible();
 
-  await page.getByLabel(/open only/i).check();
+  await page.getByText("Open only", { exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: /open only/i })).toBeChecked();
   await expect(page.getByRole("table").locator("tbody tr").first()).toBeVisible();
 });

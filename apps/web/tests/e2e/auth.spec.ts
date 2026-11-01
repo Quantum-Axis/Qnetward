@@ -40,7 +40,7 @@ test("signup and verify flow reaches the dashboard", async ({ page }) => {
   expect(verifyResponse.ok()).toBeTruthy();
 
   const successHeading = page.getByText("Account ready");
-  const dashboardHeading = page.getByText("Network Operations Overview");
+  const dashboardHeading = page.getByRole("heading", { name: /welcome back/i });
 
   try {
     await expect(successHeading).toBeVisible({ timeout: 5_000 });

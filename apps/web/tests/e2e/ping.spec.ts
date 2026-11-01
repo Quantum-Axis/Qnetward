@@ -19,7 +19,8 @@ test("demo user can run and stop ICMP continuous mode", async ({ page }) => {
   await page.locator("#probe-target").fill("127.0.0.1");
   await page.getByRole("button", { name: /options/i }).click();
   await page.locator('input[name="count"]').fill("101");
-  await page.getByLabel(/continuous/i).check();
+  await page.getByText("Continuous", { exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: /continuous/i })).toBeChecked();
 
   await expect(page.locator('input[name="count"]')).toHaveAttribute("readonly", "");
 

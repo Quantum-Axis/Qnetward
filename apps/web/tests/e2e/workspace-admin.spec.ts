@@ -71,13 +71,12 @@ test("workspace owner can revoke pending invites and switch active workspace", a
   await page.getByRole("button", { name: /join workspace/i }).click();
   expect((await acceptResponse).ok()).toBeTruthy();
 
-  await page.goto("/workspace/team");
-  const switcher = page.getByLabel("Active Workspace");
-  await expect(switcher).toBeVisible();
-  await expect(switcher.locator("option")).toHaveCount(2);
-
-  await switcher.selectOption({ label: "Switch Owner Two Workspace" });
-  await expect(switcher).toHaveValue(await switcher.locator("option", { hasText: "Switch Owner Two Workspace" }).evaluate((option) => (option as HTMLOptionElement).value));
+  await page.goto("/settings/workspaces");
+  const memberships = page.locator("#memberships li");
+  await expect(memberships).toHaveCount(2);
+  const ownerTwoRow = memberships.filter({ hasText: "Switch Owner Two Workspace" });
+  await ownerTwoRow.getByRole("button", { name: /switch to/i }).click();
+  await expect(ownerTwoRow.getByText("Active", { exact: true })).toBeVisible();
   await expect
     .poll(async () => {
       return page.evaluate(async () => {

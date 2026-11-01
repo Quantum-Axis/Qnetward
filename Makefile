@@ -4,7 +4,7 @@
 WEB := apps/web
 BIN := .tmp/qnetward
 
-.PHONY: help build run migrate migrate-status test test-db vet fmt lint web-install web-dev web-build web-lint web-e2e check clean
+.PHONY: help build run migrate migrate-status test test-db vet fmt lint web-install web-dev web-build web-lint web-e2e e2e-api check clean
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -47,8 +47,11 @@ web-build: ## Production build of the frontend
 web-lint: ## ESLint for the frontend
 	pnpm --dir $(WEB) lint
 
-web-e2e: ## Playwright end-to-end tests (needs a running stack)
+web-e2e: ## Playwright end-to-end tests (needs a running stack; see e2e-api)
 	pnpm --dir $(WEB) test:e2e
+
+e2e-api: build ## API server for the e2e suite on :8090 (test database, email off, demo on)
+	scripts/e2e-backend.sh
 
 check: vet test web-lint ## What CI runs, minus the Postgres service
 

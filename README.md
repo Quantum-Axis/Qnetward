@@ -186,7 +186,16 @@ From `apps/web/`:
 ```bash
 pnpm lint
 pnpm build
-pnpm test:e2e
+```
+
+End-to-end tests run against a separate API on the test database, with email
+delivery off so signups return a verification code the specs can use:
+
+```bash
+make e2e-api                                    # API on :8090 (needs QNETWARD_TEST_POSTGRES_DSN)
+NEXT_PUBLIC_QNETWARD_WS_URL=ws://127.0.0.1:8090/ws pnpm --dir apps/web build
+QNETWARD_BACKEND_URL=http://127.0.0.1:8090 pnpm --dir apps/web start --port 3002
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:3002 pnpm --dir apps/web test:e2e
 ```
 
 HTTP smoke test (with the local stack running):

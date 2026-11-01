@@ -6,7 +6,7 @@ import { LandingEffects } from "./landing-effects";
 import { GitHubIcon, LandingNav } from "./landing-nav";
 import { NetworkCanvas } from "./network-canvas";
 import { Pricing } from "./pricing";
-import { ProductBento } from "./product-bento";
+import { ProductShowcase } from "./product-showcase";
 import { QnetwardMark } from "./qnetward-mark";
 import { TechLogos } from "./tech-logos";
 import { ToolComparison } from "./tool-comparison";
@@ -246,10 +246,10 @@ export function LandingPage() {
             <SectionHeader
               label="Product"
               title="The tools you open during an incident, in one tab"
-              aside="Everything on this page under Product works today. The panels show what each tool looks like in the console."
+              aside="Every screen here is the console as it ships today, captured from the demo workspace."
             />
-            <div className="mt-14">
-              <ProductBento />
+            <div className="lp-reveal mt-14">
+              <ProductShowcase />
             </div>
 
             <div className="lp-reveal mt-20">

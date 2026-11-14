@@ -270,11 +270,16 @@
 
 /* Monochrome tech logos that pick up their brand colour on hover */
 .lp-logo {
-  color: #5d5d66;
+  color: #a1a1aa;
   transition:
     color 0.2s ease,
     background 0.2s ease,
     transform 0.2s ease;
+}
+
+/* Still in development: a step darker, but readable */
+.lp-logo-dim {
+  color: #71717a;
 }
 
 .lp-logo:hover {

@@ -60,11 +60,11 @@ function LogoRow({ items, dim = false }: { items: { icon: SimpleIcon; note: stri
       {items.map(({ icon, note }) => (
         <li key={icon.slug}>
           <span
-            className={`lp-logo group relative flex h-11 w-11 items-center justify-center rounded-lg ${dim ? "opacity-60" : ""}`}
+            className={`lp-logo group relative flex h-12 w-12 items-center justify-center rounded-lg ${dim ? "lp-logo-dim" : ""}`}
             style={{ ["--brand" as string]: hoverColor(icon.hex) }}
             title={`${icon.title} — ${note}`}
           >
-            <svg role="img" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-label={icon.title}>
+            <svg role="img" viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-label={icon.title}>
               <path d={icon.path} />
             </svg>
             <span className="pointer-events-none absolute -bottom-7 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap sm:block rounded-md border border-[var(--lp-border)] bg-[var(--lp-bg-raised)] px-2 py-0.5 text-2xs text-[var(--lp-muted)] opacity-0 transition-opacity group-hover:opacity-100">

@@ -116,9 +116,9 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
       <main id="main">
         {/* hero */}
         <section className="relative overflow-hidden">
-          {/* The glow stops partway down the product shot, which runs on over the plain page. */}
-          <div className="lp-hero-glow pointer-events-none absolute inset-x-0 top-0 bottom-[160px] sm:bottom-[300px]" aria-hidden="true" />
-          <div className="lp-container relative pb-16 pt-14 text-center sm:pt-24">
+          <div className="lp-hero-glow pointer-events-none absolute inset-0" aria-hidden="true" />
+          {/* The hero ends where the product shot is cropped. */}
+          <div className="lp-container relative pt-14 text-center sm:pt-24">
             <Link href="/signup" className="lp-hero-pill">
               <span className="lp-badge lp-badge-new">New</span>
               <span>Uptime monitors are live</span>
@@ -140,7 +140,6 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
               <p className="text-sm text-[var(--lp-muted)]">*No credit card required</p>
             </div>
             <div className="lp-reveal relative mt-14 sm:mt-16">
-              <span className="lp-hero-edge" aria-hidden="true" />
               <HeroConsole />
             </div>
           </div>

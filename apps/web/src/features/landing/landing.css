@@ -163,16 +163,26 @@
     radial-gradient(60% 40% at 50% 100%, rgba(255, 61, 127, 0.1), transparent 70%);
 }
 
-.lp-hero-edge {
+/* A glow that slides along behind the product shot, lighting its top edge. */
+.lp-hero-sweep {
   position: absolute;
   top: 0;
-  left: 50%;
-  z-index: 1;
-  width: min(60%, 640px);
-  height: 1px;
-  transform: translateX(-50%);
-  background: linear-gradient(90deg, transparent, var(--lp-accent), transparent);
-  box-shadow: 0 0 18px 1px rgba(255, 61, 127, 0.55);
+  left: 100%;
+  width: 360px;
+  height: 204px;
+  background:
+    linear-gradient(90deg, transparent, var(--lp-accent) 50%, transparent),
+    linear-gradient(180deg, transparent, var(--lp-accent) 50%, transparent);
+  animation: lp-sweep 9s linear infinite;
+}
+
+@keyframes lp-sweep {
+  from {
+    left: 100%;
+  }
+  to {
+    left: -360px;
+  }
 }
 
 .lp-pulse {
@@ -296,7 +306,8 @@
   .lp-cursor::after,
   .lp-pulse,
   .lp-map-arc,
-  .lp-map-ping {
+  .lp-map-ping,
+  .lp-hero-sweep {
     animation: none;
   }
   .lp-card-hover:hover {

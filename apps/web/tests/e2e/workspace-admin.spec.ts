@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { loginAsDemoUser, loginWithCredentials, provisionVerifiedUser, resolveOrigin } from "./helpers/auth";
 
 test("admin user can access admin routes and demo user is gated out", async ({ browser, page, request, baseURL }) => {
@@ -34,6 +34,14 @@ test("admin user can access admin routes and demo user is gated out", async ({ b
   await demoContext.close();
 });
 
+async function invite(page: Page, email: string) {
+  await page.getByRole("button", { name: "Invite people" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Email addresses").fill(email);
+  await dialog.getByRole("button", { name: /^send invite$/i }).click();
+  await expect(dialog).toBeHidden();
+}
+
 test("workspace owner can revoke pending invites and switch active workspace", async ({ browser, page, request, baseURL }) => {
   const origin = resolveOrigin(baseURL);
   const ownerOne = await provisionVerifiedUser(request, origin, {
@@ -49,20 +57,17 @@ test("workspace owner can revoke pending invites and switch active workspace", a
   const ownerTwoPage = await ownerTwoContext.newPage();
   await loginWithCredentials(ownerTwoPage, ownerTwo);
   await ownerTwoPage.goto("/workspace/team");
-  await ownerTwoPage.getByLabel("Invite Email").fill(ownerOne.email);
-  await ownerTwoPage.getByRole("button", { name: /send invite/i }).click();
+  await invite(ownerTwoPage, ownerOne.email);
   await expect(ownerTwoPage.getByText(new RegExp(ownerOne.email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))).first()).toBeVisible();
   await ownerTwoContext.close();
 
   await loginWithCredentials(page, ownerOne);
   await page.goto("/workspace/team");
   const revokeEmail = `revoke-${Date.now()}@example.com`;
-  await page.getByLabel("Invite Email").fill(revokeEmail);
-  await page.getByRole("button", { name: /send invite/i }).click();
+  await invite(page, revokeEmail);
   await expect(page.getByText(revokeEmail).first()).toBeVisible();
 
-  const inviteCard = page.locator("div").filter({ has: page.getByText(revokeEmail) }).first();
-  await inviteCard.getByRole("button", { name: /revoke invite/i }).click();
+  await page.getByRole("button", { name: `Revoke invite for ${revokeEmail}` }).click();
   await expect(page.getByText(`Revoked invitation for ${revokeEmail}.`)).toBeVisible();
 
   await page.goto("/settings/workspaces");

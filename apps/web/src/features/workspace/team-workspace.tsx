@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Crown, Eye, Info, Mail, MoreHorizontal, RefreshCw, Search, Shield, Trash2, UserPlus, Users, X } from "@/components/icons";
+import { Check, Copy, Info, Mail, MoreHorizontal, RefreshCw, Search, Shield, Trash2, UserPlus, Users, X } from "@/components/icons";
 import { apiRequest, ApiError } from "@/lib/api";
 import type {
   AuthMessageResponse,
@@ -44,11 +44,13 @@ const PERMISSIONS: { label: string; roles: string[] }[] = [
 ];
 
 // Quiet badges: grey for everyone, a touch of the brand colour for owners.
-const ROLE_BADGE: Record<string, string> = {
-  owner: "border-[rgba(255,61,127,0.3)] bg-[rgba(255,61,127,0.08)] text-[#ff8fb3]",
-  admin: "border-[var(--lp-border-strong)] bg-[#111111] text-[var(--lp-text)]",
-  member: "border-[var(--lp-border-strong)] bg-[#111111] text-[var(--lp-muted)]",
-  viewer: "border-[var(--lp-border-strong)] bg-[#111111] text-[var(--lp-muted)]",
+// Roles read as plain words, not decoration: the people with more say are a
+// shade brighter, and that's all.
+const ROLE_TEXT: Record<string, string> = {
+  owner: "text-[var(--lp-text)]",
+  admin: "text-[var(--lp-text)]",
+  member: "text-[var(--lp-muted)]",
+  viewer: "text-[var(--lp-muted)]",
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -59,10 +61,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 function RoleBadge({ role }: { role: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-px text-xs", ROLE_BADGE[role] ?? ROLE_BADGE.member)}>
-      {role === "owner" ? <Crown className="h-3 w-3" aria-hidden="true" /> : role === "viewer" ? <Eye className="h-3 w-3" aria-hidden="true" /> : null}
-      {roleLabel(role)}
-    </span>
+    <span className={cn("text-sm", ROLE_TEXT[role] ?? ROLE_TEXT.member)}>{roleLabel(role)}</span>
   );
 }
 

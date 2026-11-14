@@ -12,6 +12,7 @@ import { CommandPalette } from "@/components/app/command-palette";
 import { LiveToaster } from "@/components/app/live-toaster";
 import { ConsoleShellSkeleton } from "@/components/app/route-states";
 import { ViewerBanner } from "@/components/app/viewer-banner";
+import { MFAGate } from "@/components/app/mfa-gate";
 import { clearNext, peekNext } from "@/lib/next-path";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
@@ -70,7 +71,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
         <main id="main" className="flex-1 px-4 py-6 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-[1280px]">
             <ViewerBanner />
-            {children}
+            <MFAGate>{children}</MFAGate>
           </div>
         </main>
       </div>

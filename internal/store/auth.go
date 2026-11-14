@@ -252,17 +252,23 @@ func (s *Store) GetUserBySessionToken(ctx context.Context, tokenHash string) (Us
 func (s *Store) GetSessionDetailsByToken(ctx context.Context, tokenHash string) (SessionDetails, error) {
 	var details SessionDetails
 	var user User
+	var lastSeen sql.NullTime
 	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at, COALESCE(s.active_workspace_id, 0)
+		SELECT u.id, u.name, u.email, u.verification_required, u.email_verified_at, u.created_at, COALESCE(s.active_workspace_id, 0), u.last_seen_at
 		FROM sessions s
 		INNER JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.expires_at > NOW()
-	`, tokenHash).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt, &details.ActiveWorkspaceID)
+	`, tokenHash).Scan(&user.ID, &user.Name, &user.Email, &user.VerificationRequired, &user.EmailVerifiedAt, &user.CreatedAt, &details.ActiveWorkspaceID, &lastSeen)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SessionDetails{}, ErrSessionNotFound
 	}
 	if err != nil {
 		return SessionDetails{}, err
+	}
+	// Note the user as active, at most every five minutes, so busy consoles
+	// don't write on every request.
+	if !lastSeen.Valid || time.Since(lastSeen.Time) > 5*time.Minute {
+		_, _ = s.db.ExecContext(ctx, `UPDATE users SET last_seen_at = NOW() WHERE id = $1`, user.ID)
 	}
 	details.User = user
 	return details, nil

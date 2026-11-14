@@ -4,12 +4,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Crown, Eye, Info, Mail, MoreHorizontal, RefreshCw, Search, Trash2, UserPlus, Users, X } from "@/components/icons";
+import { Check, Copy, Crown, Eye, Info, Mail, MoreHorizontal, RefreshCw, Search, Shield, Trash2, UserPlus, Users, X } from "@/components/icons";
 import { apiRequest, ApiError } from "@/lib/api";
-import type { AuthMessageResponse, SessionResponse, WorkspaceInvitation, WorkspaceMember, WorkspaceTeamResponse, WorkspaceUsageResponse } from "@/lib/types";
+import type {
+  AuthMessageResponse,
+  SessionResponse,
+  WorkspaceContextResponse,
+  WorkspaceInvitation,
+  WorkspaceMember,
+  WorkspaceTeamResponse,
+  WorkspaceUsageResponse,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
-import { Avatar, formatDate, Notice, roleLabel, SettingsPageTitle } from "@/components/settings/settings-ui";
+import { Avatar, formatDate, Notice, roleLabel, SettingsCard, SettingsPageTitle } from "@/components/settings/settings-ui";
+import { Toggle } from "@/components/tools/probe-ui";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_INVITES_AT_ONCE = 20;
@@ -74,6 +83,16 @@ function invitableRoles(actorRole: string) {
   if (actorRole === "owner") return ["owner", "admin", "member", "viewer"];
   if (actorRole === "admin") return ["member", "viewer"];
   return [];
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago", or a date. */
+function activeAgo(iso: string) {
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (minutes < 10) return "Active now";
+  if (minutes < 60) return `Active ${minutes} min ago`;
+  if (minutes < 24 * 60) return `Active ${Math.floor(minutes / 60)} h ago`;
+  if (minutes < 30 * 24 * 60) return `Active ${Math.floor(minutes / (24 * 60))} days ago`;
+  return `Active ${formatDate(iso)}`;
 }
 
 /** "in 6 days", "tomorrow", "today", or "expired". */
@@ -360,6 +379,21 @@ export function TeamWorkspace() {
     enabled: authenticated,
   });
 
+  const workspaceQuery = useQuery({
+    queryKey: ["workspace-general"],
+    queryFn: () => apiRequest<WorkspaceContextResponse>("/api/workspace"),
+    enabled: authenticated,
+  });
+  const mfaQuery = useQuery({ queryKey: ["account-mfa"], queryFn: () => apiRequest<{ enabled: boolean }>("/api/account/mfa"), enabled: authenticated });
+  const setPolicy = useMutation({
+    mutationFn: (on: boolean) => apiRequest<WorkspaceContextResponse>("/api/workspace", { method: "PATCH", body: JSON.stringify({ require_mfa: on }) }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["workspace-general"], (old: WorkspaceContextResponse | undefined) => ({ ...old, ...data }));
+      setNotice({ tone: "success", text: data.require_mfa ? "Two-factor sign-in is now required in this workspace." : "Two-factor sign-in is optional again." });
+    },
+    onError: (error: Error) => setNotice({ tone: "error", text: (error as ApiError).message || "Couldn't change the requirement." }),
+  });
+
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["workspace-team"] });
     void queryClient.invalidateQueries({ queryKey: ["workspace-usage"] });
@@ -429,6 +463,9 @@ export function TeamWorkspace() {
   const inviteRoles = invitableRoles(actorRole);
   const canInvite = !isDemo && inviteRoles.length > 0;
   // The last owner can't leave (the server refuses too); they transfer ownership first.
+  const requireMFA = workspaceQuery.data?.require_mfa === true;
+  const myMFA = mfaQuery.data?.enabled;
+  const withoutMFA = members.filter((m) => m.mfa_enabled === false);
   const soleOwner = actorRole === "owner" && members.filter((m) => m.role === "owner").length <= 1;
   const q = query.trim().toLowerCase();
   const visibleMembers = q ? members.filter((m) => `${m.name} ${m.email} ${m.role}`.toLowerCase().includes(q)) : members;
@@ -540,9 +577,22 @@ export function TeamWorkspace() {
                         <span className="truncate font-medium">{member.name || member.email}</span>
                         {member.is_current ? <span className="shrink-0 rounded border border-[var(--lp-border)] px-1.5 text-2xs leading-4 text-[var(--lp-subtle)]">You</span> : null}
                       </p>
-                      <p className="truncate text-xs text-[var(--lp-subtle)]">{member.email}</p>
+                      <p className="flex items-center gap-2 truncate text-xs text-[var(--lp-subtle)]">
+                        <span className="truncate">{member.email}</span>
+                        {member.mfa_enabled === true ? (
+                          <span className="inline-flex shrink-0 items-center gap-1 text-[#86efac]" title="Signs in with two-factor">
+                            <Shield className="h-3 w-3" aria-hidden="true" /> 2FA
+                          </span>
+                        ) : member.mfa_enabled === false ? (
+                          <span className="shrink-0 text-[#fbbf24]" title="Doesn't use two-factor sign-in">
+                            No 2FA
+                          </span>
+                        ) : null}
+                      </p>
                     </div>
-                    <span className="hidden w-32 shrink-0 text-xs text-[var(--lp-subtle)] md:block">Joined {formatDate(member.joined_at)}</span>
+                    <span className="hidden w-36 shrink-0 text-xs text-[var(--lp-subtle)] md:block" title={`Joined ${formatDate(member.joined_at)}`}>
+                      {member.last_active_at ? activeAgo(member.last_active_at) : `Joined ${formatDate(member.joined_at)}`}
+                    </span>
                     <span className="w-24 shrink-0 text-right">
                       <RoleBadge role={member.role} />
                     </span>
@@ -697,6 +747,30 @@ export function TeamWorkspace() {
           </div>
         )}
       </section>
+
+      {actorRole === "owner" || actorRole === "admin" ? (
+        <SettingsCard
+          id="two-factor"
+          title="Require two-factor sign-in"
+          description="Members without two-factor can't open this workspace's data until they turn it on. They can still reach their account settings to do it."
+          hint={
+            withoutMFA.length
+              ? `${withoutMFA.length} ${withoutMFA.length === 1 ? "member doesn't" : "members don't"} use two-factor yet: ${withoutMFA.map((m) => m.name || m.email).slice(0, 3).join(", ")}${withoutMFA.length > 3 ? "…" : ""}`
+              : "Everyone here signs in with two-factor."
+          }
+        >
+          <Toggle
+            label={requireMFA ? "Required for everyone" : "Optional"}
+            description={actorRole === "owner" ? (myMFA === false ? "Turn on two-factor for your own account first." : undefined) : "Only owners can change this."}
+            checked={requireMFA}
+            disabled={actorRole !== "owner" || isDemo || setPolicy.isPending || (!requireMFA && myMFA === false)}
+            onChange={(e) => {
+              setNotice(null);
+              setPolicy.mutate(e.target.checked);
+            }}
+          />
+        </SettingsCard>
+      ) : null}
 
       {canInvite ? (
         <InviteDialog

@@ -29,6 +29,10 @@ type WorkspaceMember struct {
 	// AvatarKey locates the member's picture; the API turns it into avatar_url.
 	AvatarKey string `json:"-"`
 	AvatarURL string `json:"avatar_url,omitempty"`
+	// LastActiveAt is when they last used Qnetward; nil if never recorded.
+	LastActiveAt *time.Time `json:"last_active_at,omitempty"`
+	// MFAEnabled says whether they sign in with a second factor.
+	MFAEnabled bool `json:"mfa_enabled"`
 }
 
 type WorkspaceInvitation struct {
@@ -217,7 +221,9 @@ func (s *Store) ListWorkspaceMembersByWorkspaceIDAndUserID(ctx context.Context, 
 			u.email,
 			wm.role,
 			wm.created_at,
-			COALESCE(p.avatar_key, '')
+			COALESCE(p.avatar_key, ''),
+			u.last_seen_at,
+			EXISTS (SELECT 1 FROM user_mfa m WHERE m.user_id = u.id AND m.enabled_at IS NOT NULL)
 		FROM workspace_members wm
 		INNER JOIN users u ON u.id = wm.user_id
 		LEFT JOIN user_profiles p ON p.user_id = u.id
@@ -235,8 +241,13 @@ func (s *Store) ListWorkspaceMembersByWorkspaceIDAndUserID(ctx context.Context, 
 	var members []WorkspaceMember
 	for rows.Next() {
 		var member WorkspaceMember
-		if err := rows.Scan(&member.UserID, &member.Name, &member.Email, &member.Role, &member.JoinedAt, &member.AvatarKey); err != nil {
+		var lastSeen sql.NullTime
+		if err := rows.Scan(&member.UserID, &member.Name, &member.Email, &member.Role, &member.JoinedAt, &member.AvatarKey, &lastSeen, &member.MFAEnabled); err != nil {
 			return nil, err
+		}
+		if lastSeen.Valid {
+			t := lastSeen.Time
+			member.LastActiveAt = &t
 		}
 		member.IsCurrent = member.UserID == userID
 		members = append(members, member)
@@ -954,4 +965,20 @@ func (s *Store) LeaveWorkspace(ctx context.Context, workspaceID, userID int64) e
 		return err
 	}
 	return tx.Commit()
+}
+
+// WorkspaceMFAGate reports whether a workspace requires two-factor sign-in,
+// and whether this user has it on.
+func (s *Store) WorkspaceMFAGate(ctx context.Context, workspaceID, userID int64) (required, enabled bool, err error) {
+	err = s.db.QueryRowContext(ctx, `
+		SELECT w.require_mfa,
+			EXISTS (SELECT 1 FROM user_mfa m WHERE m.user_id = $2 AND m.enabled_at IS NOT NULL)
+		FROM workspaces w WHERE w.id = $1`, workspaceID, userID).Scan(&required, &enabled)
+	return required, enabled, err
+}
+
+// SetWorkspaceRequireMFA turns the require-two-factor policy on or off.
+func (s *Store) SetWorkspaceRequireMFA(ctx context.Context, workspaceID int64, on bool) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE workspaces SET require_mfa = $2 WHERE id = $1`, workspaceID, on)
+	return err
 }

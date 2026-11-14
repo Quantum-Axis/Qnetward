@@ -155,3 +155,64 @@ func TestTransferOwnershipAndLeave(t *testing.T) {
 		t.Fatalf("the new, only owner must not leave, got %d", code)
 	}
 }
+
+// A workspace that requires two-factor sign-in keeps its data from members
+// without it, and an owner can only turn it on with two-factor themselves.
+func TestRequireTwoFactor(t *testing.T) {
+	st := installTestStore(t)
+	owner, ownerCookie := issueTestSession(t, st)
+	member, memberCookie := issueTestSession(t, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	invitation, err := st.CreateWorkspaceInvitationByUserID(ctx, owner.ID, member.Email, "member", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AcceptWorkspaceInvitationByUserID(ctx, member.ID, invitation.ID); err != nil {
+		t.Fatal(err)
+	}
+	teamID := testWorkspaceID(t, st, owner.ID)
+	if err := st.SetSessionActiveWorkspace(ctx, hashSessionToken(memberCookie.Value), member.ID, teamID); err != nil {
+		t.Fatal(err)
+	}
+	call := func(cookie *http.Cookie, method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(cookie)
+		rr := httptest.NewRecorder()
+		testSrv.Handler().ServeHTTP(rr, req)
+		return rr
+	}
+
+	if rr := call(ownerCookie, http.MethodPatch, "/api/workspace", `{"require_mfa":true}`); rr.Code != http.StatusConflict {
+		t.Fatalf("an owner without two-factor can't require it, got %d", rr.Code)
+	}
+	if err := st.StartMFASetup(ctx, owner.ID, "sealed-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.EnableMFA(ctx, owner.ID, 1, []string{}); err != nil {
+		t.Fatal(err)
+	}
+	if rr := call(ownerCookie, http.MethodPatch, "/api/workspace", `{"require_mfa":true}`); rr.Code != http.StatusOK {
+		t.Fatalf("require two-factor: %d %s", rr.Code, rr.Body.String())
+	}
+	if rr := call(memberCookie, http.MethodGet, "/api/monitors", ""); rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), "mfa_required") {
+		t.Fatalf("a member without two-factor must be kept out, got %d %s", rr.Code, rr.Body.String())
+	}
+	if rr := call(memberCookie, http.MethodGet, "/api/account/mfa", ""); rr.Code != http.StatusOK {
+		t.Fatalf("they can still reach their own security settings, got %d", rr.Code)
+	}
+	if rr := call(ownerCookie, http.MethodGet, "/api/monitors", ""); rr.Code != http.StatusOK {
+		t.Fatalf("the owner, with two-factor, gets in, got %d", rr.Code)
+	}
+	// Owners see who has two-factor; members don't.
+	if rr := call(ownerCookie, http.MethodGet, "/api/workspace/team", ""); !strings.Contains(rr.Body.String(), `"mfa_enabled"`) {
+		t.Fatalf("owners should see two-factor status: %s", rr.Body.String())
+	}
+	if rr := call(ownerCookie, http.MethodPatch, "/api/workspace", `{"require_mfa":false}`); rr.Code != http.StatusOK {
+		t.Fatalf("turn the requirement off: %d", rr.Code)
+	}
+	if rr := call(memberCookie, http.MethodGet, "/api/monitors", ""); rr.Code != http.StatusOK {
+		t.Fatalf("with the requirement off the member gets in again, got %d", rr.Code)
+	}
+}

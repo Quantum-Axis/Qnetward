@@ -95,6 +95,16 @@ func (srv *Server) requireActorFor(w http.ResponseWriter, r *http.Request, scope
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return actor{}, false
 	}
+	// A workspace that requires two-factor sign-in keeps its data from members
+	// without it. Account settings don't come through here, so they can still
+	// turn it on.
+	if required, enabled, err := srv.store.WorkspaceMFAGate(ctx, workspace.ID, user.ID); err == nil && required && !enabled {
+		writeJSON(w, http.StatusForbidden, map[string]any{
+			"error":        workspace.Name + " requires two-factor sign-in; turn it on in your account's security settings",
+			"mfa_required": true,
+		})
+		return actor{}, false
+	}
 	if !roleMayAct(workspace.Role, scope, r.Method) {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "viewers can see this workspace but not change it; ask an owner or admin for the member role"})
 		return actor{}, false

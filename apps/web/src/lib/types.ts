@@ -65,6 +65,8 @@ export type WorkspaceContext = {
 
 export type WorkspaceContextResponse = {
   workspace?: WorkspaceContext | null;
+  /** The workspace keeps its data from members without two-factor sign-in. */
+  require_mfa?: boolean;
 };
 
 export type WorkspaceMember = {
@@ -75,6 +77,9 @@ export type WorkspaceMember = {
   joined_at: string;
   is_current: boolean;
   avatar_url?: string;
+  /** Owners and admins only. */
+  last_active_at?: string;
+  mfa_enabled?: boolean;
 };
 
 export type WorkspaceInvitation = {

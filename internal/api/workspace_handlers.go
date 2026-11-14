@@ -52,6 +52,9 @@ type authWorkspaceMember struct {
 	Role      string    `json:"role"`
 	JoinedAt  time.Time `json:"joined_at"`
 	IsCurrent bool      `json:"is_current"`
+	// Shown to owners and admins only.
+	LastActiveAt *time.Time `json:"last_active_at,omitempty"`
+	MFAEnabled   *bool      `json:"mfa_enabled,omitempty"`
 }
 
 type authWorkspaceInvitation struct {
@@ -188,7 +191,7 @@ func (srv *Server) handleWorkspaceTeam(w http.ResponseWriter, r *http.Request) {
 
 		writeJSON(w, http.StatusOK, workspaceTeamResponse{
 			Workspace:   toAuthWorkspace(workspace),
-			Members:     toAuthWorkspaceMembers(members),
+			Members:     withSecurityDetails(toAuthWorkspaceMembers(members), members, workspace.Role),
 			Invitations: srv.withAcceptPaths(ctx, toAuthWorkspaceInvitations(invitations)),
 		})
 	case http.MethodPost:
@@ -536,7 +539,8 @@ func (srv *Server) handleWorkspaceGeneral(w http.ResponseWriter, r *http.Request
 
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, map[string]any{"workspace": workspace})
+		required, _, _ := srv.store.WorkspaceMFAGate(ctx, workspace.ID, user.ID)
+		writeJSON(w, http.StatusOK, map[string]any{"workspace": workspace, "require_mfa": required})
 	case http.MethodPatch:
 		if !srv.isAllowedRequestOrigin(r) {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "forbidden origin"})
@@ -551,14 +555,23 @@ func (srv *Server) handleWorkspaceGeneral(w http.ResponseWriter, r *http.Request
 			return
 		}
 		var req struct {
-			Name string `json:"name"`
+			Name       *string `json:"name"`
+			RequireMFA *bool   `json:"require_mfa"`
 		}
 		if err := decodeJSON(w, r, &req); err != nil {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
 		}
+		if req.RequireMFA != nil {
+			srv.setRequireMFA(ctx, w, r, user, workspace, *req.RequireMFA)
+			return
+		}
+		if req.Name == nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "nothing to change"})
+			return
+		}
 		previous := workspace.Name
-		name, err := srv.store.RenameWorkspace(ctx, workspace.ID, req.Name)
+		name, err := srv.store.RenameWorkspace(ctx, workspace.ID, *req.Name)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
@@ -626,4 +639,44 @@ func (srv *Server) withAcceptPaths(ctx context.Context, invitations []authWorksp
 		invitations[i].AcceptPath = invitationAcceptPath(invitations[i].Email, err == nil)
 	}
 	return invitations
+}
+
+// withSecurityDetails adds when each member was last active and whether they
+// use two-factor, for owners and admins, who decide on the team's security.
+func withSecurityDetails(out []authWorkspaceMember, members []store.WorkspaceMember, viewerRole string) []authWorkspaceMember {
+	if viewerRole != "owner" && viewerRole != "admin" {
+		return out
+	}
+	for i := range out {
+		mfa := members[i].MFAEnabled
+		out[i].MFAEnabled = &mfa
+		out[i].LastActiveAt = members[i].LastActiveAt
+	}
+	return out
+}
+
+// setRequireMFA turns the workspace's two-factor requirement on or off. Only
+// owners may, and only once they use two-factor themselves, so turning it on
+// can't lock them out.
+func (srv *Server) setRequireMFA(ctx context.Context, w http.ResponseWriter, r *http.Request, user store.User, workspace store.WorkspaceContext, on bool) {
+	if workspace.Role != "owner" {
+		writeJSON(w, http.StatusForbidden, apiError{Error: "only workspace owners can change the two-factor requirement"})
+		return
+	}
+	if on {
+		if _, enabled, err := srv.store.WorkspaceMFAGate(ctx, workspace.ID, user.ID); err != nil || !enabled {
+			writeJSON(w, http.StatusConflict, apiError{Error: "turn on two-factor sign-in for your own account first"})
+			return
+		}
+	}
+	if err := srv.store.SetWorkspaceRequireMFA(ctx, workspace.ID, on); err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "couldn't change the two-factor requirement"})
+		return
+	}
+	action := "workspace.mfa_required"
+	if !on {
+		action = "workspace.mfa_optional"
+	}
+	srv.recordAudit(r, workspace.ID, user, action, idTarget("workspace", workspace.ID, workspace.Name), nil)
+	writeJSON(w, http.StatusOK, map[string]any{"workspace": workspace, "require_mfa": on})
 }

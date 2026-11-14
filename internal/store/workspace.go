@@ -50,6 +50,9 @@ var (
 	ErrWorkspaceInvitationExpired  = errors.New("workspace invitation is expired")
 	ErrWorkspaceMemberNotFound     = errors.New("workspace member not found")
 	ErrWorkspacePermissionDenied   = errors.New("workspace permission denied")
+	// ErrWorkspaceLastOwner stops the only owner leaving: someone must be
+	// able to manage the workspace and its billing.
+	ErrWorkspaceLastOwner = errors.New("the last owner can't leave; transfer ownership first")
 )
 
 func (s *Store) EnsureDefaultWorkspaceForUser(ctx context.Context, user User) (WorkspaceContext, error) {
@@ -790,15 +793,14 @@ func workspaceMemberByIDTx(ctx context.Context, tx *sql.Tx, workspaceID, userID 
 }
 
 func canManageWorkspaceMember(actorRole, targetRole, nextRole string) bool {
-	if targetRole == "owner" {
-		return false
-	}
 	switch actorRole {
 	case "owner":
+		// Owners manage everyone, other owners included: the acting owner stays
+		// an owner, so the workspace always keeps one.
 		if nextRole == "" {
 			return true
 		}
-		return nextRole == "admin" || nextRole == "member" || nextRole == "viewer"
+		return nextRole == "owner" || nextRole == "admin" || nextRole == "member" || nextRole == "viewer"
 	case "admin":
 		if targetRole != "member" && targetRole != "viewer" {
 			return false
@@ -885,4 +887,71 @@ func (s *Store) RenameWorkspace(ctx context.Context, workspaceID int64, name str
 		return "", ErrWorkspaceNotFound
 	}
 	return name, nil
+}
+
+// TransferWorkspaceOwnership makes target an owner and the acting owner an
+// admin, in one step, so the workspace is never without an owner.
+func (s *Store) TransferWorkspaceOwnership(ctx context.Context, workspaceID, actorUserID, targetUserID int64) (WorkspaceMember, error) {
+	if actorUserID == targetUserID {
+		return WorkspaceMember{}, ErrWorkspacePermissionDenied
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return WorkspaceMember{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	actorRole, err := workspaceRoleForUserInWorkspaceTx(ctx, tx, workspaceID, actorUserID)
+	if err != nil {
+		if errors.Is(err, ErrWorkspaceMemberNotFound) {
+			return WorkspaceMember{}, ErrWorkspacePermissionDenied
+		}
+		return WorkspaceMember{}, err
+	}
+	if actorRole != "owner" {
+		return WorkspaceMember{}, ErrWorkspacePermissionDenied
+	}
+	if _, err := workspaceRoleForUserInWorkspaceTx(ctx, tx, workspaceID, targetUserID); err != nil {
+		return WorkspaceMember{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE workspace_members SET role = 'owner' WHERE workspace_id = $1 AND user_id = $2`, workspaceID, targetUserID); err != nil {
+		return WorkspaceMember{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE workspace_members SET role = 'admin' WHERE workspace_id = $1 AND user_id = $2`, workspaceID, actorUserID); err != nil {
+		return WorkspaceMember{}, err
+	}
+	member, err := workspaceMemberByIDTx(ctx, tx, workspaceID, targetUserID)
+	if err != nil {
+		return WorkspaceMember{}, err
+	}
+	return member, tx.Commit()
+}
+
+// LeaveWorkspace removes the user from a workspace they belong to. The last
+// owner can't leave; they transfer ownership first.
+func (s *Store) LeaveWorkspace(ctx context.Context, workspaceID, userID int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	role, err := workspaceRoleForUserInWorkspaceTx(ctx, tx, workspaceID, userID)
+	if err != nil {
+		return err
+	}
+	if role == "owner" {
+		var owners int
+		// Lock the owners so two owners leaving at once can't both succeed.
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND role = 'owner' FOR UPDATE) o`, workspaceID).Scan(&owners); err != nil {
+			return err
+		}
+		if owners <= 1 {
+			return ErrWorkspaceLastOwner
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`, workspaceID, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

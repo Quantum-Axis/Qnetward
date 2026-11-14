@@ -198,6 +198,8 @@ func (srv *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/billing/uddoktapay/return", srv.handleUddoktaPayReturn)
 	mux.HandleFunc("/api/billing/uddoktapay/webhook", srv.handleUddoktaPayWebhook)
 	mux.HandleFunc("/api/workspace/team", srv.handleWorkspaceTeam)
+	mux.HandleFunc("/api/workspace/team/transfer", srv.handleTransferOwnership)
+	mux.HandleFunc("/api/workspace/leave", srv.handleLeaveWorkspace)
 	mux.HandleFunc("/api/workspace/invitations", srv.handleWorkspaceInvitations)
 	mux.HandleFunc("/api/workspace/audit", srv.handleWorkspaceAudit)
 	mux.HandleFunc("/api/workspace/api-keys", srv.handleWorkspaceAPIKeys)

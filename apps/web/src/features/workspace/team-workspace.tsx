@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Crown, Eye, Info, Mail, MoreHorizontal, RefreshCw, Search, Trash2, UserPlus, Users, X } from "@/components/icons";
@@ -58,13 +59,13 @@ function RoleBadge({ role }: { role: string }) {
 
 function canManageMember(actorRole: string, isDemo: boolean, member: WorkspaceMember) {
   if (isDemo || member.is_current) return false;
-  if (actorRole === "owner") return member.role !== "owner";
+  if (actorRole === "owner") return true;
   if (actorRole === "admin") return member.role === "member" || member.role === "viewer";
   return false;
 }
 
 function assignableRoles(actorRole: string) {
-  if (actorRole === "owner") return ["admin", "member", "viewer"];
+  if (actorRole === "owner") return ["owner", "admin", "member", "viewer"];
   if (actorRole === "admin") return ["member", "viewer"];
   return [];
 }
@@ -334,11 +335,15 @@ function RolesDialog({ open, onClose, actorRole }: { open: boolean; onClose: () 
 
 export function TeamWorkspace() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [tab, setTab] = useState<"members" | "invitations">("members");
   const [query, setQuery] = useState("");
   const [inviting, setInviting] = useState(false);
   const [showRoles, setShowRoles] = useState(false);
   const [removing, setRemoving] = useState<WorkspaceMember | null>(null);
+  const [transferring, setTransferring] = useState<WorkspaceMember | null>(null);
+  const [confirmName, setConfirmName] = useState("");
+  const [leaving, setLeaving] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -387,6 +392,21 @@ export function TeamWorkspace() {
     ...report("Invitation revoked."),
   });
 
+  const transfer = useMutation({
+    mutationFn: (values: { userID: number; confirm: string }) =>
+      apiRequest<AuthMessageResponse>("/api/workspace/team/transfer", { method: "POST", body: JSON.stringify({ user_id: values.userID, confirm: values.confirm }) }),
+    ...report("Ownership transferred."),
+  });
+  const leave = useMutation({
+    mutationFn: () => apiRequest<AuthMessageResponse>("/api/workspace/leave", { method: "POST" }),
+    // The console moves to another of their workspaces; reload so everything follows.
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      router.push("/overview");
+    },
+    onError: (error: Error) => setNotice({ tone: "error", text: (error as ApiError).message || "Couldn't leave the workspace." }),
+  });
+
   const copyLink = async (invitation: WorkspaceInvitation) => {
     if (!invitation.accept_path) return;
     try {
@@ -408,6 +428,8 @@ export function TeamWorkspace() {
   const roles = assignableRoles(actorRole);
   const inviteRoles = invitableRoles(actorRole);
   const canInvite = !isDemo && inviteRoles.length > 0;
+  // The last owner can't leave (the server refuses too); they transfer ownership first.
+  const soleOwner = actorRole === "owner" && members.filter((m) => m.role === "owner").length <= 1;
   const q = query.trim().toLowerCase();
   const visibleMembers = q ? members.filter((m) => `${m.name} ${m.email} ${m.role}`.toLowerCase().includes(q)) : members;
 
@@ -545,6 +567,17 @@ export function TeamWorkspace() {
                                 </MenuItem>
                               ))}
                               <div className="my-1 border-t border-[var(--lp-border)]" />
+                              {actorRole === "owner" && member.role !== "owner" ? (
+                                <MenuItem
+                                  onClick={() => {
+                                    close();
+                                    setConfirmName("");
+                                    setTransferring(member);
+                                  }}
+                                >
+                                  Transfer ownership…
+                                </MenuItem>
+                              ) : null}
                               <MenuItem
                                 danger
                                 onClick={() => {
@@ -555,6 +588,20 @@ export function TeamWorkspace() {
                                 Remove from workspace
                               </MenuItem>
                             </>
+                          )}
+                        </RowMenu>
+                      ) : member.is_current && !isDemo ? (
+                        <RowMenu label="Your membership">
+                          {(close) => (
+                            <MenuItem
+                              danger
+                              onClick={() => {
+                                close();
+                                setLeaving(true);
+                              }}
+                            >
+                              Leave workspace
+                            </MenuItem>
                           )}
                         </RowMenu>
                       ) : null}
@@ -667,6 +714,73 @@ export function TeamWorkspace() {
         />
       ) : null}
       <RolesDialog open={showRoles} onClose={() => setShowRoles(false)} actorRole={actorRole} />
+      <Modal
+        open={transferring !== null}
+        onClose={() => setTransferring(null)}
+        title={`Transfer ownership to ${transferring?.name || transferring?.email || "this member"}?`}
+        className="max-w-[480px]"
+        footer={
+          <>
+            <button type="button" className="console-btn console-btn-secondary h-9 px-4" onClick={() => setTransferring(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="console-btn h-9 bg-[#e5336f] px-4 font-medium text-white hover:bg-[#ff3d7f]"
+              disabled={transfer.isPending || confirmName.trim().toLowerCase() !== (workspace?.name ?? "").trim().toLowerCase()}
+              onClick={() => {
+                if (transferring) transfer.mutate({ userID: transferring.user_id, confirm: confirmName });
+                setTransferring(null);
+              }}
+            >
+              Transfer ownership
+            </button>
+          </>
+        }
+      >
+        <div className="grid gap-4">
+          <p className="text-sm leading-relaxed text-[var(--lp-muted)]">
+            They become the owner of {workspace?.name}, with full control including billing. You become an admin. Only they can make you an owner again.
+          </p>
+          <div className="grid gap-1.5">
+            <label htmlFor="transfer-confirm" className="text-sm">
+              Type <span className="font-semibold text-[var(--lp-text)]">{workspace?.name}</span> to confirm
+            </label>
+            <input id="transfer-confirm" className="h-10 w-full px-3" autoComplete="off" value={confirmName} onChange={(e) => setConfirmName(e.target.value)} />
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        open={leaving}
+        onClose={() => setLeaving(false)}
+        title={`Leave ${workspace?.name ?? "this workspace"}?`}
+        className="max-w-[440px]"
+        footer={
+          <>
+            <button type="button" className="console-btn console-btn-secondary h-9 px-4" onClick={() => setLeaving(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="console-btn h-9 bg-[#e5336f] px-4 font-medium text-white hover:bg-[#ff3d7f]"
+              disabled={leave.isPending || soleOwner}
+              onClick={() => {
+                setLeaving(false);
+                setNotice(null);
+                leave.mutate();
+              }}
+            >
+              Leave workspace
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-[var(--lp-muted)]">
+          {soleOwner
+            ?"You're the only owner, so you can't leave yet. Transfer ownership to someone first, from the menu next to their name."
+            : "You lose access right away, and you'll need a new invitation to come back. Everything you made stays with the workspace."}
+        </p>
+      </Modal>
       <Modal
         open={removing !== null}
         onClose={() => setRemoving(null)}

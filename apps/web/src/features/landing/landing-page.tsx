@@ -185,7 +185,6 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
         <section className="lp-divider py-20 sm:py-28">
           <div className="lp-container">
             <SectionHeader
-              label="Why one tool"
               title="Five tabs during an outage is four too many"
               aside="Most teams stitch diagnostics together from terminal commands, a website or two, and a separate uptime service. Qnetward puts them behind one login, with shared history."
             />

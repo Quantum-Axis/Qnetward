@@ -5,7 +5,6 @@ import { HeroConsole } from "./hero-console";
 import { LandingEffects } from "./landing-effects";
 import { LandingNav } from "./landing-nav";
 import { SiteFooter } from "./site-footer";
-import { NetworkCanvas } from "./network-canvas";
 import { Pricing } from "./pricing";
 import type { PublicPlansResponse } from "@/lib/types";
 import { ProductShowcase } from "./product-showcase";
@@ -112,63 +111,35 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
   return (
     <>
       <LandingEffects />
-      {/* announcement */}
-      <div className="border-b border-[var(--lp-border)] bg-[var(--lp-bg-raised)]">
-        <div className="lp-container flex h-10 items-center justify-center gap-3 text-sm">
-          <span className="lp-badge lp-badge-new">New</span>
-          <span className="text-[var(--lp-muted)]">
-            <span className="hidden sm:inline">Uptime monitors for websites, APIs, and servers are live</span>
-            <span className="sm:hidden">Uptime monitors are live</span>
-          </span>
-          <Link href="/signup" className="text-[var(--lp-text)] underline-offset-4 hover:underline">
-            Try it →
-          </Link>
-        </div>
-      </div>
-
       <LandingNav />
 
       <main id="main">
         {/* hero */}
         <section className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="lp-aurora lp-aurora-a" />
-            <div className="lp-aurora lp-aurora-b" />
-          </div>
-          <NetworkCanvas className="absolute inset-x-0 top-0 h-[760px] w-full opacity-40 [mask-image:linear-gradient(to_bottom,black_55%,transparent)] sm:opacity-80" />
-          <div className="lp-container relative pb-16 pt-16 text-center sm:pt-32">
-            <h1 className="mx-auto max-w-4xl text-3xl font-normal leading-[1.08] tracking-[-0.035em] sm:text-5xl">
-              <span className="lp-hero-text">See every network, server, and threat</span>
-              <span className="lp-cursor" />
+          <div className="lp-hero-glow pointer-events-none absolute inset-0" aria-hidden="true" />
+          <div className="lp-container relative pb-16 pt-14 text-center sm:pt-24">
+            <Link href="/signup" className="lp-hero-pill">
+              <span className="lp-badge lp-badge-new">New</span>
+              <span>Uptime monitors are live</span>
+              <span aria-hidden="true" className="text-[var(--lp-accent)]">→</span>
+            </Link>
+            <h1 className="mx-auto mt-7 max-w-4xl text-4xl font-semibold leading-[1.1] tracking-[-0.03em] sm:text-[64px]">
+              See every network,
+              <br />
+              <span className="text-[var(--lp-accent)]">server, and threat</span>
             </h1>
-            <p className="mx-auto mt-5 max-w-3xl text-md leading-relaxed text-[var(--lp-muted)] sm:text-lg">
-              Qnetward probes, monitors, and protects your infrastructure from one platform.{" "}
-              <br className="hidden md:block" />
-              Diagnostics and uptime monitors today. Agents and attack-surface scans next.
+            <p className="mx-auto mt-6 max-w-2xl text-md font-medium leading-relaxed text-[var(--lp-muted)] sm:text-lg">
+              Probe, monitor, and protect your infrastructure from one platform — diagnostics and uptime monitors
+              today, agents and attack-surface scans next.
             </p>
-            {/* Phones keep both buttons on one row, with shorter labels. */}
-            <div className="mx-auto mt-7 grid max-w-sm grid-cols-2 gap-2.5 sm:flex sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
-              <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-3 text-base sm:px-6 sm:text-md">
-                <span className="sm:hidden">Start free</span>
-                <span className="hidden sm:inline">Start monitoring free</span>
+            <div className="mt-8 flex flex-col items-center gap-3">
+              <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-6 text-md">
+                Start monitoring free <span aria-hidden="true">→</span>
               </Link>
-              <a href="#how" className="lp-btn lp-btn-secondary h-11 px-3 text-base sm:px-6 sm:text-md">
-                <span className="sm:hidden">How it works</span>
-                <span className="hidden sm:inline">See how it works</span>
-              </a>
+              <p className="text-sm text-[var(--lp-muted)]">*No credit card required</p>
             </div>
-            {/* One row on every width: tighter spacing and type on phones. */}
-            <ul className="mt-5 flex flex-nowrap items-center justify-center gap-x-3 whitespace-nowrap text-xs text-[var(--lp-subtle)] sm:gap-x-6 sm:text-sm">
-              {["Free to start", "No credit card", "Self-host ready"].map((item) => (
-                <li key={item} className="flex items-center gap-1.5 sm:gap-2">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5">
-                    <path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="var(--lp-green)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <div className="lp-reveal mt-10 sm:mt-12">
+            <div className="lp-reveal relative mt-14 sm:mt-16">
+              <span className="lp-hero-edge" aria-hidden="true" />
               <HeroConsole />
             </div>
           </div>

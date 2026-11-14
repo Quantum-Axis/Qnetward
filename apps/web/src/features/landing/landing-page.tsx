@@ -136,12 +136,8 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
             <div className="lp-aurora lp-aurora-b" />
           </div>
           <NetworkCanvas className="absolute inset-x-0 top-0 h-[760px] w-full opacity-40 [mask-image:linear-gradient(to_bottom,black_55%,transparent)] sm:opacity-80" />
-          <div className="lp-container relative pb-16 pt-10 text-center sm:pt-20">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--lp-border)] bg-white/[0.03] px-3 py-1 text-xs text-[var(--lp-muted)]">
-              <span className="lp-pulse h-1.5 w-1.5 rounded-full bg-[var(--lp-green)]" />
-              Network · Infrastructure · Security
-            </div>
-            <h1 className="mx-auto mt-5 max-w-4xl text-3xl font-normal leading-[1.08] tracking-[-0.035em] sm:text-5xl">
+          <div className="lp-container relative pb-16 pt-16 text-center sm:pt-32">
+            <h1 className="mx-auto max-w-4xl text-3xl font-normal leading-[1.08] tracking-[-0.035em] sm:text-5xl">
               <span className="lp-hero-text">See every network, server, and threat</span>
               <span className="lp-cursor" />
             </h1>

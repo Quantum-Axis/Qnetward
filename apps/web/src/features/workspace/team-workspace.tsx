@@ -528,7 +528,8 @@ export function TeamWorkspace() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-[var(--lp-border)] bg-[#0a0a0a]">
+      {/* No overflow-hidden: the row menus open past the card's edge. */}
+      <section className="rounded-xl border border-[var(--lp-border)] bg-[#0a0a0a]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--lp-border)] px-4">
           <div role="tablist" aria-label="Team" className="-mb-px flex gap-1">
             {(

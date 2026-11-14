@@ -14,9 +14,9 @@ export function Stepper({ steps, step, className = "mb-5" }: { steps: readonly s
               className={cn(
                 "grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs",
                 done
-                  ? "border-[rgba(74,222,128,0.45)] bg-[rgba(74,222,128,0.12)] text-[#86efac]"
+                  ? "border-[var(--lp-border-strong)] bg-[#1a1a1a] text-[var(--lp-text)]"
                   : current
-                    ? "border-[rgba(255,61,127,0.55)] bg-[rgba(255,61,127,0.12)] text-[#ff8fb3]"
+                    ? "border-[var(--lp-text)] text-[var(--lp-text)]"
                     : "border-[var(--lp-border-strong)] text-[var(--lp-subtle)]",
               )}
             >

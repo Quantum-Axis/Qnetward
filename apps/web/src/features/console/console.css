@@ -404,6 +404,13 @@
     cursor: not-allowed;
   }
 
+  /* A disabled primary stays white, only fainter, rather than turning grey. */
+  .lp-console .console-btn-primary:disabled {
+    opacity: 1;
+    background: rgba(237, 237, 237, 0.35);
+    color: rgba(10, 10, 10, 0.75);
+  }
+
   .lp-console .console-popover {
     border-radius: 10px;
     border: 1px solid var(--lp-border-strong);

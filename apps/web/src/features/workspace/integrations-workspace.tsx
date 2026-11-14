@@ -258,7 +258,7 @@ function ChannelDialog({ open, onClose, editing, initialKind }: { open: boolean;
           </div>
         ) : step === 1 && meta && kind ? (
           <div className="grid gap-5">
-            <div className="flex items-start gap-3 rounded-lg border border-[var(--lp-border)] bg-black/20 p-3">
+            <div className="flex items-start gap-3">
               <KindBadge kind={kind} />
               <p className="text-xs leading-relaxed text-[var(--lp-muted)]">{meta.help}</p>
             </div>
@@ -327,7 +327,7 @@ function ChannelDialog({ open, onClose, editing, initialKind }: { open: boolean;
           </fieldset>
         ) : saved ? (
           <div className="grid min-w-0 grid-cols-1 gap-4 [&>*]:min-w-0">
-            <div className="flex items-center gap-3 rounded-lg border border-[var(--lp-border)] p-3">
+            <div className="flex items-center gap-3">
               <KindBadge kind={saved.channel.kind} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-medium">{saved.channel.name}</p>

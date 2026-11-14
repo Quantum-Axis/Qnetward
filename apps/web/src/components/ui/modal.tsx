@@ -55,7 +55,7 @@ export function Modal({
     >
       {open ? (
         <div className="flex max-h-[85vh] flex-col">
-          <div className="flex items-start justify-between gap-4 border-b border-[var(--lp-border)] px-5 py-4">
+          <div className="flex items-start justify-between gap-4 px-5 pb-1 pt-4">
             <div className="min-w-0">
               <h2 id="modal-title" className="text-md font-medium">
                 {title}
@@ -69,7 +69,7 @@ export function Modal({
             ) : null}
           </div>
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-5">{children}</div>
-          {footer ? <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--lp-border)] bg-white/[0.015] px-5 py-3">{footer}</div> : null}
+          {footer ? <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--lp-border)] px-5 py-3">{footer}</div> : null}
         </div>
       ) : null}
     </dialog>

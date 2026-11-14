@@ -2,26 +2,32 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BellRing, Mail, MessageSquare, Webhook } from "@/components/icons";
+import type { ComponentType } from "react";
+import { BellRing, Mail, Plug, Webhook } from "@/components/icons";
+import { DiscordLogo, SlackLogo, TelegramLogo } from "@/components/brand-logos";
 import { apiRequest } from "@/lib/api";
-import type { AlertRule, SessionResponse } from "@/lib/types";
+import type { AlertRule, ChannelKind, ChannelListResponse, SessionResponse } from "@/lib/types";
 import { SettingsCard, SettingsPageTitle } from "@/components/settings/settings-ui";
 
-function ChannelRow({ icon: Icon, title, detail, status }: { icon: typeof Mail; title: string; detail: string; status: "on" | "soon" }) {
+// The same logos as Integrations, where these channels are set up.
+const CHANNELS: { kind: ChannelKind; label: string; icon: ComponentType<{ className?: string }>; detail: string }[] = [
+  { kind: "slack", label: "Slack", icon: SlackLogo, detail: "Post alerts to a channel" },
+  { kind: "discord", label: "Discord", icon: DiscordLogo, detail: "Post alerts to a server channel" },
+  { kind: "telegram", label: "Telegram", icon: TelegramLogo, detail: "Message a chat or group from your bot" },
+  { kind: "webhook", label: "Webhook", icon: Webhook, detail: "POST signed JSON to your own endpoint" },
+];
+
+function ChannelRow({ icon: Icon, title, detail, status }: { icon: ComponentType<{ className?: string }>; title: string; detail: string; status: string | null }) {
   return (
     <li className="flex items-center gap-3 px-4 py-3">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-[var(--lp-border-strong)] bg-white/[0.03]">
-        <Icon className="h-3.5 w-3.5 text-[var(--lp-muted)]" />
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[var(--lp-border-strong)] bg-[#111111]">
+        <Icon className="h-4 w-4 text-[var(--lp-muted)]" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm">{title}</p>
         <p className="truncate text-xs text-[var(--lp-subtle)]">{detail}</p>
       </div>
-      {status === "on" ? (
-        <span className="shrink-0 rounded-md border border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] px-2 py-0.5 text-xs text-[#86efac]">On</span>
-      ) : (
-        <span className="shrink-0 rounded-md border border-[var(--lp-border)] px-2 py-0.5 text-xs text-[var(--lp-subtle)]">Soon</span>
-      )}
+      <span className={`shrink-0 text-sm ${status ? "text-[var(--lp-text)]" : "text-[var(--lp-subtle)]"}`}>{status ?? "Not set up"}</span>
     </li>
   );
 }
@@ -33,6 +39,18 @@ export function NotificationsSettings() {
     queryFn: () => apiRequest<AlertRule[]>("/api/alerts/rules"),
     enabled: sessionQuery.data?.authenticated === true,
   });
+  const channelsQuery = useQuery({
+    queryKey: ["workspace-channels"],
+    queryFn: () => apiRequest<ChannelListResponse>("/api/workspace/channels"),
+    enabled: sessionQuery.data?.authenticated === true,
+  });
+  const channels = channelsQuery.data?.channels ?? [];
+  const statusOf = (kind: ChannelKind) => {
+    const mine = channels.filter((c) => c.kind === kind);
+    if (!mine.length) return null;
+    const on = mine.filter((c) => c.enabled).length;
+    return on === mine.length ? `${on} connected` : `${on} of ${mine.length} on`;
+  };
   const email = sessionQuery.data?.user?.email ?? "";
   const rules = rulesQuery.data ?? [];
   const mine = rules.filter((rule) => rule.enabled && rule.recipient_email.toLowerCase() === email.toLowerCase());
@@ -77,11 +95,21 @@ export function NotificationsSettings() {
         )}
       </SettingsCard>
 
-      <SettingsCard id="channels" title="Channels" description="Account emails always go to your sign-in address. Chat and webhook delivery arrive with Integrations.">
+      <SettingsCard
+        id="channels"
+        title="Channels"
+        description="Account emails always go to your sign-in address. Chat and webhook channels are shared by the workspace and set up in Integrations."
+        action={
+          <Link href="/workspace/integrations" className="console-btn console-btn-secondary">
+            <Plug className="h-3.5 w-3.5" /> Manage in Integrations
+          </Link>
+        }
+      >
         <ul className="divide-y divide-[var(--lp-border)] rounded-lg border border-[var(--lp-border)]">
-          <ChannelRow icon={Mail} title="Email" detail={email || "—"} status="on" />
-          <ChannelRow icon={MessageSquare} title="Slack, Discord, Telegram" detail="Post alerts to a channel" status="soon" />
-          <ChannelRow icon={Webhook} title="Webhooks" detail="Send alert events to your own endpoint" status="soon" />
+          <ChannelRow icon={Mail} title="Email" detail={email || "—"} status="On" />
+          {CHANNELS.map((c) => (
+            <ChannelRow key={c.kind} icon={c.icon} title={c.label} detail={c.detail} status={channelsQuery.isLoading ? "…" : statusOf(c.kind)} />
+          ))}
         </ul>
       </SettingsCard>
     </div>

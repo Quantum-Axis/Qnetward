@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CodeTabs } from "./code-tabs";
 import { Faq } from "./faq";
+import { FeatureGrid } from "./feature-grid";
 import { HeroConsole } from "./hero-console";
 import { LandingEffects } from "./landing-effects";
 import { LandingNav } from "./landing-nav";
@@ -124,7 +125,7 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
               <span>Uptime monitors are live</span>
               <span aria-hidden="true" className="text-[var(--lp-accent)]">→</span>
             </Link>
-            <h1 className="mx-auto mt-7 max-w-4xl text-4xl font-semibold leading-[1.1] tracking-[-0.03em] sm:text-[64px]">
+            <h1 className="mx-auto mt-7 max-w-4xl text-[clamp(28px,8.4vw,44px)] font-semibold leading-[1.1] tracking-[-0.03em] sm:text-[64px]">
               See every network,
               <br />
               <span className="text-[var(--lp-accent)]">server, and threat</span>
@@ -134,9 +135,19 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
               today, agents and attack-surface scans next.
             </p>
             <div className="mt-8 flex flex-col items-center gap-3">
-              <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-6 text-md">
-                Start monitoring free <span aria-hidden="true">→</span>
-              </Link>
+              {/* Phones keep both buttons on one row, with shorter labels. */}
+              <div className="grid w-full max-w-sm grid-cols-2 gap-2.5 sm:flex sm:w-auto sm:max-w-none sm:justify-center sm:gap-3">
+                <Link href="/signup" className="lp-btn lp-btn-primary h-11 px-3 text-base sm:px-6 sm:text-md">
+                  <span className="sm:hidden">Start free</span>
+                  <span className="hidden sm:inline">
+                    Start monitoring free <span aria-hidden="true" className="ml-1">→</span>
+                  </span>
+                </Link>
+                <a href="#how" className="lp-btn lp-btn-secondary h-11 px-3 text-base sm:px-6 sm:text-md">
+                  <span className="sm:hidden">How it works</span>
+                  <span className="hidden sm:inline">See how it works</span>
+                </a>
+              </div>
               <p className="text-sm text-[var(--lp-muted)]">*No credit card required</p>
             </div>
             <div className="lp-reveal relative mt-14 sm:mt-16">
@@ -152,16 +163,10 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
           </div>
         </section>
 
-        {/* comparison */}
-        <section className="lp-divider py-20 sm:py-28">
+        {/* features */}
+        <section id="features" className="lp-divider scroll-mt-20 py-20 sm:py-28">
           <div className="lp-container">
-            <SectionHeader
-              title="Five tabs during an outage is four too many"
-              aside="Most teams stitch diagnostics together from terminal commands, a website or two, and a separate uptime service. Qnetward puts them behind one login, with shared history."
-            />
-            <div className="mt-14">
-              <ToolComparison />
-            </div>
+            <FeatureGrid />
           </div>
         </section>
 
@@ -198,6 +203,13 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
                 </li>
               ))}
             </ol>
+          </div>
+        </section>
+
+        {/* comparison */}
+        <section className="lp-divider py-20 sm:py-28">
+          <div className="lp-container">
+            <ToolComparison />
           </div>
         </section>
 

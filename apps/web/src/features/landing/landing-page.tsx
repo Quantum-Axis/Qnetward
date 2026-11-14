@@ -116,7 +116,8 @@ export function LandingPage({ plans }: { plans: PublicPlansResponse | null }) {
       <main id="main">
         {/* hero */}
         <section className="relative overflow-hidden">
-          <div className="lp-hero-glow pointer-events-none absolute inset-0" aria-hidden="true" />
+          {/* The glow stops partway down the product shot, which runs on over the plain page. */}
+          <div className="lp-hero-glow pointer-events-none absolute inset-x-0 top-0 bottom-[160px] sm:bottom-[300px]" aria-hidden="true" />
           <div className="lp-container relative pb-16 pt-14 text-center sm:pt-24">
             <Link href="/signup" className="lp-hero-pill">
               <span className="lp-badge lp-badge-new">New</span>
